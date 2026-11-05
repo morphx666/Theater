@@ -16,7 +16,9 @@ Theater is a fast web remote for the **Denon AVR-X1700H** receiver. You run it o
 | **Remote** | An on-screen menu pad, an FM/AM tuner with presets, quick settings (sleep, dimmer, ECO, auto-standby) and a live protocol console. |
 | **Setup** | Rename, hide and assign inputs; set source levels, volume limits and the graphic EQ; change names, ECO and display options; set this app's own settings; view setup backups. |
 
-Every page has a **Customize** button. Use it to drag panels around and change their width. Layouts are saved on the server, so every device sees the same arrangement.
+### Make it yours
+
+Every page has a **Customize** button. Tap it, then drag panels where you want them and make the important ones wider, up to three columns. Some panels have extra options in Customize mode too. You can lock the volume dial so a stray swipe doesn't change the volume, or give the tuner a green, amber or blue display. Your layout and options are saved on the server, so your phone, tablet and laptop all show the same setup.
 
 ## Requirements
 
@@ -129,5 +131,7 @@ On macOS and Linux, `npm run dev` starts both servers at once. On Windows, run t
 The project has two parts. The server (`server/`, Node and TypeScript) talks to the receiver over telnet, HTTP, its HTTPS setup API and HEOS. The frontend (`web/`, Svelte 5) is served from `dist/` after you build it. Protocol notes, including several undocumented commands, are in [docs/PROTOCOL.md](docs/PROTOCOL.md). The setup API's write format is in [docs/SETUP-API.md](docs/SETUP-API.md).
 
 ## Disclaimer
+
+Every line of this app was written by AI: [Claude](https://claude.com/claude-code), Anthropic's AI model. Xavier Flix directed and supervised the work, and tested the app on a real AVR-X1700H.
 
 This is an independent project. It is not affiliated with or endorsed by Denon, Marantz, Sound United or Masimo. **Use it at your own risk.**
