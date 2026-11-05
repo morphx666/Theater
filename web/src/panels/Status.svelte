@@ -21,13 +21,16 @@
 <Panel id="status" hero>
   <div class="np-wrap">
     <div>
-      <div class="src">{on ? current : 'Standby'}</div>
+      <div class="src" title={on ? current : ''}>{on ? current : 'Standby'}</div>
       {#if on}
-        <div class="row wrap chips">
-          {#if st.soundModeText}<span class="pill accent"><Icon name="wave" size={14} />{st.soundModeText}</span>{/if}
-          {#if st.decoder}<span class="pill">{st.decoder}</span>{/if}
-          {#if st.sampleRate}<span class="pill">{st.sampleRate}Hz</span>{/if}
-          {#if layout}<span class="pill"><Icon name="speaker" size={14} />{layout}</span>{/if}
+        <!-- Fixed two-line layout so the panel never changes height with the text length -->
+        <div class="chips">
+          <div class="line"><span class="pill accent mode" title={st.soundModeText ?? ''}><Icon name="wave" size={14} /><span class="txt">{st.soundModeText ?? '—'}</span></span></div>
+          <div class="line">
+            <span class="pill">{st.decoder || '—'}</span>
+            {#if st.sampleRate}<span class="pill">{st.sampleRate}Hz</span>{/if}
+            {#if layout}<span class="pill"><Icon name="speaker" size={14} />{layout}</span>{/if}
+          </div>
         </div>
       {:else}
         <p class="muted">Turn it on with the power button above.</p>
@@ -41,6 +44,11 @@
 
 <style>
   .np-wrap { display: flex; flex-direction: column; gap: 16px; }
-  .src { font-size: 30px; font-weight: 750; letter-spacing: -0.02em; padding-right: 36px; }
-  .chips { margin-top: 10px; gap: 6px; }
+  .src { font-size: 30px; font-weight: 750; letter-spacing: -0.02em; padding-right: 36px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chips { margin-top: 10px; display: grid; gap: 6px; }
+  .line { display: flex; gap: 6px; min-width: 0; overflow: hidden; }
+  .line .pill { flex: none; }
+  .mode { max-width: 100%; min-width: 0; flex: 0 1 auto !important; }
+  .mode .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 </style>
