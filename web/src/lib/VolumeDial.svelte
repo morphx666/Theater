@@ -8,6 +8,11 @@
   // (the −/+ buttons and Mute keep working). Set from Home › Customize › "Lock dial".
   let { locked = false } = $props();
 
+  let lockText = $state();
+  let lockW = $state(46); // measured below; fallback estimate
+  $effect(() => { if (locked && lockText) lockW = lockText.getComputedTextLength() || lockW; });
+  const lockX = $derived(100 - (16 + 4 + lockW) / 2);
+
   const MIN = -80;
   const SWEEP = 270; // degrees
   const START = 135; // degrees, measured clockwise from +x axis
@@ -136,8 +141,9 @@
     <text x="100" y="98" class="num">{off ? 'OFF' : muted ? 'MUTE' : value.toFixed(1)}</text>
     <text x="100" y="122" class="unit">{off || muted ? (off ? 'standby' : value.toFixed(1) + ' dB') : 'dB'}</text>
     {#if locked}
-      <g class="lockmark" transform="translate(77 167)"><path d="M3 7h10v8H3z M5 7V5a3 3 0 0 1 6 0v2" /></g>
-      <text x="95" y="179" class="cap start">dial locked</text>
+      <!-- icon (16 wide) + 4 gap + text, centred as one unit using the text's measured width -->
+      <g class="lockmark" transform="translate({lockX} 167)"><path d="M3 7h10v8H3z M5 7V5a3 3 0 0 1 6 0v2" /></g>
+      <text bind:this={lockText} x={lockX + 20} y="179" class="cap start">dial locked</text>
     {:else}
       <text x="100" y="178" class="cap">limit {cap} dB</text>
     {/if}

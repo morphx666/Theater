@@ -308,9 +308,9 @@
     background: color-mix(in srgb, var(--card-2) 92%, transparent); backdrop-filter: blur(8px);
     border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
   }
-  /* panel options float over the bottom edge, like the toolbar over the top edge (no height change) */
+  /* panel options float just below the toolbar, over the panel (no height change) */
   .opts {
-    position: absolute; bottom: -15px; left: 12px; z-index: 3; display: flex; gap: 10px; padding: 5px 10px;
+    position: absolute; top: 24px; right: 12px; z-index: 3; display: flex; gap: 10px; padding: 5px 10px;
     background: color-mix(in srgb, var(--card-2) 92%, transparent); backdrop-filter: blur(8px);
     border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); font-size: 12.5px; font-weight: 600;
   }
