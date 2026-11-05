@@ -1,1 +1,236 @@
-<section class="card"><h2>Speaker setup</h2><p class="muted">Loading…</p></section>
+<script>
+  import { useSetup } from './useSetup.svelte.js';
+  import { txt } from './setup.js';
+  import Seg from './Seg.svelte';
+  import Icon from './Icon.svelte';
+
+  const preset = useSetup('speakers', 11, { reloadDelay: 5000 });
+  const config = useSetup('speakers', 3);
+  const dist = useSetup('speakers', 4);
+  const levels = useSetup('speakers', 5);
+  const xo = useSetup('speakers', 6);
+  const bass = useSetup('speakers', 7);
+
+  // Each setup page numbers channels differently (see docs/SETUP-API.md §4).
+  const LEVEL_NAMES = ['Front L', 'Center', 'Front R', 'Front Wide R', 'Surround R', 'Surr. Back R', 'Surr. Back', 'Surr. Back L', 'Surround L',
+    'Front Wide L', 'Front Height R', 'Front Dolby R', 'Top Front R', 'Top Middle R', 'Surr. Dolby R', 'Top Rear R', 'Surr. Height R',
+    'Rear Height R', 'Back Dolby R', 'Back Dolby L', 'Rear Height L', 'Surr. Height L', 'Top Rear L', 'Surr. Dolby L', 'Top Middle L',
+    'Top Front L', 'Front Dolby L', 'Front Height L', 'Center Height', 'Top Surround', 'Subwoofer', 'Subwoofer 2', '', 'Subwoofer 3', 'Subwoofer 4'];
+  const DIST_NAMES = ['Front L', 'Front R', 'Center', 'Subwoofer', 'Subwoofer 2', 'Subwoofer 3', 'Subwoofer 4', 'Surround L', 'Surround R',
+    'Surr. Back L', 'Surr. Back R', 'Surr. Back', 'Front Wide L', 'Front Wide R', 'Front Height L', 'Front Height R', 'Front Dolby L',
+    'Front Dolby R', 'Top Front L', 'Top Front R', 'Top Middle L', 'Top Middle R', 'Surr. Dolby L', 'Surr. Dolby R', 'Top Rear L', 'Top Rear R',
+    'Surr. Height L', 'Surr. Height R', 'Rear Height L', 'Rear Height R', 'Back Dolby L', 'Back Dolby R', 'Center Height', 'Top Surround'];
+  const XO_NAMES = ['Front', 'Center', 'Surround', 'Surround Back', 'Front Wide', 'Front Height', 'Front Dolby', 'Top Front', 'Top Middle',
+    'Surround Dolby', 'Top Rear', 'Surround Height', 'Rear Height', 'Back Dolby', 'Center Height', 'Top Surround'];
+  const KIND_NAMES = ['Front', 'Center', 'Subwoofer', 'Surround', 'Surround Back', 'Surr. Back count', 'Front Wide', 'Front Height', 'Front Dolby',
+    'Top Front', 'Top Middle', 'Surround Dolby', 'Top Rear', 'Surround Height', 'Rear Height', 'Back Dolby', 'Center Height', 'Top Surround'];
+  const SIZE = { 1: 'None', 2: 'Small', 3: 'Large', 4: 'Yes', 5: 'No', 6: '1 spkr', 7: '2 spkrs', 8: '3 spkrs', 9: '4 spkrs' };
+  const DOLBY_SETUP = ['Front Dolby', 'Surround Dolby', 'Back Dolby'];
+
+  // ---------- distances ----------
+  const unit = $derived(dist.doc?.querySelector(':scope > Unit')?.textContent.trim() ?? '2'); // 1 m, 2 ft, 3 ms
+  const ratio = $derived(Number(txt(dist.doc, 'M2FConvertRatio') ?? 3000) / 1000);
+  const fromRaw = (raw) => {
+    if (unit === '1') return raw / 100;
+    if (unit === '3') return raw / 10;
+    if (ratio === 3) { const r = raw - (raw % 3); return Math.floor((r / 30) * 10) / 10; }
+    return Number((raw / (ratio * 10)).toFixed(1));
+  };
+  const toRaw = (v) => (unit === '1' ? Math.round(v * 100) : unit === '3' ? Math.round(v * 10) : Math.min(1800, Math.round(v * ratio * 10)));
+  const unitLabel = $derived(unit === '1' ? 'm' : unit === '3' ? 'ms' : 'ft');
+  const unitStep = $derived(unit === '1' ? 0.01 : 0.1);
+
+  let distEdits = $state({}); // key "L:idx" or "D:idx" -> display value
+  const distRows = $derived([
+    ...[...(dist.doc?.querySelectorAll(':scope > List > Speaker') ?? [])].map((n) => ({
+      key: 'L:' + n.getAttribute('index'), idx: n.getAttribute('index'), name: DIST_NAMES[n.getAttribute('index')], raw: Number(n.textContent),
+      edit: n.getAttribute('display') === '3', dolby: false,
+    })),
+    ...[...(dist.doc?.querySelectorAll('DolbySpeakerSetup > Speaker') ?? [])].map((n) => ({
+      key: 'D:' + n.getAttribute('index'), idx: n.getAttribute('index'), name: DOLBY_SETUP[n.getAttribute('index')] + ' → ceiling', raw: Number(n.textContent),
+      edit: n.getAttribute('display') === '3', dolby: true,
+    })),
+  ]);
+  const distDirty = $derived(Object.keys(distEdits).length > 0);
+  const spreadOk = $derived.by(() => {
+    const vals = distRows.filter((r) => !r.dolby).map((r) => (r.key in distEdits ? toRaw(distEdits[r.key]) : r.raw));
+    return !vals.length || unit === '3' || Math.max(...vals) - Math.min(...vals) <= 600;
+  });
+  async function saveDist() {
+    const main = distRows.filter((r) => !r.dolby && r.key in distEdits).map((r) => `<Speaker index="${r.idx}">${toRaw(distEdits[r.key])}</Speaker>`).join('');
+    const dol = distRows.filter((r) => r.dolby && r.key in distEdits).map((r) => `<Speaker index="${r.idx}">${toRaw(distEdits[r.key])}</Speaker>`).join('');
+    const xml = `<Distances>${main ? `<List>${main}</List>` : ''}${dol ? `<DolbySpeakerSetup>${dol}</DolbySpeakerSetup>` : ''}</Distances>`;
+    if (await dist.write(xml)) distEdits = {};
+  }
+
+  // ---------- levels ----------
+  let levelEdits = $state({}); // idx -> dB
+  const levelRows = $derived([...(levels.doc?.querySelectorAll('List > Speaker') ?? [])].map((n) => ({
+    idx: n.getAttribute('index'), name: LEVEL_NAMES[n.getAttribute('index')] ?? 'Ch ' + n.getAttribute('index'),
+    db: Number(n.textContent) / 10, edit: n.getAttribute('display') === '3',
+  })));
+  const lv = (r) => (r.idx in levelEdits ? levelEdits[r.idx] : r.db);
+  function bump(r, d) { levelEdits[r.idx] = Math.max(-12, Math.min(12, Math.round((lv(r) + d) * 2) / 2)); if (levelEdits[r.idx] === r.db) delete levelEdits[r.idx]; }
+  async function saveLevels() {
+    const xml = `<List>${Object.entries(levelEdits).map(([i, v]) => `<Speaker index="${i}">${Math.round(v * 10)}</Speaker>`).join('')}</List>`;
+    if (await levels.write(xml)) levelEdits = {};
+  }
+
+  // ---------- crossovers ----------
+  const xoValues = $derived([...(xo.doc?.querySelectorAll('SelectableValue Item') ?? [])].map((i) => i.textContent.trim()));
+  const xoSel = $derived(txt(xo.doc, 'Selection'));
+  const xoRows = $derived([...(xo.doc?.querySelectorAll(':scope > List > Speaker') ?? [])].map((n) => ({
+    idx: n.getAttribute('index'), name: XO_NAMES[n.getAttribute('index')], hz: n.textContent.trim(), edit: n.getAttribute('display') === '3',
+  })));
+  const hz = (v) => (v === '0' ? 'Full band' : v + ' Hz');
+
+  // ---------- speaker config ----------
+  const kinds = $derived([...(config.doc?.querySelectorAll(':scope > Speaker') ?? [])].map((n) => ({
+    idx: n.getAttribute('index'), name: KIND_NAMES[n.getAttribute('index')], value: txt(n, 'Value'),
+    opts: [...n.querySelectorAll('List')].map((l) => l.textContent.trim()),
+  })));
+  let confirmCfg = $state(null);
+
+  const fmt = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}`;
+</script>
+
+<section class="card">
+  <h2>Speaker setup</h2>
+  <p class="muted small" style="margin:-6px 0 6px">The receiver's stored calibration. Changes apply instantly and are backed up first.</p>
+
+  {#if preset.doc && preset.doc.textContent.trim() !== '0'}
+    <div class="setting stack">
+      <div><div class="label">Active speaker preset</div><div class="hint">Each preset stores a complete speaker setup + Audyssey result</div></div>
+      <Seg value={preset.doc.textContent.trim()} disabled={preset.saving}
+        onchange={(v) => preset.write(`<SpeakerPreset>${v}</SpeakerPreset>`)}
+        options={[{ value: '1', label: 'Preset 1' }, { value: '2', label: 'Preset 2' }]} />
+    </div>
+  {/if}
+
+  <details open>
+    <summary>Distances <span class="faint">({unitLabel})</span></summary>
+    {#if dist.doc}
+      <div class="rows">
+        {#each distRows as r (r.key)}
+          <label class="r">
+            <span>{r.name}</span>
+            <input type="number" min="0" max={unit === '1' ? 18 : 60} step={unitStep} disabled={!r.edit}
+              value={r.key in distEdits ? distEdits[r.key] : fromRaw(r.raw)}
+              onchange={(e) => { const v = Number(e.currentTarget.value); if (v === fromRaw(r.raw)) delete distEdits[r.key]; else distEdits[r.key] = v; }} />
+          </label>
+        {/each}
+      </div>
+      {#if unit !== '3'}
+        <div class="row" style="margin-top:8px">
+          <span class="small muted">Units</span>
+          <Seg value={unit} disabled={dist.saving} onchange={(v) => dist.write(`<Unit>${v}</Unit>`)}
+            options={[{ value: '2', label: 'Feet' }, { value: '1', label: 'Meters' }]} />
+        </div>
+      {/if}
+      {#if !spreadOk}<p class="bad small">All speakers must be within {unit === '1' ? '6 m' : '20 ft'} of each other.</p>{/if}
+      <div class="actions">
+        <button class="btn" disabled={!distDirty} onclick={() => (distEdits = {})}>Revert</button>
+        <button class="btn primary" disabled={!distDirty || !spreadOk || dist.saving} onclick={saveDist}><Icon name="save" size={18} />Save distances</button>
+      </div>
+    {/if}
+  </details>
+
+  <details open>
+    <summary>Levels</summary>
+    {#if levels.doc}
+      <div class="rows">
+        {#each levelRows as r (r.idx)}
+          <div class="r">
+            <span>{r.name}</span>
+            <div class="row" style="gap:6px">
+              <button class="btn icon sm" disabled={!r.edit} aria-label="{r.name} down" onclick={() => bump(r, -0.5)}><Icon name="minus" size={16} /></button>
+              <span class="mono val" class:changed={r.idx in levelEdits}>{fmt(lv(r))}</span>
+              <button class="btn icon sm" disabled={!r.edit} aria-label="{r.name} up" onclick={() => bump(r, 0.5)}><Icon name="plus" size={16} /></button>
+            </div>
+          </div>
+        {/each}
+      </div>
+      <div class="actions">
+        <button class="btn" disabled={!Object.keys(levelEdits).length} onclick={() => (levelEdits = {})}>Revert</button>
+        <button class="btn primary" disabled={!Object.keys(levelEdits).length || levels.saving} onclick={saveLevels}><Icon name="save" size={18} />Save levels</button>
+      </div>
+    {/if}
+  </details>
+
+  <details>
+    <summary>Crossovers & bass</summary>
+    {#if xo.doc}
+      <div class="setting stack">
+        <div class="label">Crossover setting</div>
+        <Seg value={xoSel} disabled={xo.saving} onchange={(v) => xo.write(`<Selection>${v}</Selection>`, { delay: 1500 })}
+          options={[{ value: '1', label: 'Same for all' }, { value: '2', label: 'Per speaker' }]} />
+      </div>
+      {#if xoSel === '1'}
+        <label class="r"><span>All speakers</span>
+          <select value={txt(xo.doc, 'All')} onchange={(e) => xo.write(`<All>${e.currentTarget.value}</All>`)}>
+            {#each xoValues as v}<option value={v}>{hz(v)}</option>{/each}
+          </select></label>
+      {:else}
+        {#each xoRows as r (r.idx)}
+          <label class="r"><span>{r.name}</span>
+            <select value={r.hz} disabled={!r.edit} onchange={(e) => xo.write(`<Speaker index="${r.idx}">${e.currentTarget.value}</Speaker>`)}>
+              {#each xoValues as v}<option value={v}>{hz(v)}</option>{/each}
+            </select></label>
+        {/each}
+      {/if}
+    {/if}
+    {#if bass.doc}
+      <div class="setting stack">
+        <div><div class="label">Subwoofer mode</div><div class="hint">LFE+Main also sends front bass to the sub</div></div>
+        <Seg value={txt(bass.doc, 'SubwooferMode')} disabled={bass.saving} onchange={(v) => bass.write(`<SubwooferMode>${v}</SubwooferMode>`)}
+          options={[{ value: '1', label: 'LFE' }, { value: '2', label: 'LFE + Main' }]} />
+      </div>
+      <label class="r"><span>LPF for LFE</span>
+        <select value={txt(bass.doc, 'LPFforLFE')} onchange={(e) => bass.write(`<LPFforLFE>${e.currentTarget.value}</LPFforLFE>`)}>
+          {#each [...bass.doc.querySelectorAll('SelectableValue LPFforLFE Item')].map((i) => i.textContent.trim()) as v}<option value={v}>{v} Hz</option>{/each}
+        </select></label>
+    {/if}
+  </details>
+
+  <details>
+    <summary>Speaker configuration <span class="faint">(advanced)</span></summary>
+    <p class="warn small"><Icon name="info" size={16} />Changing sizes or removing speakers changes bass management and which channels play. Re-run Audyssey afterwards.</p>
+    {#each kinds as k (k.idx)}
+      <label class="r"><span>{k.name}</span>
+        <select value={k.value} disabled={k.opts.length < 2 || config.saving}
+          onchange={(e) => { confirmCfg = { k, value: e.currentTarget.value }; e.currentTarget.value = k.value; }}>
+          {#each k.opts as o}<option value={o}>{SIZE[o] ?? o}</option>{/each}
+        </select></label>
+    {/each}
+  </details>
+</section>
+
+{#if confirmCfg}
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="card">
+      <h3>Change {confirmCfg.k.name} to “{SIZE[confirmCfg.value]}”?</h3>
+      <p class="muted">This changes the receiver's speaker configuration. The previous setup is backed up, and you can switch it back here.</p>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" onclick={() => (confirmCfg = null)}>Cancel</button>
+        <button class="btn primary" onclick={() => { config.write(`<Speaker index="${confirmCfg.k.idx}">${confirmCfg.value}</Speaker>`); confirmCfg = null; }}>Change</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<style>
+  details { border-top: 1px solid var(--line); padding: 12px 0 4px; }
+  summary { cursor: pointer; font-weight: 650; padding-bottom: 8px; }
+  .rows { display: grid; gap: 2px; }
+  .r { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 0; }
+  .r input, .r select { width: 130px; flex: none; }
+  .val { min-width: 48px; text-align: center; }
+  .val.changed { color: var(--accent); font-weight: 700; }
+  .sm { width: 34px; min-height: 34px; height: 34px; }
+  .actions { display: flex; justify-content: flex-end; gap: 8px; margin: 10px 0 6px; }
+  .warn { display: flex; gap: 8px; align-items: center; color: var(--accent); margin: 0 0 8px; }
+  .bad { color: var(--bad); }
+  .modal { position: fixed; inset: 0; background: rgb(0 0 0 / 0.55); display: grid; place-items: center; z-index: 30; padding: 20px; }
+  .modal .card { max-width: 420px; display: grid; gap: 12px; }
+  .modal p { margin: 0; }
+</style>

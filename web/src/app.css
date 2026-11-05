@@ -151,3 +151,8 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .dot.warn { background: var(--accent); }
 
 .empty { text-align: center; color: var(--muted); padding: 30px 10px; }
+
+.seg { overflow-x: auto; scrollbar-width: none; }
+.seg::-webkit-scrollbar { display: none; }
+.seg button { padding: 8px 10px; }
+.btn.primary:disabled { background: var(--card-2); color: var(--muted); border-color: var(--line); box-shadow: none; }
