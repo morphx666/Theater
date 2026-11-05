@@ -8,7 +8,7 @@
 
   const PAGES = [
     { id: 'home', label: 'Home', icon: 'home', comp: Home },
-    { id: 'sound', label: 'Sound', icon: 'sliders', comp: Section },
+    { id: 'sound', label: 'Audio', icon: 'sliders', comp: Section },
     { id: 'video', label: 'Video', icon: 'tv', comp: Section },
     { id: 'speakers', label: 'Speakers', icon: 'speaker', comp: Section },
     { id: 'zones', label: 'Zone 2', icon: 'zones', comp: Section },

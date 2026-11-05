@@ -88,4 +88,4 @@ export const PANEL_LIST = [
 
 export const PANELS = Object.fromEntries(PANEL_LIST.map((p) => [p.id, p]));
 
-export const SECTION_LABELS = { home: 'Home', sound: 'Sound', video: 'Video', speakers: 'Speakers', zones: 'Zone 2', remote: 'Remote', setup: 'Setup' };
+export const SECTION_LABELS = { home: 'Home', sound: 'Audio', video: 'Video', speakers: 'Speakers', zones: 'Zone 2', remote: 'Remote', setup: 'Setup' };

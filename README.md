@@ -9,7 +9,7 @@ with everything on one screen and live updates.
 | Page | What you get |
 |---|---|
 | **Home** | Big volume dial (drag, scroll, arrow keys, hold +/−), mute, power, input tiles with your names, sound modes, Quick Select 1–4 (long-press to save), what's playing on HEOS with album art and play/pause/skip, HEOS favorites, and a live line showing the format (e.g. *Dolby Audio – Dolby Surround · PCM · 48 kHz · 5.1.2*). |
-| **Sound** | Audyssey MultEQ, Dynamic EQ, Reference Level Offset, Dynamic Volume, Dialog Enhancer, subwoofer level, LFE, Cinema EQ, tone controls, DRC, Restorer, Loudness Management, Neural:X, Center Spread, lip-sync delay. Only settings the current input and mode support are shown. |
+| **Audio** | Audyssey MultEQ, Dynamic EQ, Reference Level Offset, Dynamic Volume, Dialog Enhancer, subwoofer level, LFE, Cinema EQ, tone controls, DRC, Restorer, Loudness Management, Neural:X, Center Spread, lip-sync delay. Settings the receiver reports as unavailable for the current mode or signal are greyed out with a reason. |
 | **Speakers** | Room map of your speakers with tap-to-adjust channel trims, and the stored calibration: distances, levels, crossovers, subwoofer mode, LFE low-pass filter, speaker sizes, speaker presets. |
 | **Zone 2** | Power, source, volume, mute, All Zone Stereo (party mode). |
 | **Remote** | On-screen menu D-pad, tuner, sleep timer, dimmer, ECO, auto-standby, Bluetooth transmitter, and a **live protocol console**. |
