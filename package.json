@@ -2,6 +2,7 @@
   "name": "denon-remote",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "description": "A nicer local web remote for the Denon AVR-X1700H",
   "type": "module",
   "engines": {

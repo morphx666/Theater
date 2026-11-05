@@ -130,3 +130,7 @@ The project has two parts. The server (`server/`, Node and TypeScript) talks to 
 Every line of this app was written by AI: [Claude](https://claude.com/claude-code), Anthropic's AI model. [Xavier Flix](https://xavierflix.com) directed and supervised the work, and tested the app on a real AVR-X1700H.
 
 This is an independent project. It is not affiliated with or endorsed by Denon, Marantz, Sound United or Masimo. **Use it at your own risk.**
+
+## License
+
+[MIT](LICENSE) © 2026 [Xavier Flix](https://xavierflix.com)
