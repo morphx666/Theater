@@ -1,6 +1,7 @@
 <script>
-  import { api, toast } from './avr.svelte.js';
-  import Icon from './Icon.svelte';
+  import { api, toast } from '../lib/avr.svelte.js';
+  import Icon from '../lib/Icon.svelte';
+  import Panel from '../lib/Panel.svelte';
 
   let favs = $state(null);
   api('/api/heos/favorites').then((f) => (favs = f)).catch(() => (favs = []));
@@ -11,9 +12,12 @@
   }
 </script>
 
-{#if favs?.length}
-  <div class="card">
-    <h2>HEOS favorites</h2>
+<Panel id="favorites" title="HEOS favorites">
+  {#if favs === null}
+    <p class="faint small">Loading…</p>
+  {:else if !favs.length}
+    <p class="faint small">No HEOS favorites yet — add some in the HEOS app.</p>
+  {:else}
     <div class="favs">
       {#each favs as f, i (f.mid + i)}
         <button class="fav" onclick={() => play(i)}>
@@ -22,8 +26,8 @@
         </button>
       {/each}
     </div>
-  </div>
-{/if}
+  {/if}
+</Panel>
 
 <style>
   .favs { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 12px; }

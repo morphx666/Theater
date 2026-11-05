@@ -42,6 +42,10 @@
     reset: 'M3 12a9 9 0 1 0 3-6.7 M3 4v5h5',
     save: 'M5 3h11l5 5v13H5z M8 3v6h8 M8 21v-7h8v7',
     list: 'M9 6h11 M9 12h11 M9 18h11 M4 6h.01 M4 12h.01 M4 18h.01',
+    pin: 'M9 4h6 M10 4v6l-3 4h10l-3-4V4 M12 14v7',
+    grip: 'M9 5h.01 M15 5h.01 M9 12h.01 M15 12h.01 M9 19h.01 M15 19h.01',
+    x: 'M6 6l12 12 M18 6L6 18',
+    edit: 'M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4',
   };
 </script>
 

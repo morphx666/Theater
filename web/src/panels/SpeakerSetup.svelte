@@ -1,9 +1,10 @@
 <script>
-  import { useSetup } from './useSetup.svelte.js';
-  import { txt } from './setup.js';
-  import Seg from './Seg.svelte';
-  import Icon from './Icon.svelte';
-  import Slider from './Slider.svelte';
+  import { useSetup } from '../lib/useSetup.svelte.js';
+  import { txt } from '../lib/setup.js';
+  import Seg from '../lib/Seg.svelte';
+  import Icon from '../lib/Icon.svelte';
+  import Slider from '../lib/Slider.svelte';
+  import Panel from '../lib/Panel.svelte';
 
   const preset = useSetup('speakers', 11, { reloadDelay: 5000 });
   const config = useSetup('speakers', 3);
@@ -95,8 +96,7 @@
   const fmt = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)}`;
 </script>
 
-<section class="card">
-  <h2>Speaker setup</h2>
+<Panel id="speaker-setup" title="Speaker setup">
   <p class="muted small" style="margin:-6px 0 6px">The receiver's stored calibration. Levels and distances are sent when you press Save; other options apply instantly. Previous values are always backed up first.</p>
 
   {#if preset.doc && preset.doc.textContent.trim() !== '0'}
@@ -200,7 +200,7 @@
         </select></label>
     {/each}
   </details>
-</section>
+</Panel>
 
 {#if confirmCfg}
   <div class="modal" role="dialog" aria-modal="true">
@@ -226,7 +226,4 @@
   .actions { display: flex; justify-content: flex-end; gap: 8px; margin: 10px 0 6px; }
   .warn { display: flex; gap: 8px; align-items: center; color: var(--accent); margin: 0 0 8px; }
   .bad { color: var(--bad); }
-  .modal { position: fixed; inset: 0; background: rgb(0 0 0 / 0.55); display: grid; place-items: center; z-index: 30; padding: 20px; }
-  .modal .card { max-width: 420px; display: grid; gap: 12px; }
-  .modal p { margin: 0; }
 </style>

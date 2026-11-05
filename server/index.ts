@@ -21,7 +21,7 @@ const DIST = path.join(ROOT, 'dist');
 const USE_TELNET = process.env.AVR_TELNET !== 'off';
 
 // ---------- app settings (persisted) ----------
-type Settings = { volumeCapDb: number; volumeStep: number };
+type Settings = { volumeCapDb: number; volumeStep: number; home?: string[] };
 const SETTINGS_FILE = path.join(DATA, 'settings.json');
 let settings: Settings = { volumeCapDb: -10, volumeStep: 0.5 };
 try { settings = { ...settings, ...JSON.parse(await fs.readFile(SETTINGS_FILE, 'utf8')) }; } catch {}
@@ -170,6 +170,10 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
         const b = await readBody(req);
         if (typeof b.volumeCapDb === 'number') settings.volumeCapDb = Math.min(18, Math.max(-60, Math.round(b.volumeCapDb * 2) / 2));
         if (typeof b.volumeStep === 'number') settings.volumeStep = [0.5, 1, 2].includes(b.volumeStep) ? b.volumeStep : 0.5;
+        if (b.home === null) delete settings.home; // reset to default layout
+        else if (Array.isArray(b.home)) {
+          settings.home = [...new Set(b.home.filter((x: unknown) => typeof x === 'string' && /^[a-z0-9-]{1,40}$/.test(x)))].slice(0, 60) as string[];
+        }
         await saveSettings();
         scheduleBroadcast();
       }

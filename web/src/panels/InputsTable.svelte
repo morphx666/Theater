@@ -1,14 +1,12 @@
 <script>
-  import { avr } from './avr.svelte.js';
-  import { useSetup } from './useSetup.svelte.js';
-  import { el, esc, txt } from './setup.js';
-  import Icon from './Icon.svelte';
-  import Slider from './Slider.svelte';
+  import { useSetup } from '../lib/useSetup.svelte.js';
+  import { el, esc, txt } from '../lib/setup.js';
+  import Icon from '../lib/Icon.svelte';
+  import Panel from '../lib/Panel.svelte';
 
   const rename = useSetup('inputs', 3);
   const hide = useSetup('inputs', 4);
   const assign = useSetup('inputs', 2);
-  const level = useSetup('inputs', 5);
 
   const HIDE_REASON = { 3: 'In use by Main Zone', 4: 'In use by Zone 2', 5: 'In use by Zone 3', 7: 'Select source', 8: 'Video select' };
 
@@ -51,14 +49,10 @@
   async function setAssign(r, col, value) {
     await assign.write(`<${col} index="${r.idx}">${value}</${col}>`, { delay: 600 });
   }
-
-  const curName = $derived(avr.state.inputs?.[avr.state.source]?.name ?? avr.state.source);
-  const srcLevelNode = $derived(level.doc?.querySelector('SourceLevel'));
 </script>
 
-<div class="grid">
-  <section class="card">
-    <h2>Inputs {#if rename.loading || hide.loading}<span class="faint small">loading…</span>{/if}</h2>
+<Panel id="setup-inputs" title="Inputs" class="wide">
+    {#snippet actions()}{#if rename.loading || hide.loading}<span class="faint small">loading…</span>{/if}{/snippet}
     {#if rename.error}<p class="err">{rename.error}</p>{/if}
     <div class="table-wrap">
       <table>
@@ -106,17 +100,8 @@
     </div>
     <p class="faint small">Changes are sent to the receiver immediately; the previous values are backed up first.
       Assigning a connector that another input already uses moves it.</p>
-  </section>
+</Panel>
 
-  {#if srcLevelNode && srcLevelNode.getAttribute('display') === '3'}
-    <section class="card">
-      <h2>Source level — {curName}</h2>
-      <Slider label="Input level for the current source" min={-12} max={12} step={1} center value={Number(srcLevelNode.textContent)}
-        format={(v) => (v > 0 ? '+' : '') + v + ' dB'} onchange={(v) => level.write(`<SourceLevel>${v}</SourceLevel>`, { quiet: true })} />
-      <p class="faint small">Evens out loudness differences between inputs. Applies to whichever input is active.</p>
-    </section>
-  {/if}
-</div>
 
 <style>
   .table-wrap { overflow-x: auto; margin: 0 -4px; }

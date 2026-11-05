@@ -1,26 +1,13 @@
 <script>
-  import { avr, toast } from './avr.svelte.js';
-  import { useSetup } from './useSetup.svelte.js';
-  import { getXml, txt } from './setup.js';
-  import Seg from './Seg.svelte';
-  import Slider from './Slider.svelte';
-  import Icon from './Icon.svelte';
+  import { avr, toast } from '../lib/avr.svelte.js';
+  import { useSetup } from '../lib/useSetup.svelte.js';
+  import { getXml, txt } from '../lib/setup.js';
+  import Seg from '../lib/Seg.svelte';
+  import Slider from '../lib/Slider.svelte';
+  import Icon from '../lib/Icon.svelte';
+  import Panel from '../lib/Panel.svelte';
 
-  const vol = useSetup('audio', 7);
-  const z2 = useSetup('general', 4);
   const geq = useSetup('audio', 10, { reloadDelay: 2000 });
-
-  // ---- Main zone volume settings ----
-  const limit = $derived(txt(vol.doc, 'Limit'));
-  const pon = $derived(txt(vol.doc, 'PowerOnLevel'));
-  const mute = $derived(txt(vol.doc, 'MuteLevel'));
-  const LIMITS = [{ value: '99', label: 'Off' }, { value: '60', label: '−20 dB' }, { value: '70', label: '−10 dB' }, { value: '80', label: '0 dB' }];
-  const ponMode = $derived(pon === '99' ? 'last' : pon === '0' ? 'mute' : 'fixed');
-  const ponMax = $derived(Math.min(avr.cap, limit && limit !== '99' ? Number(limit) - 80 : 18));
-
-  // ---- Zone 2 ----
-  const z2node = (t) => z2.doc?.querySelector(t);
-  const z2edit = (t) => z2node(t)?.getAttribute('display') === '3';
 
   // ---- Graphic EQ ----
   const BANDS = ['63Hz', '125Hz', '250Hz', '500Hz', '1kHz', '2kHz', '4kHz', '8kHz', '16kHz'];
@@ -57,69 +44,11 @@
   function setBand(i, v) { curve[i] = v; }
 </script>
 
-<div class="cols">
-  <section class="card">
-    <h2>Volume — Main Zone</h2>
-    {#if vol.error}<p class="err">{vol.error}</p>{/if}
-    {#if vol.doc}
-      <div class="setting stack">
-        <div><div class="label">Volume limit</div>
-          <div class="hint">The receiver itself will never go louder than this — from any remote, app or the knob.</div></div>
-        <Seg value={LIMITS.some((l) => l.value === limit) ? limit : null} options={LIMITS} disabled={vol.saving}
-          onchange={(v) => vol.write(`<Limit>${v}</Limit>`)} />
-        {#if limit === '99'}<div class="warn small"><Icon name="info" size={16} />No limit set — the knob can reach +18 dB. A limit of −10 dB is a sensible safety net.</div>{/if}
-      </div>
-      <div class="setting stack">
-        <div><div class="label">Power-on volume</div><div class="hint">Volume when the receiver turns on</div></div>
-        <Seg value={ponMode} disabled={vol.saving}
-          options={[{ value: 'last', label: 'Last used' }, { value: 'mute', label: 'Muted' }, { value: 'fixed', label: 'Fixed' }]}
-          onchange={(v) => vol.write(`<PowerOnLevel>${v === 'last' ? 99 : v === 'mute' ? 0 : 40}</PowerOnLevel>`)} />
-        {#if ponMode === 'fixed'}
-          <Slider min={-79} max={ponMax} step={1} value={Number(pon) - 80} format={(v) => v + ' dB'}
-            onchange={(v) => vol.write(`<PowerOnLevel>${v + 80}</PowerOnLevel>`, { quiet: true })} />
-        {/if}
-      </div>
-      <div class="setting stack">
-        <div><div class="label">Mute level</div><div class="hint">How much “mute” turns it down</div></div>
-        <Seg value={mute} disabled={vol.saving} onchange={(v) => vol.write(`<MuteLevel>${v}</MuteLevel>`)}
-          options={[{ value: '1', label: 'Full' }, { value: '3', label: '−40 dB' }, { value: '2', label: '−20 dB' }]} />
-      </div>
-    {/if}
-  </section>
-
-  <section class="card">
-    <h2>Volume — Zone 2</h2>
-    {#if z2.error}<p class="err">{z2.error}</p>{/if}
-    {#if z2.doc}
-      {#if z2edit('VolumeLimit')}
-        <div class="setting stack">
-          <div class="label">Volume limit</div>
-          <Seg value={txt(z2.doc, 'VolumeLimit')} disabled={z2.saving} onchange={(v) => z2.write(`<VolumeLimit>${v}</VolumeLimit>`)}
-            options={[{ value: '1', label: 'Off' }, { value: '2', label: '−20 dB' }, { value: '3', label: '−10 dB' }, { value: '4', label: '0 dB' }]} />
-        </div>
-      {/if}
-      {#if z2edit('PowerOnVolume')}
-        <div class="setting stack">
-          <div class="label">Power-on volume</div>
-          <Seg value={txt(z2.doc, 'PowerOnVolume') === '99' ? 'last' : txt(z2.doc, 'PowerOnVolume') === '0' ? 'mute' : 'fixed'} disabled={z2.saving}
-            options={[{ value: 'last', label: 'Last used' }, { value: 'mute', label: 'Muted' }, { value: 'fixed', label: 'Fixed' }]}
-            onchange={(v) => z2.write(`<PowerOnVolume>${v === 'last' ? 99 : v === 'mute' ? 0 : 40}</PowerOnVolume>`)} />
-        </div>
-      {/if}
-      {#if z2edit('VolumeLevel')}
-        <div class="setting">
-          <div><div class="label">Variable volume</div><div class="hint">Off = fixed line-level output (for an external amp)</div></div>
-          <span class="pill">{txt(z2.doc, 'VolumeLevel') === '99' ? 'Variable' : 'Fixed ' + (Number(txt(z2.doc, 'VolumeLevel')) - 80) + ' dB'}</span>
-        </div>
-      {/if}
-    {/if}
-  </section>
-
-  <section class="card wide">
-    <h2>Graphic EQ
+<Panel id="graphic-eq" title="Graphic EQ" class="wide">
+    {#snippet actions()}
       {#if geq.doc}<button class="switch" class:on={geqOn} aria-label="Graphic EQ" disabled={geq.saving}
         onclick={() => geq.write(`<GraphicEQ><Enable>${geqOn ? 2 : 1}</Enable></GraphicEQ>`)}></button>{/if}
-    </h2>
+    {/snippet}
     {#if geq.error}<p class="err">{geq.error}</p>{/if}
     {#if geq.doc}
       <p class="muted small" style="margin:-6px 0 12px">Manual per-speaker EQ (used when Audyssey MultEQ is off).</p>
@@ -152,14 +81,10 @@
         </div>
       {/if}
     {/if}
-  </section>
-</div>
+  </Panel>
 
 <style>
-  .cols { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
-  .wide { grid-column: 1 / -1; }
   .err { color: var(--bad); }
-  .warn { display: flex; gap: 8px; align-items: center; color: var(--accent); }
   .eq { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; padding: 8px 0; overflow-x: auto; }
   .eq.off { opacity: 0.5; }
   .band { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 34px; }

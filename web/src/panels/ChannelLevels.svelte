@@ -2,10 +2,9 @@
   import { avr, send, fmtDb, level2, CHANNELS } from '../lib/avr.svelte.js';
   import Icon from '../lib/Icon.svelte';
   import Slider from '../lib/Slider.svelte';
-  import SpeakerSetup from '../lib/SpeakerSetup.svelte';
+  import Panel from '../lib/Panel.svelte';
 
   const st = $derived(avr.state);
-  const on = $derived(st.zoneMain === true);
 
   // Positions on a 100 x 100 room (screen at the top, listener in the middle).
   const POS = {
@@ -24,14 +23,10 @@
   const anyTrim = $derived(chans.some((c) => st.channels[c] !== 0));
 </script>
 
-{#if !on}
-  <div class="card empty">The main zone is in standby — channel levels appear when it's on.</div>
-{:else}
-<div class="cols">
-  <section class="card">
-    <h2>Channel levels
+<Panel id="channel-levels" title="Channel levels" needsPower>
+    {#snippet actions()}
       <button class="btn small" disabled={!anyTrim} onclick={() => send('CVZRL')}><Icon name="reset" size={16} />Reset all</button>
-    </h2>
+    {/snippet}
     <p class="muted small" style="margin:-6px 0 12px">Each speaker shows its <strong>effective level</strong> = speaker setup level + listening trim.
       Tap one to trim it (same as the receiver's <em>Option → Channel Level Adjust</em>). Stored levels are edited in <em>Speaker setup → Levels</em>.</p>
 
@@ -75,14 +70,9 @@
         </div>
       </div>
     {/if}
-  </section>
-
-  <SpeakerSetup />
-</div>
-{/if}
+</Panel>
 
 <style>
-  .cols { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); align-items: start; }
   .room { width: 100%; max-width: 520px; display: block; margin: 0 auto; touch-action: manipulation; }
   .floor { fill: var(--bg-2); stroke: var(--line); stroke-width: 0.6; }
   .screen { fill: var(--accent); opacity: 0.8; }
@@ -105,5 +95,4 @@
   .eff { color: var(--text); }
   .lv { font-size: 3.6px; text-anchor: middle; fill: var(--muted); font-family: var(--mono); pointer-events: none; }
   .adjust { margin-top: 14px; display: grid; gap: 8px; padding: 14px; border-radius: 14px; background: var(--card-2); border: 1px solid var(--line); }
-  .btn.small { min-height: 32px; padding: 4px 10px; font-size: 12.5px; text-transform: none; letter-spacing: 0; }
 </style>

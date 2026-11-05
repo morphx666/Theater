@@ -2,24 +2,22 @@
   import { avr, connect, send } from './lib/avr.svelte.js';
   import Icon from './lib/Icon.svelte';
   import Home from './pages/Home.svelte';
-  import Sound from './pages/Sound.svelte';
-  import Speakers from './pages/Speakers.svelte';
-  import Zones from './pages/Zones.svelte';
-  import Remote from './pages/Remote.svelte';
+  import Section from './pages/Section.svelte';
   import Setup from './pages/Setup.svelte';
+  import { ui } from './lib/layout.svelte.js';
 
   const PAGES = [
     { id: 'home', label: 'Home', icon: 'home', comp: Home },
-    { id: 'sound', label: 'Sound', icon: 'sliders', comp: Sound },
-    { id: 'speakers', label: 'Speakers', icon: 'speaker', comp: Speakers },
-    { id: 'zones', label: 'Zone 2', icon: 'zones', comp: Zones },
-    { id: 'remote', label: 'Remote', icon: 'remote', comp: Remote },
+    { id: 'sound', label: 'Sound', icon: 'sliders', comp: Section },
+    { id: 'speakers', label: 'Speakers', icon: 'speaker', comp: Section },
+    { id: 'zones', label: 'Zone 2', icon: 'zones', comp: Section },
+    { id: 'remote', label: 'Remote', icon: 'remote', comp: Section },
     { id: 'setup', label: 'Setup', icon: 'gear', comp: Setup },
   ];
 
   let page = $state(location.hash.slice(1) || 'home');
   const Current = $derived(PAGES.find((p) => p.id === page)?.comp ?? Home);
-  $effect(() => { history.replaceState(null, '', '#' + page); });
+  $effect(() => { history.replaceState(null, '', '#' + page); if (page !== 'home') ui.editing = false; });
   window.addEventListener('hashchange', () => (page = location.hash.slice(1) || 'home'));
 
   connect();
@@ -74,7 +72,7 @@
       {#if !st}
         <div class="empty">Connecting to the receiver…</div>
       {:else}
-        <Current />
+        {#key page}<Current section={page} />{/key}
       {/if}
     </main>
   </div>

@@ -1,7 +1,8 @@
 <script>
   // Live telnet traffic + a (guarded) command box for power users.
-  import { onRaw, send } from './avr.svelte.js';
-  import Icon from './Icon.svelte';
+  import { onRaw, send } from '../lib/avr.svelte.js';
+  import Icon from '../lib/Icon.svelte';
+  import Panel from '../lib/Panel.svelte';
 
   let open = $state(false);
   let lines = $state([]);
@@ -28,10 +29,10 @@
   }
 </script>
 
-<section class="card">
-  <h2>Console
+<Panel id="console" title="Console">
+  {#snippet actions()}
     <button class="switch" class:on={open} aria-label="Show console" onclick={() => (open = !open)}></button>
-  </h2>
+  {/snippet}
   {#if open}
     <div class="log mono" bind:this={box}>
       {#each lines as l, i (i)}<div class:me={l.startsWith('»')}>{l}</div>{/each}
@@ -45,7 +46,7 @@
   {:else}
     <p class="muted small">Watch the raw telnet protocol live and send commands by hand.</p>
   {/if}
-</section>
+</Panel>
 
 <style>
   .log { height: 240px; overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: 12.5px; margin-bottom: 10px; }
