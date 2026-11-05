@@ -109,7 +109,7 @@ Sections & types (★ = not supported on X1700H, request hangs ~20–30 s — av
 - **speakers**: 2 AmpAssign, 3 SpeakerConfig, 4 Distances, 5 Levels, 6 Crossovers, 7 Bass, 8 FrontSpeaker,
   10 Subwoofer, 11 SpeakerPreset, 18 LFEDistribution (★ 15, 16, 17)
 - **inputs**: 2 InputAssign, 3 SourceRename, 4 HideSources, 5 SourceLevels, 6 InputSelect
-- **video / network / general**: see `server/setup-spec.md`
+- **video / network / general**: see `docs/SETUP-API.md`
 - **advanced** (hidden page `advanced/advanced.html`): Settings + HDMI Diagnostics (EDID log, cable test…)
 
 Unsafe on this API: `general` type 11 (firmware), 15 (setup lock), 16 (reset), HEOS account delete/sign-out,

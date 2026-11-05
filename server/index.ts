@@ -196,7 +196,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
       if (req.method === 'POST') {
         const { data } = await readBody(req);
         log(`setup write ${m[1]}/${m[2]}: ${String(data).slice(0, 200)}`);
-        await setup.set(m[1], Number(m[2]), data, extra);
+        await setup.set(m[1], Number(m[2]), data, effectiveCap(settings.volumeCapDb, state), extra);
         // Telnet-visible values may have changed.
         setTimeout(() => telnet.sendMany(REFRESH_QUERIES), 800);
         return json(res, 200, { ok: true });

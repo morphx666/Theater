@@ -134,3 +134,22 @@ test('setup proxy strips dangerous extra params', async () => {
   assert.deepEqual(safeExtra('audio', 10, { opt1: '3', opt2: '9', evil: 'x' }), { opt1: '3', opt2: '0' });
   assert.deepEqual(safeExtra('audio', 10, { opt1: '2&type=11' }), {});
 });
+
+test('setup write validation', async () => {
+  const { validateWrite } = await import('./setup.ts');
+  const ok = (s: string, t: number, x: string) => assert.equal(validateWrite(s, t, x, -10), null, x);
+  const bad = (s: string, t: number, x: string) => assert.notEqual(validateWrite(s, t, x, -10), null, x);
+  ok('inputs', 3, '<Source index="5">Kodi</Source>');
+  ok('speakers', 5, '<List><Speaker index="1">35</Speaker></List>');
+  ok('audio', 7, '<Limit>70</Limit>');
+  ok('audio', 7, '<PowerOnLevel>99</PowerOnLevel>');
+  ok('audio', 7, '<PowerOnLevel>50</PowerOnLevel>');
+  bad('audio', 7, '<PowerOnLevel>90</PowerOnLevel>');
+  bad('general', 4, '<PowerOnVolume>85</PowerOnVolume>');
+  bad('speakers', 5, '<SetDefaults></SetDefaults>');
+  bad('audio', 10, '<GraphicEQ><SetDefaults>1</SetDefaults></GraphicEQ>');
+  bad('globals', 8, '<SetupLock>1</SetupLock>');
+  bad('inputs', 3, '<Hide index="1">2</Hide>');
+  bad('inputs', 3, '<Source index="1">a</Source><Reboot>1</Reboot>');
+  bad('general', 11, '<AutoUpdate>1</AutoUpdate>');
+});

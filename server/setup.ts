@@ -22,13 +22,58 @@ export const READABLE: Record<string, number[]> = {
 
 // Writes we expose. Anything that can brick, reset, lock, or knock the unit off the network is excluded.
 export const WRITABLE: Record<string, number[]> = {
-  globals: [3, 4, 6, 7, 10], // friendly name, zone power, zone rename, source select, speaker preset
-  audio: [3, 4, 5, 7, 9, 10],
-  speakers: [3, 4, 5, 6, 7, 8, 10, 11],
-  inputs: [2, 3, 4, 5, 6],
-  video: [],
-  general: [],
+  globals: [3], // friendly name
+  audio: [7, 10], // volume limit / power-on level / mute level, graphic EQ
+  speakers: [3, 4, 5, 6, 7, 11], // config, distances, levels, crossovers, bass, preset
+  inputs: [2, 3, 4, 5, 6], // assignment, rename, hide, source level, input mode
+  general: [3, 4, 6, 7, 10, 14], // ECO, zone 2 setup, zone rename, quick select names, display, usage data
 };
+
+// Allowed root element(s) of the XML payload for each writable page (exactly as the official UI sends them).
+const ROOTS: Record<string, string[]> = {
+  'globals/3': ['FriendlyName'],
+  'audio/7': ['Limit', 'PowerOnLevel', 'MuteLevel'],
+  'audio/10': ['GraphicEQ'],
+  'speakers/3': ['Speaker'],
+  'speakers/4': ['Distances', 'Unit'],
+  'speakers/5': ['List'],
+  'speakers/6': ['Selection', 'All', 'Speaker'],
+  'speakers/7': ['SubwooferMode', 'LPFforLFE'],
+  'speakers/11': ['SpeakerPreset'],
+  'inputs/2': ['HDMI', 'Digital', 'Analog', 'Video', 'InputMode'],
+  'inputs/3': ['Source'],
+  'inputs/4': ['Hide'],
+  'inputs/5': ['SourceLevel'],
+  'inputs/6': ['InputMode'],
+  'general/3': ['Mode', 'PowerOnDefault', 'OnScreenDisplay', 'AutoStandby'],
+  'general/4': ['VolumeLevel', 'VolumeLimit', 'PowerOnVolume', 'MuteLevel', 'Bass', 'Treble', 'HighPassFilter', 'Channel', 'LchLevel', 'RchLevel'],
+  'general/6': ['List'],
+  'general/7': ['List'],
+  'general/10': ['Dimmer', 'Channel'],
+  'general/14': ['Send'],
+};
+
+// Never pass these anywhere in a payload.
+const FORBIDDEN_TAGS = /<\s*\/?\s*(SetDefaults|Reboot|SetupLock|Update|ExecuteUpdate|FirmwareUpdate|CurveCopy|MenuLock|PanelLock|RemoteLock)\b/i;
+
+/**
+ * Validate an XML payload before it reaches the receiver. `capDb` = app volume cap, used to refuse a
+ * "power-on volume" louder than the cap (avoids a loud surprise at the next power-on).
+ */
+export function validateWrite(section: string, type: number, xml: string, capDb: number): string | null {
+  if (FORBIDDEN_TAGS.test(xml)) return 'payload contains a blocked element (reset/lock/firmware)';
+  const roots = ROOTS[`${section}/${type}`];
+  if (!roots) return `write not allowed: ${section}/${type}`;
+  const m = xml.trim().match(/^<([A-Za-z][\w]*)[\s>][\s\S]*<\/\1>$/);
+  if (!m || !roots.includes(m[1])) return `unexpected payload for ${section}/${type}`;
+  if (/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(xml)) return 'control characters not allowed';
+  const pon = xml.match(/<(PowerOnLevel|PowerOnVolume)>(\d+)</);
+  if (pon) {
+    const n = Number(pon[2]);
+    if (n !== 0 && n !== 99 && n - 80 > capDb) return `power-on volume above the safety cap (${capDb} dB)`;
+  }
+  return null;
+}
 
 // Explicitly never allowed, regardless of the lists above.
 const NEVER: Record<string, number[]> = {
@@ -70,11 +115,11 @@ export class SetupApi {
     return this.serial(() => this.request(`/ajax/${section}/get_config?${qs}`));
   }
 
-  async set(section: string, type: number, dataXml: string, extra: Record<string, string> = {}): Promise<string> {
+  async set(section: string, type: number, dataXml: string, capDb: number, extra: Record<string, string> = {}): Promise<string> {
     if (!this.canWrite(section, type)) throw new HttpError(403, `write not allowed: ${section}/${type}`);
-    if (typeof dataXml !== 'string' || dataXml.length > 20_000 || !dataXml.trim().startsWith('<')) {
-      throw new HttpError(400, 'data must be an XML fragment');
-    }
+    if (typeof dataXml !== 'string' || dataXml.length > 20_000) throw new HttpError(400, 'data must be an XML fragment');
+    const problem = validateWrite(section, type, dataXml, capDb);
+    if (problem) throw new HttpError(400, problem);
     await this.backup(section, type, extra);
     const qs = `type=${type}&data=${encodeURIComponent(dataXml)}`;
     return this.serial(() => this.request(`/ajax/${section}/set_config?${qs}`));
