@@ -96,6 +96,9 @@ apply ~1 s later:
 <cmd id="1">SetTunerPresetNameDefault</cmd> <presetno>56</presetno>               -> <cmd>OK</cmd> (blank name)
 <cmd id="1">GetTunerStatus</cmd>      -> band, frequency, automanual, presetno, presetname
 ```
+**All tuner commands (TFAN/TPAN/TMAN, TPANMEM) are silently ignored unless the input is TUNER**; queries still answer.
+A skip change sent while another input was active appeared to be lost once Tuner was selected, so the app
+only allows preset changes while Tuner is the input.
 There is no real delete: the app's "delete" = skip + clear name; `OPTPN ?` still lists skipped presets.
 `SetAutoPreset` (rescan, overwrites all) exists but its format is unknown and it is not used.
 ```

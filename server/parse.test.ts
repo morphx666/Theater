@@ -230,6 +230,10 @@ test('tuner presets: list parsing and store/recall guard', () => {
   assert.deepEqual(st.tuner.presets['01'], { name: '', freq: '009210' });
   assert.deepEqual(st.tuner.presets['13'], { name: 'KQED', freq: '009510' });
   const ok = (c: string) => guard(c, st, -10).ok;
+  assert.equal(ok('TPANMEM13'), false); // ignored by the receiver unless Tuner is the input
+  assert.equal(ok('TFANUP'), false);
+  assert.equal(ok('TPAN?'), true); // queries are fine
+  st.source = 'TUNER';
   assert.equal(ok('TPANMEM13'), true);
   assert.equal(ok('TPAN56'), true);
   assert.equal(ok('OPTPN ?'), true);

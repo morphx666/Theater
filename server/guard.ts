@@ -51,6 +51,9 @@ export function guard(raw: string, st: AvrState, capDb: number): GuardResult {
   if (BLOCKED.some((r) => r.test(cmd))) return { ok: false, reason: `blocked for safety: ${cmd}` };
   if (!ALLOWED.some((r) => r.test(cmd))) return { ok: false, reason: `not allowed: ${cmd}` };
 
+  // The receiver silently ignores tuner commands unless Tuner is the active input (queries still answer).
+  if (/^T[FPM]AN(?!\?$)/.test(cmd) && st.source !== 'TUNER') return { ok: false, reason: 'Switch the input to Tuner first' };
+
   // Master volume cap
   if (/^MV\d{2,3}$/.test(cmd)) {
     const db = volToDb(cmd.slice(2));

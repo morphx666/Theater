@@ -7,6 +7,8 @@
 
   const st = $derived(avr.state);
   const on = $derived(st.zoneMain === true);
+  // The receiver ignores tuner commands unless Tuner is the active input, so everything but Listen waits for it.
+  const active = $derived(on && st.source === 'TUNER');
 
   // Receiver frequencies are 6 digits: below 050000 it's FM in 10 kHz steps (009510 = 95.10 MHz), otherwise AM.
   function fmtFreq(raw) {
@@ -32,6 +34,7 @@
   let confirmAll = $state(false);
   let busy = $state(false);
 
+  $effect(() => { if (!active && mode !== 'listen') setMode('listen'); });
   function setMode(m) { mode = m; confirm = null; editing = null; confirmDelete = false; confirmAll = false; if (m !== 'listen') open = true; }
 
   function tapSlot(p) {
@@ -77,28 +80,31 @@
 </script>
 
 <Panel id="tuner" title="Tuner">
-  <div class="tuner">
+  {#if on && !active}
+    <p class="hint notice">The tuner only responds while it's the active input. Tap <b>Listen</b> to switch to it.</p>
+  {/if}
+  <div class="tuner" class:dim={!active}>
     <div class="freq mono">{freq}</div>
     <div class="faint small">{st.tuner?.band ?? ''}{here.length ? ` · preset ${here.map(Number).join(', ')}` : ''}</div>
   </div>
   <div class="row keys">
-    <button class="btn grow" disabled={!on} onclick={() => send('TFANDOWN')}><Icon name="left" />Tune</button>
-    <button class="btn grow" disabled={!on} onclick={() => send('TFANUP')}>Tune<Icon name="right" /></button>
+    <button class="btn grow" disabled={!active} onclick={() => send('TFANDOWN')}><Icon name="left" />Tune</button>
+    <button class="btn grow" disabled={!active} onclick={() => send('TFANUP')}>Tune<Icon name="right" /></button>
   </div>
   <div class="row keys">
-    <button class="btn grow" disabled={!on} onclick={() => send('TPANDOWN')}><Icon name="left" />Preset</button>
-    <button class="btn grow" disabled={!on} onclick={() => send('TPANUP')}>Preset<Icon name="right" /></button>
+    <button class="btn grow" disabled={!active} onclick={() => send('TPANDOWN')}><Icon name="left" />Preset</button>
+    <button class="btn grow" disabled={!active} onclick={() => send('TPANUP')}>Preset<Icon name="right" /></button>
   </div>
   <div class="row keys">
-    <Seg value={st.tuner?.band} onchange={(v) => send('TMAN' + v)} disabled={!on}
+    <Seg value={st.tuner?.band} onchange={(v) => send('TMAN' + v)} disabled={!active}
       options={[{ value: 'FM', label: 'FM' }, { value: 'AM', label: 'AM' }]} />
-    <button class="btn grow" disabled={!on} onclick={() => send('SITUNER')}><Icon name="radio" size={18} />Listen</button>
+    <button class="btn grow" class:primary={on && !active} disabled={!on || active} onclick={() => send('SITUNER')}><Icon name="radio" size={18} />{active ? 'Listening' : 'Listen'}</button>
   </div>
   <div class="row keys">
     {#if mode === 'save'}
       <button class="btn grow" onclick={() => setMode('listen')}><Icon name="x" size={18} />Cancel</button>
     {:else}
-      <button class="btn grow" disabled={!on || !presets.length} onclick={() => setMode('save')}><Icon name="save" size={18} />Save {freq} as preset…</button>
+      <button class="btn grow" disabled={!active || !presets.length} onclick={() => setMode('save')}><Icon name="save" size={18} />Save {freq} as preset…</button>
     {/if}
   </div>
 
@@ -107,7 +113,7 @@
       <summary>
         <span>Presets <span class="faint small">{used.length} of {presets.length}</span></span>
         {#if mode !== 'save'}
-          <button class="btn small ghost manage" class:on={mode === 'manage'}
+          <button class="btn small ghost manage" class:on={mode === 'manage'} disabled={!active}
             onclick={(e) => { e.preventDefault(); setMode(mode === 'manage' ? 'listen' : 'manage'); }}>
             <Icon name={mode === 'manage' ? 'check' : 'edit'} size={14} />{mode === 'manage' ? 'Done' : 'Manage'}
           </button>
@@ -124,7 +130,7 @@
         {#each presets as p (p.n)}
           <button class="slot" class:here={!p.empty && p.freq === st.tuner?.freq} class:empty={p.empty}
             class:confirm={confirm === p.n} class:sel={editing === p.n}
-            disabled={(mode !== 'manage' && !on) || (p.empty && mode !== 'save') || busy}
+            disabled={!active || (p.empty && mode !== 'save') || busy}
             onclick={() => tapSlot(p)} title={p.empty ? 'Empty' : p.name ? `${p.name} · ${fmtFreq(p.freq)}` : fmtFreq(p.freq)}>
             <span class="num">{Number(p.n)}</span>
             {#if confirm === p.n}
@@ -172,6 +178,8 @@
 <style>
   .keys { margin-top: 8px; }
   .tuner { text-align: center; padding: 8px 0 12px; }
+  .tuner.dim { opacity: 0.45; }
+  .notice { margin: 0 0 6px; text-align: center; }
   .freq { font-size: 34px; font-weight: 700; color: var(--accent); letter-spacing: -1px; }
   details { margin-top: 12px; }
   summary { cursor: pointer; font-weight: 600; padding: 4px 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }

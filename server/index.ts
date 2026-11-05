@@ -85,6 +85,7 @@ function rereadPresets() {
   setTimeout(() => { telnet.send('OPTPN ?'); refreshSkipped(); }, 1200);
 }
 async function presetAction(b: any, who: string) {
+  if (state.source !== 'TUNER') throw new HttpError(409, 'Switch the input to Tuner first');
   const n = Number(b?.n);
   const one = () => { if (!validPreset(n)) throw new HttpError(400, 'preset must be 1-56'); return n; };
   switch (b?.action) {
