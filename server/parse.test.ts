@@ -126,3 +126,11 @@ test('guard enforces the volume cap', () => {
   st.volumeLimit = 'OFF';
   assert.equal(effectiveCap(-10, st), -10);
 });
+
+test('setup proxy strips dangerous extra params', async () => {
+  const { safeExtra } = await import('./setup.ts');
+  assert.deepEqual(safeExtra('general', 11, { opt1: '2' }), {});
+  assert.deepEqual(safeExtra('audio', 9, { opt1: '1' }), {});
+  assert.deepEqual(safeExtra('audio', 10, { opt1: '3', opt2: '9', evil: 'x' }), { opt1: '3', opt2: '0' });
+  assert.deepEqual(safeExtra('audio', 10, { opt1: '2&type=11' }), {});
+});

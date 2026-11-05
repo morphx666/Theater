@@ -66,7 +66,7 @@ export class SetupApi {
 
   get(section: string, type: number, extra: Record<string, string> = {}): Promise<string> {
     if (!this.canRead(section, type)) return Promise.reject(new HttpError(403, `read not allowed: ${section}/${type}`));
-    const qs = new URLSearchParams({ type: String(type), ...extra, _: String(Date.now()) });
+    const qs = new URLSearchParams({ type: String(type), ...safeExtra(section, type, extra), _: String(Date.now()) });
     return this.serial(() => this.request(`/ajax/${section}/get_config?${qs}`));
   }
 
@@ -126,6 +126,18 @@ export class SetupApi {
       req.on('error', reject);
     });
   }
+}
+
+/**
+ * Extra query params are dangerous: e.g. `general` type 11 with `opt1=2` STARTS A FIRMWARE UPDATE.
+ * The only legitimate use is the Graphic EQ per-channel view (audio type 10: opt1=<channel code>, opt2=0).
+ * Everything else is dropped.
+ */
+export function safeExtra(section: string, type: number, extra: Record<string, string>): Record<string, string> {
+  if (section === 'audio' && type === 10 && /^\d{1,2}$/.test(extra.opt1 ?? '')) {
+    return { opt1: extra.opt1, opt2: '0' };
+  }
+  return {};
 }
 
 export class HttpError extends Error {

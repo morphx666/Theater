@@ -1,0 +1,20 @@
+# systemd unit for running Denon Remote on a Raspberry Pi (or any Linux box).
+# Install:  sudo cp deploy/denon-remote.service /etc/systemd/system/
+#           sudo systemctl daemon-reload && sudo systemctl enable --now denon-remote
+[Unit]
+Description=Denon Remote (web remote for the AVR-X1700H)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/denon-remote
+Environment=AVR_HOST=192.168.1.50
+Environment=PORT=8787
+ExecStart=/usr/bin/node --env-file-if-exists=.env server/index.ts
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
