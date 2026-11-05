@@ -3,6 +3,7 @@
   import Icon from '../lib/Icon.svelte';
   import VolumeDial from '../lib/VolumeDial.svelte';
   import NowPlaying from '../lib/NowPlaying.svelte';
+  import Favorites from '../lib/Favorites.svelte';
 
   const st = $derived(avr.state);
   const on = $derived(st?.zoneMain === true);
@@ -76,6 +77,8 @@
     <div class="card">
       <VolumeDial />
     </div>
+
+    <Favorites />
   </section>
 
   <section class="right grid">
