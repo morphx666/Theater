@@ -196,9 +196,7 @@ async function choosePort(env: Record<string, string>): Promise<number> {
 
 // ---------- telnet ----------
 async function chooseTelnet(env: Record<string, string>): Promise<'on' | 'off'> {
-  console.log('  Theater keeps a telnet connection open to the receiver, so changes show up instantly.');
-  console.log('  If another app (for example Home Assistant) also needs that connection, answer no:');
-  console.log('  Theater will then check the receiver every few seconds instead.');
+  console.log('  Answer no only if other apps have trouble connecting to your receiver.');
   return (await confirm('Use the telnet connection?', env.AVR_TELNET !== 'off')) ? 'on' : 'off';
 }
 
