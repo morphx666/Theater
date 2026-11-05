@@ -3,48 +3,88 @@
   // "Customize" mode: drag the grip (mouse or touch) or use ↑/↓ to reorder, ✕ to unpin, "Add panels" to pin more.
   import { setContext } from 'svelte';
   import { PANELS, PANEL_LIST, SECTION_LABELS } from '../panels/index.js';
-  import { homeIds, setHome, resetHome, move, ui, DEFAULT_HOME } from '../lib/layout.svelte.js';
+  import { homeIds, homeLanes, setHome, resetHome, ui, DEFAULT_HOME } from '../lib/layout.svelte.js';
   import Icon from '../lib/Icon.svelte';
   import { lanes } from '../lib/lanes.js';
 
   setContext('home', true);
 
   const saved = $derived(homeIds().filter((id) => PANELS[id]));
+  const savedLanes = $derived(homeLanes());
   let dragOrder = $state(null); // live order while dragging
+  let dragLanes = $state(null); // live column choices while dragging
   let dragId = $state(null);
   const order = $derived(dragOrder ?? saved);
+  const hints = $derived(dragLanes ?? savedLanes);
   let adding = $state(false);
   let lastMoved = $state(null); // drawn on top while panels animate
-
-  function step(id, delta) { lastMoved = id; move(id, delta); }
+  let cols = $state(1); // current number of columns (reported by the layout engine)
 
   const available = $derived(
     Object.entries(SECTION_LABELS)
       .map(([sec, label]) => ({ label, panels: PANEL_LIST.filter((p) => p.section === sec && !saved.includes(p.id)) }))
       .filter((g) => g.panels.length),
   );
-  const isDefault = $derived(JSON.stringify(saved) === JSON.stringify(DEFAULT_HOME));
+  const isDefault = $derived(JSON.stringify(saved) === JSON.stringify(DEFAULT_HOME) && !Object.keys(savedLanes).length);
 
   function remove(id) { setHome(saved.filter((x) => x !== id)); }
   function add(id) { setHome([...saved, id]); }
 
-  // ---- pointer drag (works for mouse and touch) ----
-  // Which slot is under the pointer, using each slot's settled layout box (offsetLeft/Top ignore the
-  // transforms of running animations) — not where it happens to be mid-slide.
+  // ---- columns ----
   let grid = $state();
-  // Which slot is under the pointer, using each slot's settled layout box (offsetLeft/Top ignore the
-  // transforms of running animations) — not where it happens to be mid-slide.
-  function slotAt(x, y) {
+  /** Column each panel currently sits in, as laid out on screen. */
+  function currentLanes() {
+    const out = {};
+    for (const el of grid?.querySelectorAll(':scope > [data-slot]') ?? []) out[el.dataset.slot] = Number(el.dataset.lane ?? 0);
+    return out;
+  }
+  /** Panels of one column, top to bottom. */
+  function columnOf(lanesMap, ord, lane) {
+    return ord.filter((id) => !PANELS[id].wide && (lanesMap[id] ?? -1) === lane);
+  }
+  function colAt(x) {
     const r = grid.getBoundingClientRect();
-    const px = x - r.left, py = y - r.top;
-    for (const el of grid.querySelectorAll(':scope > [data-slot]')) {
-      if (px >= el.offsetLeft && px <= el.offsetLeft + el.offsetWidth && py >= el.offsetTop && py <= el.offsetTop + el.offsetHeight) {
-        return el.dataset.slot;
-      }
-    }
-    return null;
+    const w = (r.width - 16 * (cols - 1)) / cols;
+    return Math.max(0, Math.min(cols - 1, Math.floor((x - r.left + 8) / (w + 16))));
+  }
+  let laneMap = $state({}); // panel -> column, as currently laid out (drives the arrow buttons)
+  function onLayout(e) {
+    cols = e.detail?.cols ?? cols;
+    const m = currentLanes();
+    if (JSON.stringify(m) !== JSON.stringify(laneMap)) laneMap = m;
+    follow();
   }
 
+  // ---- buttons: ↑ ↓ within the column, ← → to the neighbouring column ----
+  function nudge(id, dir) {
+    lastMoved = id;
+    const l = currentLanes();
+    const ord = [...saved];
+    if (dir === 'left' || dir === 'right') {
+      l[id] = Math.max(0, Math.min(cols - 1, l[id] + (dir === 'left' ? -1 : 1)));
+      setHome(ord, l);
+      return;
+    }
+    const col = columnOf(l, ord, l[id]);
+    const k = col.indexOf(id);
+    const other = col[k + (dir === 'up' ? -1 : 1)];
+    if (!other) return;
+    // swap the two panels' positions in the overall order
+    const a = ord.indexOf(id), b = ord.indexOf(other);
+    [ord[a], ord[b]] = [ord[b], ord[a]];
+    setHome(ord, l);
+  }
+  function canNudge(id, dir) {
+    if (PANELS[id].wide || laneMap[id] === undefined) return false;
+    const lane = laneMap[id];
+    if (dir === 'left') return lane > 0;
+    if (dir === 'right') return lane < cols - 1;
+    const col = columnOf(laneMap, order, lane);
+    const k = col.indexOf(id);
+    return dir === 'up' ? k > 0 : k >= 0 && k < col.length - 1;
+  }
+
+  // ---- pointer drag (mouse and touch) ----
   // Auto-scroll while dragging near the top/bottom edge of the window.
   let scrollSpeed = 0, scrollRaf = 0, lastPt = null;
   function autoScroll() {
@@ -54,12 +94,8 @@
     scrollRaf = requestAnimationFrame(autoScroll);
   }
 
-  // ---- drag state ----
   let dragEl = null;          // the slot element being dragged (follows the pointer)
   let grab = { x: 0, y: 0 };  // where inside the panel it was grabbed
-  let anchor = null;          // pointer position at drag start / last reorder
-  let lockUntil = 0;          // brief pause after each reorder
-  let prevOrder = null;       // order before the last reorder (to block immediate reversals)
 
   // Keep the lifted panel under the pointer, wherever the layout has settled it.
   function follow() {
@@ -81,12 +117,11 @@
     const r = dragEl.getBoundingClientRect();
     grab = { x: e.clientX - r.left, y: e.clientY - r.top };
     lastPt = { clientX: e.clientX, clientY: e.clientY };
-    anchor = { x: e.clientX, y: e.clientY };
-    lockUntil = 0;
-    prevOrder = null;
     dragId = id;
     lastMoved = id;
     dragOrder = [...saved];
+    dragLanes = currentLanes(); // freeze every panel in its current column; only the dragged one moves
+    currentLanesSaved = { ...dragLanes };
     document.body.classList.add('grabbing');
     window.addEventListener('pointermove', dragMove);
     window.addEventListener('pointerup', dragEnd, { once: true });
@@ -94,6 +129,9 @@
     requestAnimationFrame(followLoop);
   }
 
+  // Where the dragged panel should go: the column under the pointer, and within that column
+  // before/after the panel under the pointer (by its upper/lower half), or at the end if below them all.
+  // Uses settled layout boxes (offsetTop ignores running animations), so it can't oscillate.
   function dragMove(e) {
     if (!dragId) return;
     lastPt = { clientX: e.clientX, clientY: e.clientY };
@@ -101,28 +139,28 @@
     const edge = 90;
     scrollSpeed = e.clientY < edge ? -Math.ceil((edge - e.clientY) / 6) : e.clientY > innerHeight - edge ? Math.ceil((e.clientY - innerHeight + edge) / 6) : 0;
     if (scrollSpeed && !scrollRaf) scrollRaf = requestAnimationFrame(autoScroll);
+    if (PANELS[dragId].wide || cols < 1) return;
 
-    const now = performance.now();
-    if (now < lockUntil) return;
-    const dx = e.clientX - anchor.x, dy = e.clientY - anchor.y;
-    if (Math.hypot(dx, dy) < 24) return; // need some real movement since the last reorder
-    const target = slotAt(e.clientX, e.clientY);
-    if (!target || target === dragId) return;
-    const from = dragOrder.indexOf(dragId), to = dragOrder.indexOf(target);
-    // Mostly-vertical movement: only move the panel in the direction the pointer travels
-    // (up = earlier, down = later). In a masonry layout, the panel that lands under the pointer after
-    // a reorder is often the one just passed, which would otherwise bounce it straight back.
-    if (Math.abs(dy) > Math.abs(dx) && (dy < 0) !== (to < from)) return;
+    const lane = colAt(e.clientX);
+    const py = e.clientY - grid.getBoundingClientRect().top;
+    const others = columnOf(dragLanes, dragOrder, lane).filter((id) => id !== dragId);
+    let before = null; // insert before this panel; null = end of column
+    for (const id of others) {
+      const el = grid.querySelector(`[data-slot="${id}"]`);
+      if (py < el.offsetTop + el.offsetHeight / 2) { before = id; break; }
+    }
     const o = dragOrder.filter((x) => x !== dragId);
-    const ti = o.indexOf(target);
-    o.splice(from < to ? ti + 1 : ti, 0, dragId);
-    // Never immediately undo the previous reorder unless the pointer has clearly moved on.
-    if (prevOrder && o.join() === prevOrder.join() && Math.hypot(dx, dy) < 120) return;
-    prevOrder = dragOrder;
+    let ins;
+    if (before) ins = o.indexOf(before);
+    else if (others.length) ins = o.indexOf(others[others.length - 1]) + 1;
+    else ins = o.length;
+    o.splice(ins, 0, dragId);
+    const laneChanged = dragLanes[dragId] !== lane;
+    if (!laneChanged && o.join() === dragOrder.join()) return;
     dragOrder = o;
-    anchor = { x: e.clientX, y: e.clientY };
-    lockUntil = now + 180;
+    if (laneChanged) dragLanes = { ...dragLanes, [dragId]: lane };
   }
+
   function dragEnd() {
     scrollSpeed = 0;
     window.removeEventListener('pointermove', dragMove);
@@ -142,16 +180,20 @@
       }
       dragEl = null;
     }
-    const final = dragOrder;
+    const finalOrder = dragOrder, finalLanes = dragLanes;
     dragId = null;
     dragOrder = null;
-    if (JSON.stringify(final) !== JSON.stringify(saved)) setHome(final);
+    dragLanes = null;
+    if (JSON.stringify(finalOrder) !== JSON.stringify(saved) || JSON.stringify(finalLanes) !== JSON.stringify(currentLanesSaved)) {
+      setHome(finalOrder, finalLanes);
+    }
   }
+  let currentLanesSaved = null; // snapshot at drag start, to detect "no change"
 </script>
 
 <div class="bar">
   {#if ui.editing}
-    <span class="muted small grow">Drag <Icon name="grip" size={14} /> to reorder · ✕ to unpin</span>
+    <span class="muted small grow">Drag <Icon name="grip" size={14} /> anywhere — or use the arrows · ✕ to unpin</span>
     <button class="btn small" onclick={() => (adding = true)}><Icon name="plus" size={16} />Add panels</button>
     <button class="btn small" disabled={isDefault} onclick={resetHome}><Icon name="reset" size={16} />Reset</button>
     <button class="btn small primary" onclick={() => { ui.editing = false; adding = false; }}><Icon name="check" size={16} />Done</button>
@@ -168,19 +210,24 @@
   </div>
 {/if}
 
-<div class="panels" class:editing={ui.editing} use:lanes={{ animate: ui.editing }} bind:this={grid} onlaneslayout={follow}>
+<div class="panels" class:editing={ui.editing} use:lanes={{ animate: ui.editing, hints }} bind:this={grid} onlaneslayout={onLayout}>
   {#each order as id, i (id)}
     {@const p = PANELS[id]}
     <div class="slot" class:wide={p.wide} class:dragging={dragId === id} class:active={lastMoved === id} data-slot={id}>
       {#if ui.editing}
         <div class="edit">
-          <button class="grip" aria-label="Drag to reorder {p.title}" title="Drag to reorder"
+          <button class="grip" aria-label="Drag to reorder {p.title}" title="Drag to reorder · {p.title} ({SECTION_LABELS[p.section]})"
             onpointerdown={(e) => dragStart(e, id)}>
             <Icon name="grip" size={18} stroke={3} />
           </button>
-          <span class="name">{p.title}<span class="faint"> · {SECTION_LABELS[p.section]}</span></span>
-          <button class="btn icon sm ghost" aria-label="Move {p.title} up" disabled={i === 0} onclick={() => step(id, -1)}><Icon name="up" size={16} /></button>
-          <button class="btn icon sm ghost" aria-label="Move {p.title} down" disabled={i === order.length - 1} onclick={() => step(id, 1)}><Icon name="down" size={16} /></button>
+            {#if cols > 1 && !p.wide}
+              <button class="btn icon sm ghost" aria-label="Move {p.title} to the left column" disabled={!canNudge(id, 'left')} onclick={() => nudge(id, 'left')}><Icon name="left" size={16} /></button>
+            {/if}
+            <button class="btn icon sm ghost" aria-label="Move {p.title} up" disabled={!canNudge(id, 'up')} onclick={() => nudge(id, 'up')}><Icon name="up" size={16} /></button>
+            <button class="btn icon sm ghost" aria-label="Move {p.title} down" disabled={!canNudge(id, 'down')} onclick={() => nudge(id, 'down')}><Icon name="down" size={16} /></button>
+            {#if cols > 1 && !p.wide}
+              <button class="btn icon sm ghost" aria-label="Move {p.title} to the right column" disabled={!canNudge(id, 'right')} onclick={() => nudge(id, 'right')}><Icon name="right" size={16} /></button>
+            {/if}
           <button class="btn icon sm ghost danger" aria-label="Unpin {p.title}" onclick={() => remove(id)}><Icon name="x" size={16} /></button>
         </div>
       {/if}
@@ -224,13 +271,18 @@
   .slot.dragging { z-index: 50; box-shadow: 0 28px 60px -18px rgb(0 0 0 / 0.75); outline-style: solid !important; }
   :global(body.grabbing), :global(body.grabbing *) { cursor: grabbing !important; user-select: none; }
   .editing .content { pointer-events: none; user-select: none; }
-  .edit { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
+  /* Floating toolbar over the panel's header: adds no height, so the layout while editing is exactly
+     the layout you get after "Done" (a masonry layout depends on panel heights). */
+  .edit {
+    position: absolute; top: 8px; right: 8px; z-index: 3; display: flex; align-items: center; gap: 2px; padding: 3px;
+    background: color-mix(in srgb, var(--card-2) 92%, transparent); backdrop-filter: blur(8px);
+    border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+  }
   .grip {
-    width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--card-2); color: var(--muted);
+    width: 34px; height: 34px; border-radius: 9px; border: 0; background: none; color: var(--muted);
     cursor: grab; display: grid; place-items: center; touch-action: none; flex: none;
   }
   .grip:active { cursor: grabbing; color: var(--accent); }
-  .name { flex: 1; min-width: 0; font-weight: 650; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 6px; }
   .sm { width: 34px; min-height: 34px; height: 34px; }
   .sheet { width: min(460px, 100%); max-height: 80dvh; overflow: auto; }
   .group { display: grid; gap: 4px; }

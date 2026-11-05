@@ -7,7 +7,7 @@ export const ui = $state({ editing: false });
 
 // While a change is being saved, show the local version: a routine state broadcast from the server can
 // still carry the previous layout and would otherwise make panels jump back and forth.
-const pending = $state({ home: null, seq: 0 });
+const pending = $state({ home: null, lanes: null, seq: 0 });
 
 export function homeIds() {
   if (pending.home) return pending.home;
@@ -15,23 +15,33 @@ export function homeIds() {
   return Array.isArray(h) ? h : DEFAULT_HOME;
 }
 
-export async function setHome(ids) {
+/** Column chosen by the user for each panel ({ id: columnIndex }); panels without one are auto-placed. */
+export function homeLanes() {
+  if (pending.home) return pending.lanes ?? {};
+  const l = avr.settings?.homeLanes;
+  return l && typeof l === 'object' ? l : {};
+}
+
+export async function setHome(ids, lanes = homeLanes()) {
   const seq = ++pending.seq;
+  const keep = Object.fromEntries(Object.entries(lanes).filter(([id]) => ids.includes(id)));
   pending.home = ids;
+  pending.lanes = keep;
   try {
-    const saved = await api('/api/settings', { method: 'POST', body: { home: ids } });
-    if (seq === pending.seq) avr.settings = { ...avr.settings, home: saved.home };
+    const saved = await api('/api/settings', { method: 'POST', body: { home: ids, homeLanes: keep } });
+    if (seq === pending.seq) avr.settings = { ...avr.settings, home: saved.home, homeLanes: saved.homeLanes };
   } catch (e) {
     toast(e.message, 'error');
   } finally {
-    if (seq === pending.seq) pending.home = null; // newest save finished; follow the server again
+    if (seq === pending.seq) { pending.home = null; pending.lanes = null; } // newest save finished; follow the server again
   }
 }
 
 export async function resetHome() {
   pending.seq++;
   pending.home = null;
-  avr.settings = { ...avr.settings, home: undefined };
+  pending.lanes = null;
+  avr.settings = { ...avr.settings, home: undefined, homeLanes: undefined };
   try { await api('/api/settings', { method: 'POST', body: { home: null } }); } catch (e) { toast(e.message, 'error'); }
 }
 
