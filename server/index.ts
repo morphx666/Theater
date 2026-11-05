@@ -212,6 +212,7 @@ function sendCommand(raw: string, source = ''): { ok: boolean; cmd?: string; rea
   if (!r.ok) { log(`rejected: ${raw} (${r.reason})`); return r; }
   if (!r.cmd.endsWith('?')) log(`sent: ${r.cmd}${source ? ` (from ${source})` : ''}`); // audit trail (queries omitted)
   telnet.send(r.cmd);
+  if (r.cmd.startsWith('TPANMEM')) setTimeout(() => telnet.send('OPTPN ?'), 1000); // show the stored preset
   return r;
 }
 

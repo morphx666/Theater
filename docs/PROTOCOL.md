@@ -79,6 +79,10 @@ Unprompted info lines are also pushed: `SYSMI <sound mode text>`, `SYSDA <decode
 Z2ON|OFF  Z2<src>  Z240  Z2UP|DOWN  Z2MUON|OFF  Z2?
 SLPOFF|SLP030   ECOON|AUTO|OFF   DIM BRI|DIM|DAR|OFF   STBY15M|30M|60M|OFF   SPPR 1|2   BTTX ON|OFF
 TFAN009490 (tuner 94.90 FM)  TMANFM|AM  TPAN01..  TFANUP/DOWN  TPANUP/DOWN
+TPANMEM01..56   store the current station in that preset (official protocol). Bare TPANMEM opens the
+                receiver's own memory prompt instead; the app blocks it.
+OPTPN ?         -> OPTPN01<8-char name>009210 ... OPTPN56   (whole preset list; names blank unless set)
+TFANCMP         unprompted "tuning complete" status after tuning: not a frequency
 MNMEN ON|OFF  MNCUP MNCDN MNCLT MNCRT MNENT MNRTN MNOPT MNINF  (on-screen menu remote)
 MNZST ON|OFF (All Zone Stereo)   NS9A play  NS9B pause  NS9C stop  NS9D next  NS9E prev
 ```

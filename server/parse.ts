@@ -46,7 +46,7 @@ export type AvrState = {
   volumeLimit: string | null; // "OFF" | "060" | "070" | "080"
   powerOnLevel: string | null; // "LAS" | "MUT" | "040" ...
   muteLevel: string | null;
-  tuner: { band: string | null; freq: string | null; preset: string | null };
+  tuner: { band: string | null; freq: string | null; preset: string | null; presets: Record<string, { name: string; freq: string }> }; // presets: "01".. "56"
   firmware: Record<string, string>;
 };
 
@@ -59,7 +59,7 @@ export function emptyState(): AvrState {
     zone2: { power: null, source: null, volume: null, mute: null },
     sleep: null, eco: null, dimmer: null, autoStandby: null, speakerPreset: null, btTx: null, allZoneStereo: null,
     volumeLimit: null, powerOnLevel: null, muteLevel: null,
-    tuner: { band: null, freq: null, preset: null }, firmware: {},
+    tuner: { band: null, freq: null, preset: null, presets: {} }, firmware: {},
   };
 }
 
@@ -129,6 +129,7 @@ function pick(st: AvrState, l: string): unknown {
     case 'Z2': return st.zone2;
     case 'SS': return [st.inputs, st.quickNames, st.setupLevels, st.volumeLimit, st.powerOnLevel, st.muteLevel, st.sampleRate, st.signal, st.firmware, st.audioFormat, st.video];
     case 'TF': case 'TP': case 'TM': return st.tuner;
+    case 'OP': return [st.tuner.presets];
     default: return st;
   }
 }
@@ -187,6 +188,12 @@ function applyInner(st: AvrState, l: string): void {
   // TFAN009510 = 95.10 MHz. Status words such as TFANCMP ("tuning complete") are not frequencies.
   if (l.startsWith('TFAN')) { const v = l.slice(4).trim(); if (/^\d{4,6}$/.test(v)) st.tuner.freq = v; return; }
   if (l.startsWith('TMAN')) { const v = l.slice(4).trim(); if (v === 'AM' || v === 'FM') st.tuner.band = v; return; }
+  // OPTPN01 <8-char name>009210 = preset 01, 92.10 MHz
+  if (l.startsWith('OPTPN')) {
+    const m = l.match(/^OPTPN(\d{2})(.*?)(\d{6})$/);
+    if (m) st.tuner.presets[m[1]] = { name: m[2].trim(), freq: m[3] };
+    return;
+  }
   if (l.startsWith('TPAN')) { st.tuner.preset = l.slice(4).trim(); return; }
   if (l.startsWith('SS')) { applySS(st, l.slice(2)); return; }
 }
@@ -252,7 +259,7 @@ export const REFRESH_QUERIES = [
   'PSDEL ?', 'PSNEURAL ?', 'PSCES ?',
   'Z2?', 'Z2MU?', 'SLP?', 'ECO?', 'DIM ?', 'STBY?', 'SPPR ?', 'BTTX ?', 'MSQUICK ?', 'MNZST ?',
   'SSSOD ?', 'SSFUN ?', 'SSQSNZMA ?', 'SSLEV ?', 'SSVCTZMA ?', 'SSINFAISFSV ?', 'SSINFAISSIG ?', 'SSINFFRM ?',
-  'TFAN?', 'TMAN?', 'TPAN?',
+  'TFAN?', 'TMAN?', 'TPAN?', 'OPTPN ?',
 ];
 
 /** Lighter refresh after power-on / input change (parameters can differ per input). */

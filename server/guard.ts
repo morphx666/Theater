@@ -24,7 +24,11 @@ const ALLOWED = [
   /^STBY(15M|30M|60M|OFF|\?)$/,
   /^SPPR (1|2|\?)$/,
   /^BTTX (ON|OFF|SP|BT|\?)$/,
-  /^T[FPM]AN([A-Z0-9 ]{1,8}|\?)$/,
+  /^TFAN(UP|DOWN|\d{6}|\?)$/, // tune
+  /^TMAN(AM|FM|AUTO|MANUAL|\?)$/, // band / tuning mode
+  /^TPAN(UP|DOWN|OFF|0[1-9]|[1-4]\d|5[0-6]|\?)$/, // recall preset 01-56
+  /^TPANMEM(0[1-9]|[1-4]\d|5[0-6])$/, // store the current station in preset 01-56 (bare TPANMEM opens a prompt: not allowed)
+  /^OPTPN \?$/, // read the preset list
   /^MN(CUP|CDN|CLT|CRT|ENT|RTN|OPT|INF|MEN ON|MEN OFF|ZST ON|ZST OFF|ZST \?)$/,
   /^NS9[A-E]$/,
   /^VS(MONI|VPM|AUDIO|SC)[A-Z0-9 ]{1,8}$/,

@@ -222,3 +222,21 @@ test('tuner frequency ignores status words', () => {
   applyLine(st, 'TFANCMP'); // "tuning complete"
   assert.equal(st.tuner.freq, '009510');
 });
+
+test('tuner presets: list parsing and store/recall guard', () => {
+  const st = emptyState();
+  applyLine(st, 'OPTPN01         009210');
+  applyLine(st, 'OPTPN13 KQED    009510');
+  assert.deepEqual(st.tuner.presets['01'], { name: '', freq: '009210' });
+  assert.deepEqual(st.tuner.presets['13'], { name: 'KQED', freq: '009510' });
+  const ok = (c: string) => guard(c, st, -10).ok;
+  assert.equal(ok('TPANMEM13'), true);
+  assert.equal(ok('TPAN56'), true);
+  assert.equal(ok('OPTPN ?'), true);
+  assert.equal(ok('TPANMEM'), false); // opens the receiver's memory prompt
+  assert.equal(ok('TPANMEM57'), false);
+  assert.equal(ok('TPANMEM00'), false);
+  assert.equal(ok('TPAN57'), false);
+  assert.equal(ok('TFANUP'), true);
+  assert.equal(ok('TMANFM'), true);
+});
