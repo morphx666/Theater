@@ -4,6 +4,7 @@
   import Panel from '../lib/Panel.svelte';
   import Seg from '../lib/Seg.svelte';
   import { remember } from '../lib/remember.js';
+  import TunerDial from '../lib/TunerDial.svelte';
 
   const st = $derived(avr.state);
   const on = $derived(st.zoneMain === true);
@@ -84,8 +85,10 @@
     <p class="hint notice">The tuner only responds while it's the active input. Tap <b>Listen</b> to switch to it.</p>
   {/if}
   <div class="tuner" class:dim={!active}>
-    <div class="freq mono">{freq}</div>
-    <div class="faint small">{st.tuner?.band ?? ''}{here.length ? ` · preset ${here.map(Number).join(', ')}` : ''}</div>
+    <TunerDial freq={st.tuner?.freq} band={st.tuner?.band} disabled={!active}
+      ontune={(raw, b) => send(b !== st.tuner?.band ? ['TMAN' + b, 'TFAN' + raw] : 'TFAN' + raw)} />
+    <div class="faint small sub">{freq} · {st.tuner?.band ?? ''}{here.length ? ` · preset ${here.map(Number).join(', ')}` : ''}
+      {#if active}<span class="tip">· tap the dial to type, drag to tune</span>{/if}</div>
   </div>
   <div class="row keys">
     <button class="btn grow" disabled={!active} onclick={() => send('TFANDOWN')}><Icon name="left" />Tune</button>
@@ -177,10 +180,10 @@
 
 <style>
   .keys { margin-top: 8px; }
-  .tuner { text-align: center; padding: 8px 0 12px; }
-  .tuner.dim { opacity: 0.45; }
+  .tuner { text-align: center; padding: 4px 0 10px; }
+  .sub { margin-top: 6px; }
+  .tip { opacity: 0.8; }
   .notice { margin: 0 0 6px; text-align: center; }
-  .freq { font-size: 34px; font-weight: 700; color: var(--accent); letter-spacing: -1px; }
   details { margin-top: 12px; }
   summary { cursor: pointer; font-weight: 600; padding: 4px 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   summary::before { content: '▸'; margin-right: 6px; }
