@@ -38,6 +38,7 @@ const setup = new SetupApi(HOST, DATA);
 const conn = { telnet: false, heos: false, http: false };
 let progress = { position: null as number | null, duration: null as number | null };
 let lastLog: string[] = []; // recent raw telnet lines, for the debug console
+let prevPowerLine: string | null = null;
 
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
@@ -53,6 +54,10 @@ telnet.on('line', (line: string) => {
   if (lastLog.length > 200) lastLog = lastLog.slice(-200);
   const prevPower = state.zoneMain;
   const prevSource = state.source;
+  if (/^(PW|ZM|Z2)(ON|OFF|STANDBY)$/.test(line) && line !== (line.startsWith('PW') ? (prevPowerLine ?? '') : '')) {
+    if (line.startsWith('PW')) prevPowerLine = line;
+    log(`receiver reported: ${line}`);
+  }
   if (applyLine(state, line)) scheduleBroadcast();
   // Parameters depend on power state and input; re-read them after transitions.
   if ((line === 'ZMON' && prevPower === false) || (line.startsWith('SI') && prevSource && line.slice(2) !== prevSource)) {
@@ -112,14 +117,18 @@ function broadcastRaw(line: string) {
   for (const c of rawSubscribers) if (c.readyState === WebSocket.OPEN) c.send(s);
 }
 
-function sendCommand(raw: string): { ok: boolean; cmd?: string; reason?: string } {
+function sendCommand(raw: string, source = ''): { ok: boolean; cmd?: string; reason?: string } {
   const r = guard(raw, state, effectiveCap(settings.volumeCapDb, state));
   if (!r.ok) { log(`rejected: ${raw} (${r.reason})`); return r; }
+  if (!r.cmd.endsWith('?')) log(`sent: ${r.cmd}${source ? ` (from ${source})` : ''}`); // audit trail (queries omitted)
   telnet.send(r.cmd);
   return r;
 }
 
-wss.on('connection', (ws) => {
+const clientNames = new WeakMap<WebSocket, string>();
+const clientName = (ws: WebSocket) => clientNames.get(ws) ?? 'ws';
+wss.on('connection', (ws, req) => {
+  clientNames.set(ws, String(req.socket.remoteAddress ?? 'ws').replace(/^::ffff:/, ''));
   ws.send(JSON.stringify(snapshot()));
   ws.on('close', () => rawSubscribers.delete(ws));
   ws.on('message', async (data) => {
@@ -128,7 +137,7 @@ wss.on('connection', (ws) => {
     if (msg.type === 'cmd') {
       const cmds: string[] = Array.isArray(msg.cmd) ? msg.cmd : [msg.cmd];
       for (const c of cmds) {
-        const r = sendCommand(c);
+        const r = sendCommand(c, clientName(ws));
         if (!r.ok) ws.send(JSON.stringify({ type: 'error', message: r.reason }));
       }
     } else if (msg.type === 'heos') {
@@ -162,7 +171,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
     if (p === '/api/state' && req.method === 'GET') return json(res, 200, snapshot());
     if (p === '/api/cmd' && req.method === 'POST') {
       const { cmd } = await readBody(req);
-      const r = sendCommand(cmd);
+      const r = sendCommand(cmd, req.socket.remoteAddress ?? 'http');
       return json(res, r.ok ? 200 : 400, r);
     }
     if (p === '/api/settings') {

@@ -191,7 +191,7 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .err { color: var(--bad); }
 
 /* Page grid of panels — "grid lanes" (masonry): see lib/lanes.js */
-.panels { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.panels { position: relative; display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); align-items: start; }
 .panels > .wide { grid-column: 1 / -1; }
 .panels.lanes-native { display: grid-lanes; }
 .panels.lanes-js { grid-auto-rows: 1px; row-gap: 0; align-items: start; }

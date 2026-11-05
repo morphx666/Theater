@@ -5,21 +5,32 @@ export const DEFAULT_HOME = ['status', 'volume', 'inputs', 'sound-mode', 'quick-
 
 export const ui = $state({ editing: false });
 
+// While a change is being saved, show the local version: a routine state broadcast from the server can
+// still carry the previous layout and would otherwise make panels jump back and forth.
+const pending = $state({ home: null, seq: 0 });
+
 export function homeIds() {
+  if (pending.home) return pending.home;
   const h = avr.settings?.home;
   return Array.isArray(h) ? h : DEFAULT_HOME;
 }
 
 export async function setHome(ids) {
-  avr.settings = { ...avr.settings, home: ids }; // optimistic
+  const seq = ++pending.seq;
+  pending.home = ids;
   try {
-    await api('/api/settings', { method: 'POST', body: { home: ids } });
+    const saved = await api('/api/settings', { method: 'POST', body: { home: ids } });
+    if (seq === pending.seq) avr.settings = { ...avr.settings, home: saved.home };
   } catch (e) {
     toast(e.message, 'error');
+  } finally {
+    if (seq === pending.seq) pending.home = null; // newest save finished; follow the server again
   }
 }
 
 export async function resetHome() {
+  pending.seq++;
+  pending.home = null;
   avr.settings = { ...avr.settings, home: undefined };
   try { await api('/api/settings', { method: 'POST', body: { home: null } }); } catch (e) { toast(e.message, 'error'); }
 }

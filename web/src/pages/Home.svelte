@@ -29,8 +29,25 @@
   function add(id) { setHome([...saved, id]); }
 
   // ---- pointer drag (works for mouse and touch) ----
+  // Which slot is under the pointer, using each slot's settled layout box (offsetLeft/Top ignore the
+  // transforms of running animations) — not where it happens to be mid-slide.
+  let grid = $state();
+  let swapLockUntil = 0, lastSwapPt = null;
+  function slotAt(x, y) {
+    const r = grid.getBoundingClientRect();
+    const px = x - r.left, py = y - r.top;
+    for (const el of grid.querySelectorAll(':scope > [data-slot]')) {
+      if (px >= el.offsetLeft && px <= el.offsetLeft + el.offsetWidth && py >= el.offsetTop && py <= el.offsetTop + el.offsetHeight) {
+        return el.dataset.slot;
+      }
+    }
+    return null;
+  }
+
   function dragStart(e, id) {
     e.preventDefault();
+    swapLockUntil = 0;
+    lastSwapPt = null;
     dragId = id;
     lastMoved = id;
     dragOrder = [...saved];
@@ -52,9 +69,15 @@
     const edge = 90;
     scrollSpeed = e.clientY < edge ? -Math.ceil((edge - e.clientY) / 6) : e.clientY > innerHeight - edge ? Math.ceil((e.clientY - innerHeight + edge) / 6) : 0;
     if (scrollSpeed && !scrollRaf) scrollRaf = requestAnimationFrame(autoScroll);
-    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-slot]');
-    const target = over?.dataset.slot;
+    // Hysteresis: after a swap, wait for the pointer to travel a bit and for the slide to mostly finish,
+    // otherwise panels of different sizes can swap back and forth under a still pointer (flicker).
+    const now = performance.now();
+    if (now < swapLockUntil) return;
+    if (lastSwapPt && Math.hypot(e.clientX - lastSwapPt.x, e.clientY - lastSwapPt.y) < 28) return;
+    const target = slotAt(e.clientX, e.clientY);
     if (!target || target === dragId) return;
+    swapLockUntil = now + 220;
+    lastSwapPt = { x: e.clientX, y: e.clientY };
     const o = dragOrder.filter((x) => x !== dragId);
     const ti = o.indexOf(target);
     const from = dragOrder.indexOf(dragId);
@@ -94,7 +117,7 @@
   </div>
 {/if}
 
-<div class="panels" class:editing={ui.editing} use:lanes={{ animate: ui.editing }}>
+<div class="panels" class:editing={ui.editing} use:lanes={{ animate: ui.editing }} bind:this={grid}>
   {#each order as id, i (id)}
     {@const p = PANELS[id]}
     <div class="slot" class:wide={p.wide} class:dragging={dragId === id} class:active={lastMoved === id} data-slot={id}>
@@ -143,6 +166,7 @@
 <style>
   .bar { display: flex; align-items: center; gap: 8px; margin: -4px 0 12px; flex-wrap: wrap; }
   .bar .muted { display: inline-flex; align-items: center; gap: 4px; }
+  .panels { position: relative; } /* offsetParent for slotAt() */
   .slot { min-width: 0; position: relative; transition: opacity 0.15s; }
   .slot.wide { grid-column: 1 / -1; }
   .editing .slot { outline: 2px dashed color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 4px; border-radius: var(--radius); background: var(--bg); }

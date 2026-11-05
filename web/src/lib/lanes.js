@@ -22,6 +22,7 @@ export function lanes(node, opts = {}) {
   let raf = 0;
   const heights = new Map();
   const lastPos = new WeakMap(); // child -> {x, y} relative to container (native mode only)
+  const target = new WeakMap(); // child -> settled position it is currently animating towards
 
   // ---- FLIP helpers ----
   const children = () => [...node.children].filter((c) => {
@@ -44,6 +45,11 @@ export function lanes(node, opts = {}) {
       }
       const a = first.get(c);
       if (!a) continue;
+      // Destination unchanged and already sliding there? Let it finish instead of restarting (prevents jitter).
+      const dest = `${c.offsetLeft},${c.offsetTop},${c.offsetWidth}`;
+      const running = c.getAnimations().length > 0;
+      if (running && target.get(c) === dest) continue;
+      target.set(c, dest);
       c.getAnimations().forEach((x) => x.cancel()); // measure the true new spot
       const b = c.getBoundingClientRect();
       const dx = a.left - b.left;
