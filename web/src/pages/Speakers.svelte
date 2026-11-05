@@ -32,7 +32,8 @@
     <h2>Channel levels
       <button class="btn small" disabled={!anyTrim} onclick={() => send('CVZRL')}><Icon name="reset" size={16} />Reset all</button>
     </h2>
-    <p class="muted small" style="margin:-6px 0 12px">Temporary trims on top of your Audyssey calibration. Tap a speaker to adjust.</p>
+    <p class="muted small" style="margin:-6px 0 12px">Each speaker shows its <strong>effective level</strong> = speaker setup level + listening trim.
+      Tap one to trim it (same as the receiver's <em>Option → Channel Level Adjust</em>). Stored levels are edited in <em>Speaker setup → Levels</em>.</p>
 
     <svg class="room" viewBox="-4 -4 108 108" role="group" aria-label="Speaker layout">
       <rect x="0" y="0" width="100" height="100" rx="6" class="floor" />
@@ -45,13 +46,15 @@
       {#each chans as c (c)}
         {@const [x, y] = POS[c]}
         {@const v = st.channels[c]}
+        {@const eff = total(c)}
         <g class="spk" class:sel={selected === c} class:h={isHeight(c)} class:sub={c.startsWith('SW')}
-          transform="translate({x} {y})" role="button" tabindex="0" aria-label="{CHANNELS[c] ?? c} {fmtDb(v)} dB"
+          transform="translate({x} {y})" role="button" tabindex="0" aria-label="{CHANNELS[c] ?? c} {fmtDb(eff)} dB, trim {fmtDb(v)} dB"
           onclick={() => (sel = selected === c ? null : c)} onkeydown={(e) => e.key === 'Enter' && (sel = c)}>
           {#if v !== 0}<circle r={7 + Math.abs(v) * 0.6} class="halo" class:neg={v < 0} />{/if}
           {#if c.startsWith('SW')}<rect x="-6" y="-6" width="12" height="12" rx="3" class="body" />{:else}<circle r="6" class="body" />{/if}
           <text y="1.6" class="code">{c}</text>
-          <text y="12.5" class="lv">{v === 0 ? '0' : fmtDb(v)}</text>
+          <text y="12.5" class="lv" class:trimmed={v !== 0}>{eff === 0 ? '0' : fmtDb(eff)}</text>
+          {#if v !== 0}<text x="6.5" y="-5" class="trim" class:neg={v < 0}>{fmtDb(v)}</text>{/if}
         </g>
       {/each}
     </svg>
@@ -60,12 +63,12 @@
       <div class="adjust">
         <div class="row between">
           <strong>{CHANNELS[selected] ?? selected}</strong>
-          <span class="faint small">calibrated {fmtDb(st.setupLevels[selected] ?? 0)} dB · effective {fmtDb(total(selected))} dB</span>
+          <span class="faint small">setup {fmtDb(st.setupLevels[selected] ?? 0)} + trim {fmtDb(st.channels[selected])} = <strong class="eff">{fmtDb(total(selected))} dB</strong></span>
         </div>
         <div class="row">
           <button class="btn icon" aria-label="Down" onclick={() => send(`CV${selected} DOWN`)}><Icon name="minus" /></button>
           <div class="grow">
-            <Slider min={-12} max={12} step={0.5} center value={st.channels[selected]} format={(v) => fmtDb(v) + ' dB'}
+            <Slider label="Trim" min={-12} max={12} step={0.5} center value={st.channels[selected]} format={(v) => fmtDb(v) + ' dB'}
               onchange={(v) => send(`CV${selected} ${level2(v)}`)} />
           </div>
           <button class="btn icon" aria-label="Up" onclick={() => send(`CV${selected} UP`)}><Icon name="plus" /></button>
@@ -86,6 +89,8 @@
   .seat { fill: var(--card-2); stroke: var(--line); stroke-width: 0.6; }
   .person { fill: none; stroke: var(--muted); stroke-width: 0.9; stroke-linecap: round; }
   .spk { cursor: pointer; }
+  .spk:focus { outline: none; }
+  .spk:focus-visible .body { stroke: var(--accent); stroke-width: 1.4; }
   .spk .body { fill: var(--card); stroke: var(--muted); stroke-width: 0.8; transition: all 0.15s; }
   .spk.h .body { stroke-dasharray: 2 1.2; }
   .spk:hover .body { stroke: var(--accent); }
@@ -94,6 +99,10 @@
   .halo { fill: color-mix(in srgb, var(--accent) 22%, transparent); }
   .halo.neg { fill: color-mix(in srgb, var(--blue) 22%, transparent); }
   .code { font-size: 3.4px; font-weight: 700; text-anchor: middle; fill: var(--text); pointer-events: none; }
+  .lv.trimmed { fill: var(--accent); font-weight: 700; }
+  .trim { font-size: 3px; font-weight: 700; fill: var(--accent); font-family: var(--mono); pointer-events: none; }
+  .trim.neg { fill: var(--blue); }
+  .eff { color: var(--text); }
   .lv { font-size: 3.6px; text-anchor: middle; fill: var(--muted); font-family: var(--mono); pointer-events: none; }
   .adjust { margin-top: 14px; display: grid; gap: 8px; padding: 14px; border-radius: 14px; background: var(--card-2); border: 1px solid var(--line); }
   .btn.small { min-height: 32px; padding: 4px 10px; font-size: 12.5px; text-transform: none; letter-spacing: 0; }

@@ -42,4 +42,6 @@
   .label { font-weight: 550; }
   .val { color: var(--accent); font-weight: 600; font-size: 14px; }
   input.center::-webkit-slider-runnable-track { background: var(--track); }
+  input.center::-moz-range-track { background: var(--track); }
+  input.center::-moz-range-progress { background: transparent; }
 </style>
