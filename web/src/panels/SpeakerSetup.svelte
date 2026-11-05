@@ -5,6 +5,7 @@
   import Icon from '../lib/Icon.svelte';
   import Slider from '../lib/Slider.svelte';
   import Panel from '../lib/Panel.svelte';
+  import { remember } from '../lib/remember.js';
 
   const preset = useSetup('speakers', 11, { reloadDelay: 5000 });
   const config = useSetup('speakers', 3);
@@ -108,7 +109,7 @@
     </div>
   {/if}
 
-  <details open>
+  <details open use:remember={'speaker-setup.levels'}>
     <summary>Levels</summary>
     {#if levels.doc}
       <div class="rows">
@@ -126,7 +127,7 @@
     {/if}
   </details>
 
-  <details open>
+  <details open use:remember={'speaker-setup.distances'}>
     <summary>Distances <span class="faint">({unitLabel})</span></summary>
     {#if dist.doc}
       <div class="rows">
@@ -154,7 +155,7 @@
     {/if}
   </details>
 
-  <details>
+  <details use:remember={'speaker-setup.crossovers'}>
     <summary>Crossovers & bass</summary>
     {#if xo.doc}
       <div class="setting stack">
@@ -189,7 +190,7 @@
     {/if}
   </details>
 
-  <details>
+  <details use:remember={'speaker-setup.config'}>
     <summary>Speaker configuration <span class="faint">(advanced)</span></summary>
     <p class="warn small"><Icon name="info" size={16} />Changing sizes or removing speakers changes bass management and which channels play. Re-run Audyssey afterwards.</p>
     {#each kinds as k (k.idx)}

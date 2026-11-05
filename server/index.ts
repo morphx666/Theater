@@ -21,10 +21,25 @@ const DIST = path.join(ROOT, 'dist');
 const USE_TELNET = process.env.AVR_TELNET !== 'off';
 
 // ---------- app settings (persisted) ----------
-type Settings = { volumeCapDb: number; volumeStep: number; home?: string[]; homeLanes?: Record<string, number>; homeSpans?: Record<string, number> };
+type Layout = { order?: string[]; lanes?: Record<string, number>; spans?: Record<string, number> };
+type Settings = {
+  volumeCapDb: number; volumeStep: number;
+  layouts?: Record<string, Layout>; // per page: panel order, start column, width in columns
+  home?: string[]; homeLanes?: Record<string, number>; homeSpans?: Record<string, number>; // legacy (migrated)
+};
 const SETTINGS_FILE = path.join(DATA, 'settings.json');
 let settings: Settings = { volumeCapDb: -10, volumeStep: 0.5 };
 try { settings = { ...settings, ...JSON.parse(await fs.readFile(SETTINGS_FILE, 'utf8')) }; } catch {}
+// Migrate the older Home-only layout format into layouts.home.
+if (settings.home || settings.homeLanes || settings.homeSpans) {
+  settings.layouts = { ...(settings.layouts ?? {}), home: { order: settings.home, lanes: settings.homeLanes ?? {}, spans: settings.homeSpans ?? {} } };
+  if (!settings.home) delete settings.layouts.home!.order;
+  delete settings.home; delete settings.homeLanes; delete settings.homeSpans;
+  await saveSettings().catch(() => {});
+}
+const ID = /^[a-z0-9-]{1,40}$/;
+const intMap = (m: unknown, lo: number, hi: number) =>
+  Object.fromEntries(Object.entries(m && typeof m === 'object' ? m : {}).filter(([k, v]) => ID.test(k) && Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi)) as Record<string, number>;
 async function saveSettings() {
   await fs.mkdir(DATA, { recursive: true });
   await fs.writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2));
@@ -179,19 +194,17 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
         const b = await readBody(req);
         if (typeof b.volumeCapDb === 'number') settings.volumeCapDb = Math.min(18, Math.max(-60, Math.round(b.volumeCapDb * 2) / 2));
         if (typeof b.volumeStep === 'number') settings.volumeStep = [0.5, 1, 2].includes(b.volumeStep) ? b.volumeStep : 0.5;
-        if (b.home === null) { delete settings.home; delete settings.homeLanes; delete settings.homeSpans; } // reset to default layout
-        else if (Array.isArray(b.home)) {
-          settings.home = [...new Set(b.home.filter((x: unknown) => typeof x === 'string' && /^[a-z0-9-]{1,40}$/.test(x)))].slice(0, 60) as string[];
-        }
-        if (b.homeSpans && typeof b.homeSpans === 'object') {
-          settings.homeSpans = Object.fromEntries(
-            Object.entries(b.homeSpans).filter(([k, v]) => /^[a-z0-9-]{1,40}$/.test(k) && Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 4),
-          ) as Record<string, number>;
-        }
-        if (b.homeLanes && typeof b.homeLanes === 'object') {
-          settings.homeLanes = Object.fromEntries(
-            Object.entries(b.homeLanes).filter(([k, v]) => /^[a-z0-9-]{1,40}$/.test(k) && Number.isInteger(v) && (v as number) >= 0 && (v as number) < 8),
-          ) as Record<string, number>;
+        if (b.layout && typeof b.layout === 'object' && ID.test(String(b.layout.page))) {
+          const page = String(b.layout.page);
+          settings.layouts ??= {};
+          if (b.layout.reset) delete settings.layouts[page];
+          else if (Array.isArray(b.layout.order) && Object.keys(settings.layouts).length < 40) {
+            settings.layouts[page] = {
+              order: [...new Set(b.layout.order.filter((x: unknown) => typeof x === 'string' && ID.test(x)))].slice(0, 60) as string[],
+              lanes: intMap(b.layout.lanes, 0, 7),
+              spans: intMap(b.layout.spans, 1, 4),
+            };
+          }
         }
         await saveSettings();
         scheduleBroadcast();

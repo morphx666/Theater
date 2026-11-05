@@ -3,8 +3,10 @@
   import { onRaw, send } from '../lib/avr.svelte.js';
   import Icon from '../lib/Icon.svelte';
   import Panel from '../lib/Panel.svelte';
+  import { loadOpen, saveOpen } from '../lib/remember.js';
 
-  let open = $state(false);
+  let open = $state(loadOpen('console', false));
+  $effect(() => saveOpen('console', open));
   let lines = $state([]);
   let cmd = $state('');
   let box = $state();
