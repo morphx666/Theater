@@ -120,8 +120,8 @@ function pick(st: AvrState, l: string): unknown {
 }
 
 function applyInner(st: AvrState, l: string): void {
-  if (l.startsWith('PW')) { st.power = l === 'PWON'; return; }
-  if (l.startsWith('ZM')) { st.zoneMain = l === 'ZMON'; return; }
+  if (l.startsWith('PW')) { st.power = l === 'PWON'; if (!st.power) st.sleep = 0; return; }
+  if (l.startsWith('ZM')) { st.zoneMain = l === 'ZMON'; if (!st.zoneMain) st.sleep = 0; return; } // timer ends with the zone
   if (l.startsWith('MVMAX')) { st.volumeMax = volToDb(l.slice(5).trim()); return; }
   if (l.startsWith('MV')) { const v = volToDb(l.slice(2)); if (v !== null) st.volume = v; return; }
   if (l.startsWith('MU')) { st.mute = l === 'MUON'; return; }

@@ -153,3 +153,11 @@ test('setup write validation', async () => {
   bad('inputs', 3, '<Source index="1">a</Source><Reboot>1</Reboot>');
   bad('general', 11, '<AutoUpdate>1</AutoUpdate>');
 });
+
+test('sleep timer clears when the main zone turns off', () => {
+  const st = emptyState();
+  applyLine(st, 'SLP021');
+  assert.equal(st.sleep, 21);
+  applyLine(st, 'ZMOFF');
+  assert.equal(st.sleep, 0);
+});
