@@ -77,6 +77,12 @@ export function panelOption(panel, key) {
   return !!avr.settings?.panelOptions?.[panel]?.[key];
 }
 
+/** A multiple-choice option (e.g. the tuner dial color); `fallback` when unset. */
+export function panelChoice(panel, key, fallback) {
+  const v = avr.settings?.panelOptions?.[panel]?.[key];
+  return typeof v === 'string' ? v : fallback;
+}
+
 export async function setPanelOption(panel, key, value) {
   const po = { ...(avr.settings?.panelOptions ?? {}) };
   po[panel] = { ...(po[panel] ?? {}), [key]: value };

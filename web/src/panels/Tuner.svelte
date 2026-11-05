@@ -5,6 +5,7 @@
   import Seg from '../lib/Seg.svelte';
   import { remember } from '../lib/remember.js';
   import TunerDial from '../lib/TunerDial.svelte';
+  import { panelChoice } from '../lib/layout.svelte.js';
 
   const st = $derived(avr.state);
   const on = $derived(st.zoneMain === true);
@@ -85,7 +86,7 @@
     <p class="hint notice">The tuner only responds while it's the active input. Tap <b>Listen</b> to switch to it.</p>
   {/if}
   <div class="tuner" class:dim={!active}>
-    <TunerDial freq={st.tuner?.freq} band={st.tuner?.band} disabled={!active}
+    <TunerDial freq={st.tuner?.freq} band={st.tuner?.band} disabled={!active} color={panelChoice('tuner', 'dialColor', 'green')}
       ontune={(raw, b) => send(b !== st.tuner?.band ? ['TMAN' + b, 'TFAN' + raw] : 'TFAN' + raw)} />
     <div class="faint small sub">{freq} · {st.tuner?.band ?? ''}{here.length ? ` · preset ${here.map(Number).join(', ')}` : ''}
       {#if active}<span class="tip">· tap the dial to type, drag to tune</span>{/if}</div>

@@ -63,7 +63,11 @@ export const PANEL_LIST = [
   { id: 'all-zone-stereo', title: 'All Zone Stereo', section: 'zones', comp: AllZoneStereo },
 
   { id: 'osd', title: 'On-screen menu', section: 'remote', comp: OsdPad },
-  { id: 'tuner', title: 'Tuner', section: 'remote', comp: Tuner },
+  { id: 'tuner', title: 'Tuner', section: 'remote', comp: Tuner, options: [{ key: 'dialColor', label: 'Dial', choices: [
+    { value: 'green', label: 'Green', swatch: '#2ee87a' },
+    { value: 'amber', label: 'Amber', swatch: '#ffa826' },
+    { value: 'blue', label: 'Blue VFD', swatch: '#46dcff' },
+  ] }] },
   { id: 'quick-settings', title: 'Quick settings', section: 'remote', comp: QuickSettings },
   { id: 'console', title: 'Console', section: 'remote', comp: Console },
 

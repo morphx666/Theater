@@ -3,7 +3,7 @@
   // current frequency and fades out at the edges. Drag the scale to tune; tap it to type a frequency.
   //   freq: receiver's 6-digit frequency ("010570" = 105.70 MHz, "105000" = 1050 kHz); band: 'FM' | 'AM'
   //   ontune(raw6, band): called with a valid, snapped frequency
-  let { freq, band, disabled = false, ontune } = $props();
+  let { freq, band, disabled = false, color = 'green', ontune } = $props(); // color: green | amber | blue
 
   // North American bands: FM 87.5-107.9 MHz on odd tenths (0.2 MHz steps), AM 530-1710 kHz in 10 kHz steps.
   const FM = { min: 87.5, max: 107.9, step: 0.2, end: 108 };
@@ -132,7 +132,7 @@
   }
 </script>
 
-<div class="dial" class:disabled class:dragging={dragX != null} bind:clientWidth={width}
+<div class="dial {color}" class:disabled class:dragging={dragX != null} bind:clientWidth={width}
   role="slider" tabindex={disabled ? -1 : 0} aria-label="Tuner frequency"
   aria-valuetext={shownValue != null ? `${label(shownValue, isAM ? 'AM' : 'FM')} ${isAM ? 'kHz' : 'MHz'}` : 'unknown'}
   aria-valuenow={shownValue ?? undefined} aria-disabled={disabled}
@@ -181,13 +181,16 @@
 
 <style>
   .dial {
-    --glow: #3dff8f;
-    --phosphor: #2ee87a;
+    /* green phosphor (default); amber and VFD blue below. Triplets so they work in rgb(... / alpha). */
+    --ph: 46 232 122; --gl: 61 255 143; --ink: 4 8 5; --bg-a: #0b1a10; --bg-b: #050a07;
+    --phosphor: rgb(var(--ph)); --glow: rgb(var(--gl));
     position: relative; height: 140px; overflow: hidden; border-radius: 12px; cursor: grab; touch-action: pan-y;
-    background: radial-gradient(120% 90% at 50% 50%, #0b1a10 0%, #050a07 70%), #040805;
+    background: radial-gradient(120% 90% at 50% 50%, var(--bg-a) 0%, var(--bg-b) 70%), rgb(var(--ink));
     box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.06), inset 0 10px 30px rgb(0 0 0 / 0.6);
     user-select: none; -webkit-user-select: none; outline: none;
   }
+  .dial.amber { --ph: 255 168 38; --gl: 255 190 80; --ink: 9 6 2; --bg-a: #1f1406; --bg-b: #0b0703; }
+  .dial.blue { --ph: 70 220 255; --gl: 120 235 255; --ink: 2 7 10; --bg-a: #071a22; --bg-b: #03090c; }
   .dial:focus-visible { box-shadow: inset 0 0 0 2px var(--accent), inset 0 10px 30px rgb(0 0 0 / 0.6); }
   .dial.dragging { cursor: grabbing; }
   .dial.disabled { cursor: default; filter: saturate(0.25) brightness(0.7); }
@@ -199,7 +202,7 @@
     mask-image: linear-gradient(to right, transparent 0%, #000 22%, #000 78%, transparent 100%);
   }
   svg { display: block; will-change: transform; transition: transform 0.55s cubic-bezier(0.22, 0.8, 0.25, 1);
-    filter: drop-shadow(0 0 3px rgb(61 255 143 / 0.45)); }
+    filter: drop-shadow(0 0 3px rgb(var(--gl) / 0.45)); }
   .dragging svg { transition: none; }
   @media (prefers-reduced-motion: reduce) { svg { transition: none; } }
 
@@ -209,9 +212,9 @@
   text { font: 700 26px/1 var(--font); letter-spacing: -0.5px; }
   text.small { font-size: 21px; }
 
-  .unit { position: absolute; right: 12px; font: 700 15px/1 var(--font); color: rgb(46 232 122 / 0.3); pointer-events: none;
-    text-shadow: 0 0 3px #040805, 0 0 6px #040805, 0 0 10px #040805; } /* dark halo keeps it readable over the scale */
-  .unit.active { color: rgb(46 232 122 / 0.9); text-shadow: 0 0 3px #040805, 0 0 6px #040805, 0 0 10px #040805, 0 0 6px rgb(61 255 143 / 0.5); }
+  .unit { position: absolute; right: 12px; font: 700 15px/1 var(--font); color: rgb(var(--ph) / 0.3); pointer-events: none;
+    text-shadow: 0 0 3px rgb(var(--ink)), 0 0 6px rgb(var(--ink)), 0 0 10px rgb(var(--ink)); } /* dark halo keeps it readable over the scale */
+  .unit.active { color: rgb(var(--ph) / 0.9); text-shadow: 0 0 3px rgb(var(--ink)), 0 0 6px rgb(var(--ink)), 0 0 10px rgb(var(--ink)), 0 0 6px rgb(var(--gl) / 0.5); }
   .mhz { top: 40px; }
   .khz { bottom: 34px; }
 
@@ -221,9 +224,9 @@
   .readout { position: absolute; top: 5px; left: 50%; transform: translateX(-50%); z-index: 1; }
   .val, .entry {
     display: inline-block; min-width: 5.2ch; padding: 1px 8px; border-radius: 7px; text-align: center;
-    font: 700 17px/1.3 var(--mono); color: var(--glow); background: rgb(4 8 5 / 0.92);
-    border: 1px solid rgb(61 255 143 / 0.35); text-shadow: 0 0 6px rgb(61 255 143 / 0.6);
+    font: 700 17px/1.3 var(--mono); color: var(--glow); background: rgb(var(--ink) / 0.92);
+    border: 1px solid rgb(var(--gl) / 0.35); text-shadow: 0 0 6px rgb(var(--gl) / 0.6);
   }
-  .entry { width: 7ch; outline: none; border-color: var(--glow); caret-color: var(--glow); box-shadow: 0 0 10px rgb(61 255 143 / 0.35); }
+  .entry { width: 7ch; outline: none; border-color: var(--glow); caret-color: var(--glow); box-shadow: 0 0 10px rgb(var(--gl) / 0.35); }
   .err { margin-top: 6px; font-size: 12.5px; color: var(--bad); text-align: center; }
 </style>

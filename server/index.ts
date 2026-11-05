@@ -27,7 +27,7 @@ type Layout = { order?: string[]; lanes?: Record<string, number>; spans?: Record
 type Settings = {
   volumeCapDb: number; volumeStep: number;
   layouts?: Record<string, Layout>; // per page: panel order, start column, width in columns
-  panelOptions?: Record<string, Record<string, boolean>>; // per panel, e.g. { volume: { locked: true } }
+  panelOptions?: Record<string, Record<string, boolean | string>>; // per panel, e.g. { volume: { locked: true }, tuner: { dialColor: 'amber' } }
   home?: string[]; homeLanes?: Record<string, number>; homeSpans?: Record<string, number>; // legacy (migrated)
 };
 const SETTINGS_FILE = path.join(DATA, 'settings.json');
@@ -334,7 +334,9 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
         if (b.panelOption && ID.test(String(b.panelOption.panel)) && /^[a-zA-Z]{1,30}$/.test(String(b.panelOption.key))) {
           const { panel, key, value } = b.panelOption;
           settings.panelOptions ??= {};
-          settings.panelOptions[panel] = { ...(settings.panelOptions[panel] ?? {}), [key]: !!value };
+          // on/off options are booleans; multiple-choice options are short ids (e.g. dial color)
+          const v = typeof value === 'string' && /^[a-z0-9-]{1,20}$/.test(value) ? value : !!value;
+          settings.panelOptions[panel] = { ...(settings.panelOptions[panel] ?? {}), [key]: v };
         }
         if (b.layout && typeof b.layout === 'object' && ID.test(String(b.layout.page))) {
           const page = String(b.layout.page);

@@ -4,7 +4,7 @@
   // columns; the width button makes it 1-3 columns wide; ✕ removes it (Home only).
   // The layout (order, start column, width) is saved per page on the server.
   import { PANELS, SECTION_LABELS } from '../panels/index.js';
-  import { getLayout, saveLayout, resetLayout, ui, panelOption, setPanelOption } from './layout.svelte.js';
+  import { getLayout, saveLayout, resetLayout, ui, panelOption, panelChoice, setPanelOption } from './layout.svelte.js';
   import Icon from './Icon.svelte';
   import { lanes } from './lanes.js';
 
@@ -274,10 +274,22 @@
       {#if ui.editing && p.options?.length}
         <div class="opts">
           {#each p.options as o (o.key)}
-            <label class="opt">
-              <input type="checkbox" checked={panelOption(id, o.key)} onchange={(e) => setPanelOption(id, o.key, e.currentTarget.checked)} />
-              {o.label}
-            </label>
+            {#if o.choices}
+              {@const cur = panelChoice(id, o.key, o.choices[0].value)}
+              <div class="opt" role="radiogroup" aria-label={o.label}>
+                {o.label}
+                {#each o.choices as c (c.value)}
+                  <button class="swatch" class:on={cur === c.value} role="radio" aria-checked={cur === c.value}
+                    aria-label={c.label} title={c.label} style="--sw: {c.swatch}"
+                    onclick={() => setPanelOption(id, o.key, c.value)}></button>
+                {/each}
+              </div>
+            {:else}
+              <label class="opt">
+                <input type="checkbox" checked={panelOption(id, o.key)} onchange={(e) => setPanelOption(id, o.key, e.currentTarget.checked)} />
+                {o.label}
+              </label>
+            {/if}
           {/each}
         </div>
       {/if}
@@ -316,6 +328,9 @@
   }
   .opt { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
   .opt input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; cursor: pointer; }
+  .swatch { width: 18px; height: 18px; padding: 0; border-radius: 50%; cursor: pointer; background: var(--sw);
+    border: 2px solid var(--card-2); box-shadow: 0 0 0 1px var(--line); }
+  .swatch.on { box-shadow: 0 0 0 2px var(--text), 0 0 8px var(--sw); }
   .grip {
     width: 30px; height: 30px; border-radius: 8px; border: 0; background: none; color: var(--muted);
     cursor: grab; display: grid; place-items: center; touch-action: none; flex: none;
