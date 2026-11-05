@@ -59,7 +59,7 @@
   }
 </script>
 
-<div class="dimmer {idle.level}" class:on={idle.dimmed} class:guard aria-hidden="true"
+<div class="dimmer {idle.level}" class:on={idle.dimmed} class:preview={idle.preview && !idle.dimmed} class:guard aria-hidden="true"
   onpointerup={swallow} onclick={swallow} oncontextmenu={swallow} onwheel={guardedWake}></div>
 
 <style>
@@ -69,9 +69,10 @@
   }
   .dimmer.guard { pointer-events: auto; }
   .dimmer.on { pointer-events: auto; cursor: none; transition: opacity 2s ease-in; }
-  .dimmer.on.dim { opacity: 0.6; }
-  .dimmer.on.dark { opacity: 0.85; }
-  .dimmer.on.black { opacity: 1; }
+  .dimmer.preview { transition: opacity 0.3s ease-out; } /* visual only: input still reaches the UI */
+  .dimmer:is(.on, .preview).dim { opacity: 0.6; }
+  .dimmer:is(.on, .preview).dark { opacity: 0.85; }
+  .dimmer:is(.on, .preview).black { opacity: 1; }
   @media (prefers-reduced-motion: reduce) {
     .dimmer, .dimmer.on { transition: none; }
   }

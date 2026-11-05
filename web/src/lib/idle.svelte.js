@@ -12,7 +12,16 @@ function load() {
   }
 }
 
-export const idle = $state({ dimmed: false, ...load() });
+export const idle = $state({ dimmed: false, preview: false, ...load() });
+
+let previewTimer;
+
+/** Show the current darkness for a moment (from the settings), without blocking input. */
+export function preview(ms = 2000) {
+  idle.preview = true;
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => (idle.preview = false), ms);
+}
 
 let timer;
 let lastArm = 0;
