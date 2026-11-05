@@ -14,6 +14,9 @@
   let dragId = $state(null);
   const order = $derived(dragOrder ?? saved);
   let adding = $state(false);
+  let lastMoved = $state(null); // drawn on top while panels animate
+
+  function step(id, delta) { lastMoved = id; move(id, delta); }
 
   const available = $derived(
     Object.entries(SECTION_LABELS)
@@ -29,6 +32,7 @@
   function dragStart(e, id) {
     e.preventDefault();
     dragId = id;
+    lastMoved = id;
     dragOrder = [...saved];
     window.addEventListener('pointermove', dragMove);
     window.addEventListener('pointerup', dragEnd, { once: true });
@@ -90,10 +94,10 @@
   </div>
 {/if}
 
-<div class="panels" class:editing={ui.editing} use:lanes>
+<div class="panels" class:editing={ui.editing} use:lanes={{ animate: ui.editing }}>
   {#each order as id, i (id)}
     {@const p = PANELS[id]}
-    <div class="slot" class:wide={p.wide} class:dragging={dragId === id} data-slot={id}>
+    <div class="slot" class:wide={p.wide} class:dragging={dragId === id} class:active={lastMoved === id} data-slot={id}>
       {#if ui.editing}
         <div class="edit">
           <button class="grip" aria-label="Drag to reorder {p.title}" title="Drag to reorder"
@@ -101,8 +105,8 @@
             <Icon name="grip" size={18} stroke={3} />
           </button>
           <span class="name">{p.title}<span class="faint"> · {SECTION_LABELS[p.section]}</span></span>
-          <button class="btn icon sm ghost" aria-label="Move {p.title} up" disabled={i === 0} onclick={() => move(id, -1)}><Icon name="up" size={16} /></button>
-          <button class="btn icon sm ghost" aria-label="Move {p.title} down" disabled={i === order.length - 1} onclick={() => move(id, 1)}><Icon name="down" size={16} /></button>
+          <button class="btn icon sm ghost" aria-label="Move {p.title} up" disabled={i === 0} onclick={() => step(id, -1)}><Icon name="up" size={16} /></button>
+          <button class="btn icon sm ghost" aria-label="Move {p.title} down" disabled={i === order.length - 1} onclick={() => step(id, 1)}><Icon name="down" size={16} /></button>
           <button class="btn icon sm ghost danger" aria-label="Unpin {p.title}" onclick={() => remove(id)}><Icon name="x" size={16} /></button>
         </div>
       {/if}
@@ -141,7 +145,7 @@
   .bar .muted { display: inline-flex; align-items: center; gap: 4px; }
   .slot { min-width: 0; position: relative; transition: opacity 0.15s; }
   .slot.wide { grid-column: 1 / -1; }
-  .editing .slot { outline: 2px dashed color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 4px; border-radius: var(--radius); }
+  .editing .slot { outline: 2px dashed color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 4px; border-radius: var(--radius); background: var(--bg); }
   .slot.dragging { opacity: 0.45; }
   .editing .content { pointer-events: none; user-select: none; }
   .edit { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
