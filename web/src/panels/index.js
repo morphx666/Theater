@@ -38,6 +38,7 @@ import NetworkControl from './NetworkControl.svelte';
 import StreamingServices from './StreamingServices.svelte';
 import HeosAccount from './HeosAccount.svelte';
 import Language from './Language.svelte';
+import SpeakerPresets from './SpeakerPresets.svelte';
 
 /** section = page it lives on; tab = Setup sub-tab; wide = spans the full row. */
 export const PANEL_LIST = [
@@ -47,6 +48,8 @@ export const PANEL_LIST = [
   { id: 'sound-mode', title: 'Sound mode', section: 'home', comp: SoundMode },
   { id: 'quick-select', title: 'Quick Select', section: 'home', comp: QuickSelect },
   { id: 'favorites', title: 'HEOS favorites', section: 'home', comp: Favorites },
+  // Home-only (no page shows the 'home' section; these are offered under Home › Add panels)
+  { id: 'speaker-presets', title: 'Speaker presets', section: 'home', comp: SpeakerPresets },
 
   { id: 'audyssey', title: 'Audyssey', section: 'sound', comp: Audyssey },
   { id: 'dialog-bass', title: 'Dialog & bass', section: 'sound', comp: DialogBass },

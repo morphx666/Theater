@@ -90,6 +90,15 @@ telnet.on('line', (line: string) => {
   if ((line === 'ZMON' && prevPower === false) || (line.startsWith('SI') && prevSource && line.slice(2) !== prevSource)) {
     setTimeout(() => telnet.sendMany(POWER_ON_QUERIES), 1500);
   }
+  // Switching speaker preset changes levels, speakers and Audyssey: re-read them.
+  if (/^SPPR [12]$/.test(line) && line !== lastModeLine.SPPR) {
+    const first = lastModeLine.SPPR === undefined;
+    lastModeLine.SPPR = line;
+    if (!first) {
+      setTimeout(() => telnet.sendMany(['SSLEV ?', 'CV?', ...POWER_ON_QUERIES]), 2500);
+      setTimeout(refreshInstalled, 5000);
+    }
+  }
   // Active channels depend on the sound mode and the incoming format: re-read them when either changes.
   if ((/^MS(?!QUICK)/.test(line) || line.startsWith('SYSDA')) && line !== lastModeLine[line.slice(0, 2)]) {
     lastModeLine[line.slice(0, 2)] = line;
