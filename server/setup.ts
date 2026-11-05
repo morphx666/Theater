@@ -14,9 +14,10 @@ export const READABLE: Record<string, number[]> = {
   audio: [3, 4, 5, 7, 9, 10],
   speakers: [2, 3, 4, 5, 6, 7, 8, 10, 11, 18],
   inputs: [2, 3, 4, 5, 6],
-  video: [],
-  network: [],
-  general: [],
+  video: [3, 4, 7, 8, 9, 11, 12, 13],
+  network: [2, 4, 5, 6, 9, 10, 11, 12, 13],
+  general: [2, 3, 4, 6, 7, 10, 14, 17],
+  account: [9],
 };
 
 // Writes we expose. Anything that can brick, reset, lock, or knock the unit off the network is excluded.
