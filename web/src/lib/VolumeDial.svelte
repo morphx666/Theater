@@ -62,14 +62,25 @@
     const cur = local ?? st?.volume ?? MIN;
     setDb(Math.max(cur - 6, Math.min(cur + 6, target)));
   }
+  // Volume only changes by dragging the knob itself. Clicking/tapping elsewhere on the ring does nothing,
+  // so a stray tap near the end of the arc can never jump the volume up.
   function down(e) {
     if (off) return;
+    e.preventDefault();
+    e.stopPropagation();
     dragging = true;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    fromPointer(e);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up, { once: true });
+    window.addEventListener('pointercancel', up, { once: true });
   }
   function move(e) { if (dragging) fromPointer(e); }
-  function up() { dragging = false; holdUntil = Date.now() + 900; }
+  function up() {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    window.removeEventListener('pointercancel', up);
+    dragging = false;
+    holdUntil = Date.now() + 900;
+  }
   function wheel(e) {
     if (off) return;
     e.preventDefault();
@@ -98,7 +109,7 @@
 <div class="dial" class:muted class:off>
   <svg bind:this={svg} viewBox="0 0 200 200" role="slider" tabindex="0" aria-label="Master volume"
     aria-valuemin={MIN} aria-valuemax={cap} aria-valuenow={value}
-    onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onwheel={wheel} onkeydown={key}>
+    onwheel={wheel} onkeydown={key}>
     <defs>
       <linearGradient id="vg" x1="0" y1="1" x2="1" y2="0">
         <stop offset="0" stop-color="var(--accent)" />
@@ -116,6 +127,7 @@
     {/if}
     <line x1={cx1} y1={cy1} x2={cx2} y2={cy2} class="capmark" />
     <circle cx={kx} cy={ky} r="9" class="knob" />
+    <circle cx={kx} cy={ky} r="20" class="grab" class:active={dragging} onpointerdown={down} role="presentation" />
     <text x="100" y="98" class="num">{off ? 'OFF' : muted ? 'MUTE' : value.toFixed(1)}</text>
     <text x="100" y="122" class="unit">{off || muted ? (off ? 'standby' : value.toFixed(1) + ' dB') : 'dB'}</text>
     <text x="100" y="178" class="cap">limit {cap} dB</text>
@@ -134,8 +146,11 @@
 
 <style>
   .dial { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-  svg { width: min(100%, 300px); touch-action: none; cursor: grab; user-select: none; }
-  svg:active { cursor: grabbing; }
+  svg { width: min(100%, 300px); touch-action: none; user-select: none; }
+  .grab { fill: transparent; cursor: grab; }
+  .grab.active { cursor: grabbing; }
+  .off .grab { cursor: default; }
+  .knob { pointer-events: none; }
   .track { fill: none; stroke: var(--line); stroke-width: 12; stroke-linecap: round; }
   .over { fill: none; stroke: color-mix(in srgb, var(--bad) 30%, transparent); stroke-width: 12; stroke-linecap: round; }
   .fill { fill: none; stroke: url(#vg); stroke-width: 12; stroke-linecap: round; transition: d 0.12s; }
@@ -148,7 +163,6 @@
   .muted .fill, .muted .glow { stroke: var(--faint); opacity: 0.6; }
   .muted .num { fill: var(--bad); font-size: 32px; }
   .off .num { fill: var(--faint); }
-  .off svg { cursor: default; }
   .controls { gap: 14px; }
   .big { width: 56px; height: 56px; border-radius: 50%; }
   .mute { min-width: 120px; border-radius: 99px; height: 48px; }
