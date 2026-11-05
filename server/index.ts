@@ -13,6 +13,7 @@ import { applyLine, emptyState, REFRESH_QUERIES, POWER_ON_QUERIES, SIGNAL_QUERIE
 import { decodeVideo, learnFromInformation, loadCodes, saveCodes } from './signal.ts';
 import { guard, effectiveCap } from './guard.ts';
 import { pollAsTelnetLines } from './http-status.ts';
+import { TunerPresets, PRESET_COUNT, pad, validPreset, validName } from './tuner-presets.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = process.env.AVR_HOST ?? '192.168.1.50';
@@ -69,6 +70,61 @@ async function refreshInstalled() {
   }
 }
 
+// ---------- tuner presets (names / skip live on the AppCommand API) ----------
+const tunerPresets = new TunerPresets(HOST);
+async function refreshSkipped() {
+  try {
+    const list = await tunerPresets.skipped();
+    if (JSON.stringify(list) !== JSON.stringify(state.tuner.skipped)) { state.tuner.skipped = list; scheduleBroadcast(); }
+  } catch (e) {
+    log(`could not read tuner preset skips: ${(e as Error).message}`);
+  }
+}
+/** After a change: give the receiver a moment, then re-read names (telnet) and skips. */
+function rereadPresets() {
+  setTimeout(() => { telnet.send('OPTPN ?'); refreshSkipped(); }, 1200);
+}
+async function presetAction(b: any, who: string) {
+  const n = Number(b?.n);
+  const one = () => { if (!validPreset(n)) throw new HttpError(400, 'preset must be 1-56'); return n; };
+  switch (b?.action) {
+    case 'rename': {
+      if (!validName(b.name)) throw new HttpError(400, 'name: up to 8 plain characters');
+      await tunerPresets.rename(one(), b.name);
+      log(`preset ${pad(n)} renamed to "${b.name.trim()}" (from ${who})`);
+      break;
+    }
+    case 'delete': // the receiver can't empty a slot: hide it (skip) and clear its name
+      await tunerPresets.setSkip(one(), true);
+      if (state.tuner.presets[pad(n)]?.name) await tunerPresets.rename(n, '');
+      log(`preset ${pad(n)} deleted (skipped) (from ${who})`);
+      break;
+    case 'restore':
+      await tunerPresets.setSkip(one(), false);
+      log(`preset ${pad(n)} restored (from ${who})`);
+      break;
+    case 'deleteAll':
+    case 'restoreAll': {
+      const del = b.action === 'deleteAll';
+      if (del) { // keep a copy of what was there
+        await fs.mkdir(path.join(DATA, 'backups'), { recursive: true });
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        await fs.writeFile(path.join(DATA, 'backups', `${ts}_tuner_presets.json`), JSON.stringify(state.tuner, null, 2));
+      }
+      for (let i = 1; i <= PRESET_COUNT; i++) {
+        if (state.tuner.skipped.includes(pad(i)) === del) continue; // already in that state
+        await tunerPresets.setSkip(i, del);
+        if (del && state.tuner.presets[pad(i)]?.name) await tunerPresets.rename(i, '');
+      }
+      log(`all presets ${del ? 'deleted (skipped)' : 'restored'} (from ${who})`);
+      break;
+    }
+    default:
+      throw new HttpError(400, 'unknown action');
+  }
+  rereadPresets();
+}
+
 // ---------- HDMI signal info ----------
 const signalCodes = await loadCodes(DATA);
 let signalTimer: NodeJS.Timeout | undefined;
@@ -112,7 +168,7 @@ const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 
 telnet.on('status', (up: boolean) => {
   conn.telnet = up;
   log(`telnet ${up ? 'connected' : 'disconnected'}`);
-  if (up) { telnet.sendMany(REFRESH_QUERIES); setTimeout(refreshInstalled, 2000); }
+  if (up) { telnet.sendMany(REFRESH_QUERIES); setTimeout(refreshInstalled, 2000); setTimeout(refreshSkipped, 3000); }
   scheduleBroadcast();
 });
 telnet.on('warn', (m) => log(m));
@@ -212,7 +268,11 @@ function sendCommand(raw: string, source = ''): { ok: boolean; cmd?: string; rea
   if (!r.ok) { log(`rejected: ${raw} (${r.reason})`); return r; }
   if (!r.cmd.endsWith('?')) log(`sent: ${r.cmd}${source ? ` (from ${source})` : ''}`); // audit trail (queries omitted)
   telnet.send(r.cmd);
-  if (r.cmd.startsWith('TPANMEM')) setTimeout(() => telnet.send('OPTPN ?'), 1000); // show the stored preset
+  if (r.cmd.startsWith('TPANMEM')) { // saving into a deleted (skipped) slot brings it back
+    const n = Number(r.cmd.slice(7));
+    if (state.tuner.skipped.includes(pad(n))) tunerPresets.setSkip(n, false).catch((e) => log(`could not unskip preset: ${e.message}`));
+    rereadPresets();
+  }
   return r;
 }
 
@@ -296,6 +356,10 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
     if (p === '/api/heos/favorites/play' && req.method === 'POST') {
       const { index } = await readBody(req);
       await heos.playFavorite(Number(index));
+      return json(res, 200, { ok: true });
+    }
+    if (p === '/api/tuner/presets' && req.method === 'POST') {
+      await presetAction(await readBody(req), req.socket.remoteAddress ?? 'http');
       return json(res, 200, { ok: true });
     }
     if (p === '/api/setup/capabilities') return json(res, 200, { readable: READABLE, writable: WRITABLE });

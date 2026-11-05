@@ -240,3 +240,18 @@ test('tuner presets: list parsing and store/recall guard', () => {
   assert.equal(ok('TFANUP'), true);
   assert.equal(ok('TMANFM'), true);
 });
+
+test('tuner preset name / number validation', async () => {
+  const { validName, validPreset } = await import('./tuner-presets.ts');
+  assert.equal(validName('KQED'), true);
+  assert.equal(validName(''), true); // clears the name
+  assert.equal(validName('TOOLONG99'), false); // receiver limit is 8
+  assert.equal(validName('Café'), false); // plain ASCII only
+  assert.equal(validName('a\nb'), false);
+  assert.equal(validName('<script>'), false);
+  assert.equal(validPreset(1), true);
+  assert.equal(validPreset(56), true);
+  assert.equal(validPreset(0), false);
+  assert.equal(validPreset(57), false);
+  assert.equal(validPreset(1.5), false);
+});

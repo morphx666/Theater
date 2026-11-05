@@ -83,6 +83,22 @@ TPANMEM01..56   store the current station in that preset (official protocol). Ba
                 receiver's own memory prompt instead; the app blocks it.
 OPTPN ?         -> OPTPN01<8-char name>009210 ... OPTPN56   (whole preset list; names blank unless set)
 TFANCMP         unprompted "tuning complete" status after tuning: not a frequency
+```
+Preset **names** and **skip** (hide) have no telnet command (checked in the 2020 protocol spreadsheet). They work on
+`AppCommand.xml` (found by probing; Deviceinfo lists SetPresetName/SetPresetNameDefault/SetPresetSkip). Parameters
+are **siblings** of `<cmd>`, one command per request (a second one in the same `<tx>` returns empty), and writes
+apply ~1 s later:
+```xml
+<cmd id="1">GetTunerPresetSkip</cmd>  <presetno>56</presetno>                     -> <value>OFF</value>
+<cmd id="1">SetTunerPresetSkip</cmd>  <presetno>56</presetno> <value>ON</value>    -> <value>OK</value>
+<cmd id="1">GetTunerPresetName</cmd>  <presetno>56</presetno>                     -> <value>        </value> (8 chars)
+<cmd id="1">SetTunerPresetName</cmd>  <presetno>56</presetno> <value>KQED</value>  -> <value>OK</value>
+<cmd id="1">SetTunerPresetNameDefault</cmd> <presetno>56</presetno>               -> <cmd>OK</cmd> (blank name)
+<cmd id="1">GetTunerStatus</cmd>      -> band, frequency, automanual, presetno, presetname
+```
+There is no real delete: the app's "delete" = skip + clear name; `OPTPN ?` still lists skipped presets.
+`SetAutoPreset` (rescan, overwrites all) exists but its format is unknown and it is not used.
+```
 MNMEN ON|OFF  MNCUP MNCDN MNCLT MNCRT MNENT MNRTN MNOPT MNINF  (on-screen menu remote)
 MNZST ON|OFF (All Zone Stereo)   NS9A play  NS9B pause  NS9C stop  NS9D next  NS9E prev
 ```

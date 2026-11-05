@@ -46,7 +46,7 @@ export type AvrState = {
   volumeLimit: string | null; // "OFF" | "060" | "070" | "080"
   powerOnLevel: string | null; // "LAS" | "MUT" | "040" ...
   muteLevel: string | null;
-  tuner: { band: string | null; freq: string | null; preset: string | null; presets: Record<string, { name: string; freq: string }> }; // presets: "01".. "56"
+  tuner: { band: string | null; freq: string | null; preset: string | null; presets: Record<string, { name: string; freq: string }>; skipped: string[] }; // skipped = "deleted" (hidden) presets // presets: "01".. "56"
   firmware: Record<string, string>;
 };
 
@@ -59,7 +59,7 @@ export function emptyState(): AvrState {
     zone2: { power: null, source: null, volume: null, mute: null },
     sleep: null, eco: null, dimmer: null, autoStandby: null, speakerPreset: null, btTx: null, allZoneStereo: null,
     volumeLimit: null, powerOnLevel: null, muteLevel: null,
-    tuner: { band: null, freq: null, preset: null, presets: {} }, firmware: {},
+    tuner: { band: null, freq: null, preset: null, presets: {}, skipped: [] }, firmware: {},
   };
 }
 
