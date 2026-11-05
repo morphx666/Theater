@@ -161,3 +161,16 @@ test('sleep timer clears when the main zone turns off', () => {
   applyLine(st, 'ZMOFF');
   assert.equal(st.sleep, 0);
 });
+
+test('active channels follow the latest CV? reply; installed speakers from setup XML', async () => {
+  const { installedFromLevelsXml } = await import('./parse.ts');
+  const st = emptyState();
+  for (const l of ['CVFL 50', 'CVFR 50', 'CVFDL 50', 'CVFDR 50', 'CVEND']) applyLine(st, l);
+  assert.deepEqual(st.activeChannels, ['FL', 'FR', 'FDL', 'FDR']);
+  applyLine(st, 'MSDOLBY AUDIO-DD');
+  for (const l of ['CVFL 50', 'CVFR 50', 'CVC 50', 'CVEND']) applyLine(st, l);
+  assert.deepEqual(st.activeChannels, ['FL', 'FR', 'C']);
+  assert.equal(st.channels.FDL, 0); // last known trim is kept
+  const xml = '<Levels><List><Speaker index="0" display="3">0</Speaker><Speaker index="26" display="3">40</Speaker><Speaker index="30" display="3">-30</Speaker></List></Levels>';
+  assert.deepEqual(installedFromLevelsXml(xml), ['FL', 'FDL', 'SW']);
+});

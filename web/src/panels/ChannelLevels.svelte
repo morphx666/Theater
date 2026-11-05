@@ -14,13 +14,18 @@
     SDL: [8, 50], SDR: [92, 50], SL: [8, 63], SR: [92, 63], SBL: [33, 92], SBR: [67, 92], SB: [50, 93],
     BDL: [25, 96], BDR: [75, 96],
   };
-  const chans = $derived(Object.keys(st.channels ?? {}).filter((c) => POS[c]));
+  // Every installed speaker is drawn; ones the current sound mode doesn't use are dimmed.
+  const chans = $derived(
+    [...new Set([...(st.installed ?? []), ...Object.keys(st.channels ?? {})])].filter((c) => POS[c]),
+  );
+  const isActive = (c) => !st.activeChannels?.length || st.activeChannels.includes(c);
+  const inactive = $derived(chans.filter((c) => !isActive(c)));
   let sel = $state(null);
-  const selected = $derived(sel && chans.includes(sel) ? sel : null);
+  const selected = $derived(sel && chans.includes(sel) && isActive(sel) ? sel : null);
   const isHeight = (c) => /^(FH|TF|TM|TR|FD|SD|BD)/.test(c);
   const total = (c) => (st.channels[c] ?? 0) + (st.setupLevels[c] ?? 0);
 
-  const anyTrim = $derived(chans.some((c) => st.channels[c] !== 0));
+  const anyTrim = $derived(chans.some((c) => isActive(c) && (st.channels[c] ?? 0) !== 0));
 </script>
 
 <Panel id="channel-levels" title="Channel levels" needsPower>
@@ -40,19 +45,28 @@
       </g>
       {#each chans as c (c)}
         {@const [x, y] = POS[c]}
-        {@const v = st.channels[c]}
+        {@const v = st.channels[c] ?? 0}
+        {@const on = isActive(c)}
         {@const eff = total(c)}
-        <g class="spk" class:sel={selected === c} class:h={isHeight(c)} class:sub={c.startsWith('SW')}
-          transform="translate({x} {y})" role="button" tabindex="0" aria-label="{CHANNELS[c] ?? c} {fmtDb(eff)} dB, trim {fmtDb(v)} dB"
-          onclick={() => (sel = selected === c ? null : c)} onkeydown={(e) => e.key === 'Enter' && (sel = c)}>
-          {#if v !== 0}<circle r={7 + Math.abs(v) * 0.6} class="halo" class:neg={v < 0} />{/if}
+        <g class="spk" class:sel={selected === c} class:h={isHeight(c)} class:sub={c.startsWith('SW')} class:idle={!on}
+          transform="translate({x} {y})" role="button" tabindex={on ? 0 : -1} aria-disabled={!on}
+          aria-label="{CHANNELS[c] ?? c} {fmtDb(eff)} dB{on ? `, trim ${fmtDb(v)} dB` : ', not used by the current sound mode'}"
+          onclick={() => on && (sel = selected === c ? null : c)} onkeydown={(e) => on && e.key === 'Enter' && (sel = c)}>
+          <title>{CHANNELS[c] ?? c}{on ? '' : ' — not used by the current sound mode'}</title>
+          {#if on && v !== 0}<circle r={7 + Math.abs(v) * 0.6} class="halo" class:neg={v < 0} />{/if}
           {#if c.startsWith('SW')}<rect x="-6" y="-6" width="12" height="12" rx="3" class="body" />{:else}<circle r="6" class="body" />{/if}
           <text y="1.6" class="code">{c}</text>
-          <text y="12.5" class="lv" class:trimmed={v !== 0}>{eff === 0 ? '0' : fmtDb(eff)}</text>
-          {#if v !== 0}<text x="6.5" y="-5" class="trim" class:neg={v < 0}>{fmtDb(v)}</text>{/if}
+          <text y="12.5" class="lv" class:trimmed={on && v !== 0}>{eff === 0 ? '0' : fmtDb(eff)}</text>
+          {#if on && v !== 0}<text x="6.5" y="-5" class="trim" class:neg={v < 0}>{fmtDb(v)}</text>{/if}
         </g>
       {/each}
     </svg>
+    {#if inactive.length}
+      <p class="idle-note faint small">
+        Dimmed: {inactive.map((c) => CHANNELS[c] ?? c).join(', ')} — not used by the current sound mode
+        ({st.soundModeText ?? st.surround}). Height speakers play with an upmixer such as Dolby Surround or DTS Neural:X, or with Atmos content.
+      </p>
+    {/if}
 
     {#if selected}
       <div class="adjust">
@@ -78,7 +92,10 @@
   .screen { fill: var(--accent); opacity: 0.8; }
   .seat { fill: var(--card-2); stroke: var(--line); stroke-width: 0.6; }
   .person { fill: none; stroke: var(--muted); stroke-width: 0.9; stroke-linecap: round; }
-  .spk { cursor: pointer; }
+  .spk { cursor: pointer; transition: opacity 0.2s; }
+  .spk.idle { opacity: 0.35; cursor: default; }
+  .spk.idle .body { stroke-dasharray: 1.2 1.2; }
+  .idle-note { margin: 8px 0 0; text-align: center; }
   .spk:focus { outline: none; }
   .spk:focus-visible .body { stroke: var(--accent); stroke-width: 1.4; }
   .spk .body { fill: var(--card); stroke: var(--muted); stroke-width: 0.8; transition: all 0.15s; }

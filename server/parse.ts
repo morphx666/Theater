@@ -17,7 +17,9 @@ export type AvrState = {
   sampleRate: string | null; // SSINFAISFSV e.g. "48K"
   signal: string | null; // SSINFAISSIG
   ps: Record<string, string>; // raw PS params: DYNEQ -> "ON"
-  channels: Record<string, number>; // CV levels in dB (listening adjustment)
+  channels: Record<string, number>; // CV levels in dB (listening adjustment); remembers every channel seen
+  activeChannels: string[]; // channels the current sound mode actually uses (from the last CV? reply)
+  installed: string[]; // speakers configured in setup (from the setup API), regardless of sound mode
   setupLevels: Record<string, number>; // SSLEV calibrated levels in dB
   inputs: Record<string, { name: string; hidden: boolean }>; // keyed by SI code
   quickNames: string[]; // 4 entries
@@ -41,7 +43,7 @@ export function emptyState(): AvrState {
   return {
     model: null, power: null, zoneMain: null, volume: null, volumeMax: null, mute: null, source: null,
     surround: null, soundModeText: null, decoder: null, sampleRate: null, signal: null,
-    ps: {}, channels: {}, setupLevels: {}, inputs: {}, quickNames: ['', '', '', ''], quick: null,
+    ps: {}, channels: {}, activeChannels: [], installed: [], setupLevels: {}, inputs: {}, quickNames: ['', '', '', ''], quick: null,
     zone2: { power: null, source: null, volume: null, mute: null },
     sleep: null, eco: null, dimmer: null, autoStandby: null, speakerPreset: null, btTx: null, allZoneStereo: null,
     volumeLimit: null, powerOnLevel: null, muteLevel: null,
@@ -111,7 +113,7 @@ function pick(st: AvrState, l: string): unknown {
   const p = l.slice(0, 2);
   switch (p) {
     case 'PS': return st.ps;
-    case 'CV': return st.channels;
+    case 'CV': return [st.channels, st.activeChannels];
     case 'Z2': return st.zone2;
     case 'SS': return [st.inputs, st.quickNames, st.setupLevels, st.volumeLimit, st.powerOnLevel, st.muteLevel, st.sampleRate, st.signal, st.firmware];
     case 'TF': case 'TP': case 'TM': return st.tuner;
@@ -119,7 +121,11 @@ function pick(st: AvrState, l: string): unknown {
   }
 }
 
+// Per-state bookkeeping for the CV? reply currently being received (not part of the broadcast state).
+const cvBatch = new WeakMap<AvrState, { open: boolean; list: string[] }>();
+
 function applyInner(st: AvrState, l: string): void {
+  if (!l.startsWith('CV')) { const b = cvBatch.get(st); if (b) b.open = false; } // a CV run ended without CVEND
   if (l.startsWith('PW')) { st.power = l === 'PWON'; if (!st.power) st.sleep = 0; return; }
   if (l.startsWith('ZM')) { st.zoneMain = l === 'ZMON'; if (!st.zoneMain) st.sleep = 0; return; } // timer ends with the zone
   if (l.startsWith('MVMAX')) { st.volumeMax = volToDb(l.slice(5).trim()); return; }
@@ -141,9 +147,16 @@ function applyInner(st: AvrState, l: string): void {
     return;
   }
   if (l.startsWith('CV')) {
-    if (l === 'CVEND') return;
+    // A CV? reply is a run of consecutive CV lines ending in CVEND, listing only the active channels.
+    let batch = cvBatch.get(st);
+    if (!batch || !batch.open) { batch = { open: true, list: [] }; cvBatch.set(st, batch); }
+    if (l === 'CVEND') { st.activeChannels = batch.list; batch.open = false; return; }
     const m = l.slice(2).match(/^([A-Z0-9]+) (\d{2,3})$/);
-    if (m) { const v = levelToDb(m[2]); if (v !== null) st.channels[m[1]] = v; }
+    if (m) {
+      const v = levelToDb(m[2]);
+      if (v !== null) st.channels[m[1]] = v;
+      if (!batch.list.includes(m[1])) batch.list.push(m[1]);
+    }
     return;
   }
   if (l.startsWith('Z2')) { applyZone2(st.zone2, l.slice(2)); return; }
@@ -224,3 +237,20 @@ export const POWER_ON_QUERIES = [
   'PSDYNVOL ?', 'PSREFLEV ?', 'PSCINEMA EQ. ?', 'PSDRC ?', 'PSSWL ?', 'PSDEH ?', 'PSRSTR ?', 'PSLOM ?',
   'SSINFAISFSV ?', 'SSINFAISSIG ?',
 ];
+
+// Setup API "Levels" page (speakers type 5) speaker index -> telnet channel code.
+export const LEVEL_INDEX_TO_CODE: Record<number, string> = {
+  0: 'FL', 1: 'C', 2: 'FR', 3: 'FWR', 4: 'SR', 5: 'SBR', 6: 'SB', 7: 'SBL', 8: 'SL', 9: 'FWL', 10: 'FHR', 11: 'FDR',
+  12: 'TFR', 13: 'TMR', 14: 'SDR', 15: 'TRR', 16: 'SHR', 17: 'RHR', 18: 'BDR', 19: 'BDL', 20: 'RHL', 21: 'SHL', 22: 'TRL',
+  23: 'SDL', 24: 'TML', 25: 'TFL', 26: 'FDL', 27: 'FHL', 28: 'CH', 29: 'TS', 30: 'SW', 31: 'SW2', 33: 'SW3', 34: 'SW4',
+};
+
+/** Installed speakers from the setup API Levels XML (only configured speakers are listed). */
+export function installedFromLevelsXml(xml: string): string[] {
+  const out: string[] = [];
+  for (const m of xml.matchAll(/<Speaker index="(\d+)"[^>]*display="(\d)"/g)) {
+    const code = LEVEL_INDEX_TO_CODE[Number(m[1])];
+    if (code && m[2] !== '1' && !out.includes(code)) out.push(code);
+  }
+  return out;
+}

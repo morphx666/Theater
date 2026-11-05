@@ -9,7 +9,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { AvrTelnet } from './telnet.ts';
 import { Heos, emptyNowPlaying } from './heos.ts';
 import { SetupApi, HttpError, READABLE, WRITABLE } from './setup.ts';
-import { applyLine, emptyState, REFRESH_QUERIES, POWER_ON_QUERIES } from './parse.ts';
+import { applyLine, emptyState, REFRESH_QUERIES, POWER_ON_QUERIES, installedFromLevelsXml } from './parse.ts';
 import { guard, effectiveCap } from './guard.ts';
 import { pollAsTelnetLines } from './http-status.ts';
 
@@ -54,13 +54,25 @@ const conn = { telnet: false, heos: false, http: false };
 let progress = { position: null as number | null, duration: null as number | null };
 let lastLog: string[] = []; // recent raw telnet lines, for the debug console
 let prevPowerLine: string | null = null;
+const lastModeLine: Record<string, string> = {};
+let cvTimer: NodeJS.Timeout | undefined;
+
+// Installed speakers (independent of sound mode) come from the setup API's Levels page.
+async function refreshInstalled() {
+  try {
+    const list = installedFromLevelsXml(await setup.get('speakers', 5));
+    if (list.length && JSON.stringify(list) !== JSON.stringify(state.installed)) { state.installed = list; scheduleBroadcast(); }
+  } catch (e) {
+    log(`could not read installed speakers: ${(e as Error).message}`);
+  }
+}
 
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
 telnet.on('status', (up: boolean) => {
   conn.telnet = up;
   log(`telnet ${up ? 'connected' : 'disconnected'}`);
-  if (up) telnet.sendMany(REFRESH_QUERIES);
+  if (up) { telnet.sendMany(REFRESH_QUERIES); setTimeout(refreshInstalled, 2000); }
   scheduleBroadcast();
 });
 telnet.on('warn', (m) => log(m));
@@ -77,6 +89,12 @@ telnet.on('line', (line: string) => {
   // Parameters depend on power state and input; re-read them after transitions.
   if ((line === 'ZMON' && prevPower === false) || (line.startsWith('SI') && prevSource && line.slice(2) !== prevSource)) {
     setTimeout(() => telnet.sendMany(POWER_ON_QUERIES), 1500);
+  }
+  // Active channels depend on the sound mode and the incoming format: re-read them when either changes.
+  if ((/^MS(?!QUICK)/.test(line) || line.startsWith('SYSDA')) && line !== lastModeLine[line.slice(0, 2)]) {
+    lastModeLine[line.slice(0, 2)] = line;
+    clearTimeout(cvTimer);
+    cvTimer = setTimeout(() => telnet.send('CV?'), 700);
   }
   broadcastRaw(line);
 });
@@ -235,6 +253,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
         await setup.set(m[1], Number(m[2]), data, effectiveCap(settings.volumeCapDb, state), extra);
         // Telnet-visible values may have changed.
         setTimeout(() => telnet.sendMany(REFRESH_QUERIES), 800);
+        if (m[1] === 'speakers') setTimeout(refreshInstalled, 1500);
         return json(res, 200, { ok: true });
       }
     }
