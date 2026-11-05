@@ -193,3 +193,25 @@ test('IP settings can be read but never written', async () => {
   assert.equal(api.canRead('network', 7), false); // diagnostics runs a test on read
   assert.equal(api.canRead('general', 11), false);
 });
+
+test('HDMI video signal info', async () => {
+  const { decodeVideo, learnFromInformation } = await import('./signal.ts');
+  const st = emptyState();
+  for (const l of ['SYSDVIN 4K24', 'SYSDVOUT 4K24', 'SYSDV END', 'SSINFSIGHDR IHDR10', 'SSINFSIGHDR OHDR10',
+    'SSINFSIGCOS 99', 'SSINFSIGPIX 22', 'SSINFSIGFRL I---', 'SSINFSIGFRL O---', 'SSINFAISFOR 3/2/.1']) applyLine(st, l);
+  assert.deepEqual(st.video, { resIn: '4K24', resOut: '4K24', hdrIn: 'HDR10', hdrOut: 'HDR10', cos: '99', pix: '22', frlIn: '---', frlOut: '---' });
+  assert.equal(st.audioFormat, '3/2/.1');
+  const codes = { cos: { '9': 'BT.2020' }, pix: { '2': '10bits' } };
+  const v = decodeVideo(st.video, codes)!;
+  assert.deepEqual(v.out, { res: '4K24', hdr: 'HDR10', color: 'BT.2020', depth: '10bits', frl: null });
+  assert.equal(v.unknown, false);
+  // An unknown code is flagged, then learned from the Information page XML (input side, output side).
+  applyLine(st, 'SSINFSIGCOS 44');
+  assert.equal(decodeVideo(st.video, codes)!.unknown, true);
+  const xml = '<HDMISignalInfo><ColorSpace>YCbCr 4:2:0 -&gt; YCbCr 4:2:0</ColorSpace><PixelDepth>10bits -&gt; 10bits</PixelDepth></HDMISignalInfo>';
+  assert.equal(learnFromInformation(xml, st.video, codes), true);
+  assert.equal(decodeVideo(st.video, codes)!.out.color, 'YCbCr 4:2:0');
+  // No HDMI video: nothing to show.
+  applyLine(st, 'SYSDVIN ---'); applyLine(st, 'SYSDVOUT ---');
+  assert.equal(decodeVideo(st.video, codes), null);
+});

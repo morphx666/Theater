@@ -179,10 +179,18 @@ export class SetupApi {
     return p;
   }
 
-  private request(pathAndQuery: string): Promise<string> {
+  /**
+   * The Information page (general type 12). Read-only, but it takes ~30 s and the receiver's setup server
+   * answers nothing else meanwhile, so it is not in READABLE: only the server calls this, and rarely.
+   */
+  information(): Promise<string> {
+    return this.serial(() => this.request(`/ajax/general/get_config?type=12&_=${Date.now()}`, 45_000));
+  }
+
+  private request(pathAndQuery: string, timeout = 20_000): Promise<string> {
     return new Promise((resolve, reject) => {
       const req = https.get(
-        { host: this.host, port: 10443, path: pathAndQuery, agent: this.agent, timeout: 20_000 },
+        { host: this.host, port: 10443, path: pathAndQuery, agent: this.agent, timeout },
         (res) => {
           let body = '';
           res.setEncoding('utf8');

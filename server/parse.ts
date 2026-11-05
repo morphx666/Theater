@@ -3,6 +3,15 @@
 
 export type Zone2 = { power: boolean | null; source: string | null; volume: number | null; mute: boolean | null };
 
+/** Raw HDMI signal info. Codes (cos, pix) are two digits: input then output; decoded in signal.ts. */
+export type VideoSignal = {
+  resIn: string | null; resOut: string | null; // SYSDVIN / SYSDVOUT, e.g. "4K24"
+  hdrIn: string | null; hdrOut: string | null; // SSINFSIGHDR I…/O…, e.g. "HDR10", "---"
+  cos: string | null; // SSINFSIGCOS, color space codes, e.g. "99" (BT.2020 -> BT.2020)
+  pix: string | null; // SSINFSIGPIX, pixel depth codes, e.g. "22" (10 bits -> 10 bits)
+  frlIn: string | null; frlOut: string | null; // SSINFSIGFRL I…/O… (HDMI 2.1 FRL rate)
+};
+
 export type AvrState = {
   model: string | null;
   power: boolean | null; // whole unit (PW)
@@ -16,6 +25,8 @@ export type AvrState = {
   decoder: string | null; // SYSDA, e.g. "PCM"
   sampleRate: string | null; // SSINFAISFSV e.g. "48K"
   signal: string | null; // SSINFAISSIG
+  audioFormat: string | null; // SSINFAISFOR, channels in the source: "3/2/.1" = 3 front, 2 surround, LFE
+  video: VideoSignal; // HDMI signal info (what the receiver's Information page shows)
   ps: Record<string, string>; // raw PS params: DYNEQ -> "ON"
   channels: Record<string, number>; // CV levels in dB (listening adjustment); remembers every channel seen
   activeChannels: string[]; // channels the current sound mode actually uses (from the last CV? reply)
@@ -42,7 +53,8 @@ export type AvrState = {
 export function emptyState(): AvrState {
   return {
     model: null, power: null, zoneMain: null, volume: null, volumeMax: null, mute: null, source: null,
-    surround: null, soundModeText: null, decoder: null, sampleRate: null, signal: null,
+    surround: null, soundModeText: null, decoder: null, sampleRate: null, signal: null, audioFormat: null,
+    video: { resIn: null, resOut: null, hdrIn: null, hdrOut: null, cos: null, pix: null, frlIn: null, frlOut: null },
     ps: {}, channels: {}, activeChannels: [], installed: [], setupLevels: {}, inputs: {}, quickNames: ['', '', '', ''], quick: null,
     zone2: { power: null, source: null, volume: null, mute: null },
     sleep: null, eco: null, dimmer: null, autoStandby: null, speakerPreset: null, btTx: null, allZoneStereo: null,
@@ -115,7 +127,7 @@ function pick(st: AvrState, l: string): unknown {
     case 'PS': return st.ps;
     case 'CV': return [st.channels, st.activeChannels];
     case 'Z2': return st.zone2;
-    case 'SS': return [st.inputs, st.quickNames, st.setupLevels, st.volumeLimit, st.powerOnLevel, st.muteLevel, st.sampleRate, st.signal, st.firmware];
+    case 'SS': return [st.inputs, st.quickNames, st.setupLevels, st.volumeLimit, st.powerOnLevel, st.muteLevel, st.sampleRate, st.signal, st.firmware, st.audioFormat, st.video];
     case 'TF': case 'TP': case 'TM': return st.tuner;
     default: return st;
   }
@@ -136,6 +148,11 @@ function applyInner(st: AvrState, l: string): void {
   if (l.startsWith('SI')) { st.source = l.slice(2).trim(); return; }
   if (l.startsWith('SYSMI')) { st.soundModeText = l.slice(5).trim(); return; }
   if (l.startsWith('SYSDA')) { st.decoder = l.slice(5).trim(); return; }
+  if (l.startsWith('SYSDV')) { // SYSDVIN 4K24 / SYSDVOUT 4K24 / SYSDV END
+    const m = l.match(/^SYSDV(IN|OUT) (.*)$/);
+    if (m) st.video[m[1] === 'IN' ? 'resIn' : 'resOut'] = m[2].trim();
+    return;
+  }
   if (l.startsWith('SYMO')) { st.model = l.slice(4).trim(); return; }
   if (l.startsWith('PS')) {
     const body = l.slice(2);
@@ -213,6 +230,12 @@ function applySS(st: AvrState, r: string): void {
   }
   if (r.startsWith('INFAISFSV')) { st.sampleRate = r.slice(9).trim(); return; }
   if (r.startsWith('INFAISSIG')) { st.signal = r.slice(9).trim(); return; }
+  if (r.startsWith('INFAISFOR')) { st.audioFormat = r.slice(9).trim(); return; }
+  if ((m = r.match(/^INFSIG(HDR|FRL) ([IO])(.*)$/))) {
+    st.video[`${m[1].toLowerCase()}${m[2] === 'I' ? 'In' : 'Out'}` as 'hdrIn'] = m[3].trim();
+    return;
+  }
+  if ((m = r.match(/^INFSIG(COS|PIX) (\S+)$/))) { st.video[m[1] === 'COS' ? 'cos' : 'pix'] = m[2]; return; }
   if (r.startsWith('INFFRM')) {
     if (r === 'INFFRM END') return;
     m = r.slice(6).match(/^(\S+) (.*)$/);
@@ -237,6 +260,9 @@ export const POWER_ON_QUERIES = [
   'PSDYNVOL ?', 'PSREFLEV ?', 'PSCINEMA EQ. ?', 'PSDRC ?', 'PSSWL ?', 'PSDEH ?', 'PSRSTR ?', 'PSLOM ?',
   'SSINFAISFSV ?', 'SSINFAISSIG ?',
 ];
+
+/** HDMI video + audio-format info (instant telnet queries; the Information web page takes ~30 s). */
+export const SIGNAL_QUERIES = ['SYSDV ?', 'SSINFSIGHDR ?', 'SSINFSIGCOS ?', 'SSINFSIGPIX ?', 'SSINFSIGFRL ?', 'SSINFAISFOR ?'];
 
 // Setup API "Levels" page (speakers type 5) speaker index -> telnet channel code.
 export const LEVEL_INDEX_TO_CODE: Record<number, string> = {

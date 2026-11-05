@@ -56,8 +56,21 @@ SSLEV ?          -> SSLEVC 53 ...                (Audyssey/setup speaker levels,
 SSVCTZMA ?       -> LIM OFF / PON LAS / DIS REL / MLV MUT  (volume limit, power-on level, display, mute level)
 SSINFAISFSV ?    -> 48K                          (input sample rate)
 SSINFFRM ?       -> firmware versions
+SSINFAISFOR ?    -> 3/2/.1                       (source channel format: front/surround/LFE)
+SYSDV ?          -> SYSDVIN 4K24, SYSDVOUT 4K24, SYSDV END   (HDMI resolution in/out)
+SSINFSIGHDR ?    -> SSINFSIGHDR IHDR10, SSINFSIGHDR OHDR10   (HDR in/out; "---" = SDR)
+SSINFSIGCOS ?    -> 99                           (color space code, input digit + output digit; 9 = BT.2020)
+SSINFSIGPIX ?    -> 22                           (pixel depth code, input + output; 2 = 10 bits)
+SSINFSIGFRL ?    -> SSINFSIGFRL I---, O---       (HDMI 2.1 FRL rate in/out)
+SSINFSIGGMS ?    -> 00000000                     (game flags: ALLM / QMS / QFT, layout unconfirmed)
 SYMO             -> AVR-X1700HUSA
 ```
+These are the same lines the receiver emits while building its **Information** web page (setup API general type 12).
+That page itself takes **~32 s** to load, and the receiver's whole setup server (port 10443) answers nothing
+else meanwhile, so the app queries these over telnet instead. `SSINFSIG ?` alone returns nothing; query each one.
+The COS/PIX codes are undocumented: the app ships with the confirmed ones and learns new ones by reading the
+Information page once (at most every 10 min) and saving them to `data/signal-codes.json`.
+`GetVideoInfo` on `AppCommand0300.xml` also works (params `videooutput`, `hdmisigin`, `hdmisigout`; resolution only).
 Unprompted info lines are also pushed: `SYSMI <sound mode text>`, `SYSDA <decoded format>`, `SSINFAISSIG <signal>`,
 `OPINFASP <active speaker map>`, `OPINFINS ...`.
 

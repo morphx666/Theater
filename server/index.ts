@@ -9,7 +9,8 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { AvrTelnet } from './telnet.ts';
 import { Heos, emptyNowPlaying } from './heos.ts';
 import { SetupApi, HttpError, READABLE, WRITABLE } from './setup.ts';
-import { applyLine, emptyState, REFRESH_QUERIES, POWER_ON_QUERIES, installedFromLevelsXml } from './parse.ts';
+import { applyLine, emptyState, REFRESH_QUERIES, POWER_ON_QUERIES, SIGNAL_QUERIES, installedFromLevelsXml } from './parse.ts';
+import { decodeVideo, learnFromInformation, loadCodes, saveCodes } from './signal.ts';
 import { guard, effectiveCap } from './guard.ts';
 import { pollAsTelnetLines } from './http-status.ts';
 
@@ -68,6 +69,44 @@ async function refreshInstalled() {
   }
 }
 
+// ---------- HDMI signal info ----------
+const signalCodes = await loadCodes(DATA);
+let signalTimer: NodeJS.Timeout | undefined;
+function querySignal(delay = 1200) {
+  clearTimeout(signalTimer);
+  signalTimer = setTimeout(() => { if (conn.telnet) telnet.sendMany(SIGNAL_QUERIES); }, delay);
+}
+// Codes for color space / pixel depth we haven't seen yet: read the (slow) Information page once to learn them.
+let lastLearn = 0;
+let learning = false;
+let learnTimer: NodeJS.Timeout | undefined;
+function maybeLearnCodes() {
+  if (learning || Date.now() - lastLearn < 10 * 60_000 || !state.zoneMain) return;
+  if (!decodeVideo(state.video, signalCodes)?.unknown) return;
+  clearTimeout(learnTimer);
+  learnTimer = setTimeout(async () => {
+    if (!decodeVideo(state.video, signalCodes)?.unknown) return;
+    learning = true; lastLearn = Date.now();
+    const before = JSON.stringify([state.video.cos, state.video.pix]);
+    log(`unknown video signal codes (color ${state.video.cos}, depth ${state.video.pix}); reading the Information page (~30 s)`);
+    try {
+      const xml = await setup.information();
+      // The signal may have changed during the 30 s wait; only learn if the codes are the same as when we asked.
+      if (JSON.stringify([state.video.cos, state.video.pix]) === before && learnFromInformation(xml, state.video, signalCodes)) {
+        await saveCodes(DATA, signalCodes);
+        log(`learned video signal codes: ${JSON.stringify(signalCodes)}`);
+        scheduleBroadcast();
+      }
+    } catch (e) {
+      log(`could not read the Information page: ${(e as Error).message}`);
+    } finally {
+      learning = false;
+    }
+  }, 4000); // let the signal settle first
+}
+// Light polling while someone is looking (the receiver doesn't announce every video change).
+setInterval(() => { if (conn.telnet && state.zoneMain && wss.clients.size) telnet.sendMany(SIGNAL_QUERIES); }, 10_000);
+
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
 telnet.on('status', (up: boolean) => {
@@ -90,7 +129,15 @@ telnet.on('line', (line: string) => {
   // Parameters depend on power state and input; re-read them after transitions.
   if ((line === 'ZMON' && prevPower === false) || (line.startsWith('SI') && prevSource && line.slice(2) !== prevSource)) {
     setTimeout(() => telnet.sendMany(POWER_ON_QUERIES), 1500);
+    querySignal(4000); // the HDMI handshake takes a few seconds
   }
+  // New content often means a new video format too (e.g. a movie switching to 4K24 HDR).
+  const sigKey = line.startsWith('SYSDA') ? 'sig:SYSDA' : line.startsWith('SSINFAISSIG') ? 'sig:AIS' : null;
+  if (sigKey && line !== lastModeLine[sigKey]) {
+    lastModeLine[sigKey] = line;
+    querySignal();
+  }
+  if (/^(SYSDV|SSINFSIG)/.test(line)) maybeLearnCodes();
   // Switching speaker preset changes levels, speakers and Audyssey: re-read them.
   if (/^SPPR [12]$/.test(line) && line !== lastModeLine.SPPR) {
     const first = lastModeLine.SPPR === undefined;
@@ -135,7 +182,7 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 function snapshot() {
   return {
     type: 'state',
-    state,
+    state: { ...state, videoInfo: decodeVideo(state.video, signalCodes) },
     nowPlaying: heos.now ?? emptyNowPlaying(),
     progress,
     conn,
