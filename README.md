@@ -15,6 +15,13 @@ with everything on one screen and live updates.
 | **Remote** | On-screen menu D-pad, tuner, sleep timer, dimmer, ECO, auto-standby, Bluetooth transmitter, and a **live protocol console**. |
 | **Setup** | Rename, hide and assign inputs; per-source level; volume limit, power-on volume, mute level (Main + Zone 2); 9-band graphic EQ; zone and Quick Select names; ECO and display options; app settings; backups. |
 
+### Customizing the layout
+
+- **Every page has a Customize button.** In Customize mode you can drag panels anywhere, move them with ← ↑ ↓ →, and set each panel to 1×, 2× or 3× column width. What you see while customizing is exactly what you get.
+- **Home shows the panels you pin.** Use the 📌 on any panel, or **Add panels** in Customize mode. ✕ unpins.
+- **Layouts are stored on the server** (`data/settings.json`, under `layouts`), so every device sees the same arrangement.
+- **Open/closed sections** (for example in Speaker setup) are remembered separately on each device.
+
 ## Quick start (Mac)
 
 ```bash
