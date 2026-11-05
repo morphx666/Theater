@@ -8,8 +8,8 @@
   const on = $derived(st.zoneMain === true);
   const freq = $derived.by(() => {
     const f = st.tuner?.freq;
-    if (!f) return '—';
     const n = Number(f);
+    if (!f || !Number.isFinite(n)) return '—';
     return st.tuner.band === 'AM' ? `${n} kHz` : `${(n / 100).toFixed(2)} MHz`;
   });
 </script>

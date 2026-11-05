@@ -184,7 +184,8 @@ function applyInner(st: AvrState, l: string): void {
   if (l.startsWith('SPPR')) { st.speakerPreset = l.slice(4).trim(); return; }
   if (l.startsWith('BTTX')) { const v = l.slice(4).trim(); if (v === 'ON' || v === 'OFF') st.btTx = v; return; }
   if (l.startsWith('MNZST')) { st.allZoneStereo = l.slice(5).trim() === 'ON'; return; }
-  if (l.startsWith('TFAN')) { st.tuner.freq = l.slice(4).trim(); return; }
+  // TFAN009510 = 95.10 MHz. Status words such as TFANCMP ("tuning complete") are not frequencies.
+  if (l.startsWith('TFAN')) { const v = l.slice(4).trim(); if (/^\d{4,6}$/.test(v)) st.tuner.freq = v; return; }
   if (l.startsWith('TMAN')) { const v = l.slice(4).trim(); if (v === 'AM' || v === 'FM') st.tuner.band = v; return; }
   if (l.startsWith('TPAN')) { st.tuner.preset = l.slice(4).trim(); return; }
   if (l.startsWith('SS')) { applySS(st, l.slice(2)); return; }

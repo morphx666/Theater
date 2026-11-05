@@ -215,3 +215,10 @@ test('HDMI video signal info', async () => {
   applyLine(st, 'SYSDVIN ---'); applyLine(st, 'SYSDVOUT ---');
   assert.equal(decodeVideo(st.video, codes), null);
 });
+
+test('tuner frequency ignores status words', () => {
+  const st = emptyState();
+  applyLine(st, 'TFAN009510');
+  applyLine(st, 'TFANCMP'); // "tuning complete"
+  assert.equal(st.tuner.freq, '009510');
+});
