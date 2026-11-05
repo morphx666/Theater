@@ -172,7 +172,8 @@
   .lockmark path { fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
   .track { fill: none; stroke: var(--line); stroke-width: 12; stroke-linecap: round; }
   .over { fill: none; stroke: color-mix(in srgb, var(--bad) 30%, transparent); stroke-width: 12; stroke-linecap: round; }
-  .fill { fill: none; stroke: url(#vg); stroke-width: 12; stroke-linecap: round; transition: d 0.12s; }
+  /* No transition on the arc: browsers can't interpolate an SVG arc (radius/flags), so the fill would bulge outside the ring. */
+  .fill { fill: none; stroke: url(#vg); stroke-width: 12; stroke-linecap: round; }
   .glow { fill: none; stroke: var(--accent); stroke-width: 12; opacity: 0.45; stroke-linecap: round; }
   .knob { fill: #fff; filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)); }
   .capmark { stroke: var(--bad); stroke-width: 2.5; stroke-linecap: round; }
