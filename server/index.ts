@@ -1,0 +1,248 @@
+// Denon Remote server: bridges the browser (WebSocket + REST) to the receiver (telnet / HTTP / HEOS / setup API).
+
+import http from 'node:http';
+import fs from 'node:fs/promises';
+import { createReadStream, existsSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { WebSocketServer, WebSocket } from 'ws';
+import { AvrTelnet } from './telnet.ts';
+import { Heos, emptyNowPlaying } from './heos.ts';
+import { SetupApi, HttpError, READABLE, WRITABLE } from './setup.ts';
+import { applyLine, emptyState, REFRESH_QUERIES, POWER_ON_QUERIES } from './parse.ts';
+import { guard, effectiveCap } from './guard.ts';
+import { pollAsTelnetLines } from './http-status.ts';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const HOST = process.env.AVR_HOST ?? '192.168.1.50';
+const PORT = Number(process.env.PORT ?? 8787);
+const DATA = process.env.DATA_DIR ?? path.join(ROOT, 'data');
+const DIST = path.join(ROOT, 'dist');
+const USE_TELNET = process.env.AVR_TELNET !== 'off';
+
+// ---------- app settings (persisted) ----------
+type Settings = { volumeCapDb: number; volumeStep: number };
+const SETTINGS_FILE = path.join(DATA, 'settings.json');
+let settings: Settings = { volumeCapDb: -10, volumeStep: 0.5 };
+try { settings = { ...settings, ...JSON.parse(await fs.readFile(SETTINGS_FILE, 'utf8')) }; } catch {}
+async function saveSettings() {
+  await fs.mkdir(DATA, { recursive: true });
+  await fs.writeFile(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+}
+
+// ---------- receiver connections ----------
+const state = emptyState();
+const telnet = new AvrTelnet(HOST);
+const heos = new Heos(HOST);
+const setup = new SetupApi(HOST, DATA);
+const conn = { telnet: false, heos: false, http: false };
+let progress = { position: null as number | null, duration: null as number | null };
+let lastLog: string[] = []; // recent raw telnet lines, for the debug console
+
+const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
+
+telnet.on('status', (up: boolean) => {
+  conn.telnet = up;
+  log(`telnet ${up ? 'connected' : 'disconnected'}`);
+  if (up) telnet.sendMany(REFRESH_QUERIES);
+  scheduleBroadcast();
+});
+telnet.on('warn', (m) => log(m));
+telnet.on('line', (line: string) => {
+  lastLog.push(line);
+  if (lastLog.length > 200) lastLog = lastLog.slice(-200);
+  const prevPower = state.zoneMain;
+  const prevSource = state.source;
+  if (applyLine(state, line)) scheduleBroadcast();
+  // Parameters depend on power state and input; re-read them after transitions.
+  if ((line === 'ZMON' && prevPower === false) || (line.startsWith('SI') && prevSource && line.slice(2) !== prevSource)) {
+    setTimeout(() => telnet.sendMany(POWER_ON_QUERIES), 1500);
+  }
+  broadcastRaw(line);
+});
+
+heos.on('status', (up: boolean) => { conn.heos = up; log(`heos ${up ? 'connected' : 'disconnected'}`); scheduleBroadcast(); });
+heos.on('nowPlaying', () => scheduleBroadcast());
+heos.on('progress', (p) => { progress = p; broadcast({ type: 'progress', ...p }); });
+heos.on('warn', (m) => log(m));
+
+// HTTP polling fallback whenever telnet is down.
+setInterval(async () => {
+  if (conn.telnet) return;
+  try {
+    const lines = await pollAsTelnetLines(HOST);
+    conn.http = true;
+    let changed = false;
+    for (const l of lines) changed = applyLine(state, l) || changed;
+    if (changed) scheduleBroadcast();
+  } catch {
+    if (conn.http) { conn.http = false; scheduleBroadcast(); }
+  }
+}, 3000);
+
+// ---------- websocket ----------
+const server = http.createServer(handle);
+const wss = new WebSocketServer({ server, path: '/ws' });
+
+function snapshot() {
+  return {
+    type: 'state',
+    state,
+    nowPlaying: heos.now ?? emptyNowPlaying(),
+    progress,
+    conn,
+    settings,
+    cap: effectiveCap(settings.volumeCapDb, state),
+  };
+}
+
+let pending: NodeJS.Timeout | null = null;
+function scheduleBroadcast() {
+  if (pending) return;
+  pending = setTimeout(() => { pending = null; broadcast(snapshot()); }, 40);
+}
+function broadcast(msg: object) {
+  const s = JSON.stringify(msg);
+  for (const c of wss.clients) if (c.readyState === WebSocket.OPEN) c.send(s);
+}
+const rawSubscribers = new Set<WebSocket>();
+function broadcastRaw(line: string) {
+  if (!rawSubscribers.size) return;
+  const s = JSON.stringify({ type: 'raw', line });
+  for (const c of rawSubscribers) if (c.readyState === WebSocket.OPEN) c.send(s);
+}
+
+function sendCommand(raw: string): { ok: boolean; cmd?: string; reason?: string } {
+  const r = guard(raw, state, effectiveCap(settings.volumeCapDb, state));
+  if (!r.ok) { log(`rejected: ${raw} (${r.reason})`); return r; }
+  telnet.send(r.cmd);
+  return r;
+}
+
+wss.on('connection', (ws) => {
+  ws.send(JSON.stringify(snapshot()));
+  ws.on('close', () => rawSubscribers.delete(ws));
+  ws.on('message', async (data) => {
+    let msg: any;
+    try { msg = JSON.parse(String(data)); } catch { return; }
+    if (msg.type === 'cmd') {
+      const cmds: string[] = Array.isArray(msg.cmd) ? msg.cmd : [msg.cmd];
+      for (const c of cmds) {
+        const r = sendCommand(c);
+        if (!r.ok) ws.send(JSON.stringify({ type: 'error', message: r.reason }));
+      }
+    } else if (msg.type === 'heos') {
+      try { await heos.transport(msg.action); } catch (e) { ws.send(JSON.stringify({ type: 'error', message: (e as Error).message })); }
+    } else if (msg.type === 'raw-subscribe') {
+      if (msg.on) {
+        rawSubscribers.add(ws);
+        for (const line of lastLog) ws.send(JSON.stringify({ type: 'raw', line }));
+      } else rawSubscribers.delete(ws);
+    }
+  });
+});
+
+// ---------- REST ----------
+async function readBody(req: http.IncomingMessage): Promise<any> {
+  let body = '';
+  for await (const c of req) { body += c; if (body.length > 100_000) throw new HttpError(413, 'too large'); }
+  if (!body) return {};
+  try { return JSON.parse(body); } catch { throw new HttpError(400, 'invalid JSON'); }
+}
+
+function json(res: http.ServerResponse, status: number, obj: unknown) {
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.end(JSON.stringify(obj));
+}
+
+async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
+  const url = new URL(req.url ?? '/', 'http://x');
+  const p = url.pathname;
+  try {
+    if (p === '/api/state' && req.method === 'GET') return json(res, 200, snapshot());
+    if (p === '/api/cmd' && req.method === 'POST') {
+      const { cmd } = await readBody(req);
+      const r = sendCommand(cmd);
+      return json(res, r.ok ? 200 : 400, r);
+    }
+    if (p === '/api/settings') {
+      if (req.method === 'POST') {
+        const b = await readBody(req);
+        if (typeof b.volumeCapDb === 'number') settings.volumeCapDb = Math.min(18, Math.max(-60, Math.round(b.volumeCapDb * 2) / 2));
+        if (typeof b.volumeStep === 'number') settings.volumeStep = [0.5, 1, 2].includes(b.volumeStep) ? b.volumeStep : 0.5;
+        await saveSettings();
+        scheduleBroadcast();
+      }
+      return json(res, 200, settings);
+    }
+    if (p === '/api/heos/favorites' && req.method === 'GET') return json(res, 200, await heos.favorites());
+    if (p === '/api/heos/favorites/play' && req.method === 'POST') {
+      const { index } = await readBody(req);
+      await heos.playFavorite(Number(index));
+      return json(res, 200, { ok: true });
+    }
+    if (p === '/api/setup/capabilities') return json(res, 200, { readable: READABLE, writable: WRITABLE });
+    if (p === '/api/setup/backups') return json(res, 200, await setup.listBackups());
+    let m = p.match(/^\/api\/setup\/backups\/([\w.\-]+\.xml)$/);
+    if (m) { res.writeHead(200, { 'Content-Type': 'application/xml' }); return res.end(await setup.readBackup(m[1])); }
+    m = p.match(/^\/api\/setup\/(\w+)\/(\d+)$/);
+    if (m) {
+      const extra = Object.fromEntries([...url.searchParams].filter(([k]) => k !== 'type' && k !== 'data'));
+      if (req.method === 'GET') {
+        const xml = await setup.get(m[1], Number(m[2]), extra);
+        res.writeHead(200, { 'Content-Type': 'application/xml', 'Cache-Control': 'no-store' });
+        return res.end(xml);
+      }
+      if (req.method === 'POST') {
+        const { data } = await readBody(req);
+        log(`setup write ${m[1]}/${m[2]}: ${String(data).slice(0, 200)}`);
+        await setup.set(m[1], Number(m[2]), data, extra);
+        // Telnet-visible values may have changed.
+        setTimeout(() => telnet.sendMany(REFRESH_QUERIES), 800);
+        return json(res, 200, { ok: true });
+      }
+    }
+    if (p.startsWith('/api/')) return json(res, 404, { error: 'not found' });
+    return serveStatic(p, res);
+  } catch (e) {
+    const status = e instanceof HttpError ? e.status : 500;
+    log(`error ${p}: ${(e as Error).message}`);
+    return json(res, status, { error: (e as Error).message });
+  }
+}
+
+const MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
+  '.png': 'image/png', '.json': 'application/json', '.webmanifest': 'application/manifest+json', '.ico': 'image/x-icon',
+};
+
+async function serveStatic(p: string, res: http.ServerResponse) {
+  if (!existsSync(DIST)) {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    return res.end('Frontend not built. Run `npm run build`, or use `npm run dev` and open the Vite URL.');
+  }
+  let file = path.normalize(path.join(DIST, decodeURIComponent(p)));
+  if (!file.startsWith(DIST)) { res.writeHead(403); return res.end(); }
+  try {
+    if ((await fs.stat(file)).isDirectory()) file = path.join(file, 'index.html');
+  } catch {
+    file = path.join(DIST, 'index.html'); // SPA fallback
+  }
+  const ext = path.extname(file);
+  res.writeHead(200, {
+    'Content-Type': MIME[ext] ?? 'application/octet-stream',
+    'Cache-Control': p.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
+  });
+  createReadStream(file).pipe(res);
+}
+
+// ---------- start ----------
+server.listen(PORT, () => {
+  log(`Denon Remote on http://localhost:${PORT}  (receiver ${HOST}, telnet ${USE_TELNET ? 'on' : 'off'})`);
+});
+if (USE_TELNET) telnet.start();
+heos.start();
+
+for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(sig, () => { telnet.stop(); heos.stop(); server.close(); process.exit(0); });
+}

@@ -1,0 +1,81 @@
+// Safety layer: every command from the browser goes through here before reaching the receiver.
+
+import { dbToVol, volToDb, type AvrState } from './parse.ts';
+
+export type GuardResult = { ok: true; cmd: string } | { ok: false; reason: string };
+
+// Command prefixes the UI is allowed to send. Anything else is rejected.
+const ALLOWED = [
+  /^PW(ON|STANDBY|\?)$/,
+  /^ZM(ON|OFF|\?)$/,
+  /^MV(UP|DOWN|\d{2,3}|\?)$/,
+  /^MU(ON|OFF|\?)$/,
+  /^SI[A-Z0-9/]{2,8}$/,
+  /^SI\?$/,
+  /^MS[A-Z0-9 :.\-]{1,30}$/,
+  /^MS\?$/,
+  /^PS[A-Z0-9 :.\-]{2,30}$/,
+  /^CV[A-Z0-9]{1,4} (UP|DOWN|\d{2,3})$/,
+  /^CV(ZRL|\?)$/,
+  /^Z2(ON|OFF|UP|DOWN|MUON|MUOFF|MU\?|\?|\d{2,3}|[A-Z0-9/]{2,8})$/,
+  /^SLP(OFF|\d{3}|\?)$/,
+  /^ECO(ON|AUTO|OFF|\?)$/,
+  /^DIM (BRI|DIM|DAR|OFF|SEL|\?)$/,
+  /^STBY(15M|30M|60M|OFF|\?)$/,
+  /^SPPR (1|2|\?)$/,
+  /^BTTX (ON|OFF|SP|BT|\?)$/,
+  /^T[FPM]AN([A-Z0-9 ]{1,8}|\?)$/,
+  /^MN(CUP|CDN|CLT|CRT|ENT|RTN|OPT|INF|MEN ON|MEN OFF|ZST ON|ZST OFF|ZST \?)$/,
+  /^NS9[A-E]$/,
+  /^VS(MONI|VPM|AUDIO|SC)[A-Z0-9 ]{1,8}$/,
+  /^SS[A-Z0-9 ]{2,20}\?$/, // SS* is read-only (queries only)
+  /^SYMO$/,
+];
+
+// Belt and braces: never pass these even if a pattern above would match.
+const BLOCKED = [/^SYRST/, /^NSRBT/, /^SYPANEL/, /^SYALL/, /^NSUP/, /^MNMEN ON SETUP/, /^SY(?!MO$)/];
+
+export const MIN_DB = -80;
+
+/**
+ * Validate a raw telnet command and enforce the volume cap.
+ * `capDb` is the highest master volume (dB) the app will allow.
+ */
+export function guard(raw: string, st: AvrState, capDb: number): GuardResult {
+  const cmd = String(raw ?? '').toUpperCase().replace(/[\r\n]/g, '').trim();
+  if (!cmd || cmd.length > 40 || !/^[\x20-\x7E]+$/.test(cmd)) return { ok: false, reason: 'invalid command' };
+  if (BLOCKED.some((r) => r.test(cmd))) return { ok: false, reason: `blocked for safety: ${cmd}` };
+  if (!ALLOWED.some((r) => r.test(cmd))) return { ok: false, reason: `not allowed: ${cmd}` };
+
+  // Master volume cap
+  if (/^MV\d{2,3}$/.test(cmd)) {
+    const db = volToDb(cmd.slice(2));
+    if (db === null) return { ok: false, reason: 'bad volume' };
+    if (db > capDb) return { ok: true, cmd: `MV${dbToVol(capDb)}` }; // clamp
+  }
+  if (cmd === 'MVUP' && st.volume !== null && st.volume + 0.5 > capDb) {
+    return { ok: false, reason: `volume cap reached (${capDb} dB)` };
+  }
+  // Zone 2 volume cap (uses the same ceiling)
+  const z2 = cmd.match(/^Z2(\d{2,3})$/);
+  if (z2) {
+    const db = volToDb(z2[1]);
+    if (db !== null && db > capDb) return { ok: true, cmd: `Z2${dbToVol(capDb)}` };
+  }
+  if (cmd === 'Z2UP' && st.zone2.volume !== null && st.zone2.volume + 1 > capDb) {
+    return { ok: false, reason: `zone 2 volume cap reached (${capDb} dB)` };
+  }
+  return { ok: true, cmd };
+}
+
+/** Effective cap = the stricter of the app setting and the receiver's own Volume Limit. */
+export function effectiveCap(appCapDb: number, st: AvrState): number {
+  let cap = appCapDb;
+  const lim = st.volumeLimit;
+  // Volume Limit is reported as a whole step (60 / 70 / 80 → -20 / -10 / 0 dB), possibly zero-padded.
+  if (lim && /^\d{2,3}$/.test(lim)) {
+    const n = Number(lim);
+    if (n > 0 && n <= 98) cap = Math.min(cap, n - 80);
+  }
+  return cap;
+}
