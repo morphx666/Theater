@@ -5,6 +5,7 @@
   import { PANELS, PANEL_LIST, SECTION_LABELS } from '../panels/index.js';
   import { homeIds, setHome, resetHome, move, ui, DEFAULT_HOME } from '../lib/layout.svelte.js';
   import Icon from '../lib/Icon.svelte';
+  import { lanes } from '../lib/lanes.js';
 
   setContext('home', true);
 
@@ -89,7 +90,7 @@
   </div>
 {/if}
 
-<div class="panels" class:editing={ui.editing}>
+<div class="panels" class:editing={ui.editing} use:lanes>
   {#each order as id, i (id)}
     {@const p = PANELS[id]}
     <div class="slot" class:wide={p.wide} class:dragging={dragId === id} data-slot={id}>

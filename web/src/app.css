@@ -190,6 +190,9 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline: 2px s
 .btn.small { min-height: 32px; padding: 4px 10px; font-size: 12.5px; text-transform: none; letter-spacing: 0; }
 .err { color: var(--bad); }
 
-/* Page grid of panels */
+/* Page grid of panels — "grid lanes" (masonry): see lib/lanes.js */
 .panels { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); align-items: start; }
-.panels > .wide, .panels > * > .wide { grid-column: 1 / -1; }
+.panels > .wide { grid-column: 1 / -1; }
+.panels.lanes-native { display: grid-lanes; }
+.panels.lanes-js { grid-auto-rows: 1px; row-gap: 0; align-items: start; }
+.panels.lanes-js > * { align-self: start; }
