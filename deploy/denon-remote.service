@@ -1,5 +1,5 @@
 # systemd unit for running Theater on a Raspberry Pi (or any Linux box).
-# setup.sh writes a ready-to-use copy of this for you. Use this file only to set it up by hand; see "Manual setup" in README.md.
+# setup.sh writes a ready-to-use copy of this for you. Use this file only to set it up by hand; see docs/MANUAL-SETUP.md.
 # Settings (receiver IP, port) belong in the app's .env file, not here.
 [Unit]
 Description=Theater (web remote for Denon receivers)

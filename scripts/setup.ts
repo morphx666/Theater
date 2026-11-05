@@ -31,18 +31,27 @@ function readEnv(file: string): Record<string, string> {
   return out;
 }
 
-/** Set keys in .env (created from .env.example), keeping every other line and comment as it is. */
-function writeEnv(values: Record<string, string>) {
+/**
+ * Set keys in .env (created from .env.example), keeping every other line and comment as it is.
+ * A value of null comments the setting out (the app then uses its default). A setting that is only present
+ * commented out (e.g. "# DATA_DIR=...") is set on that same line.
+ */
+function writeEnv(values: Record<string, string | null>) {
   const base = fs.existsSync(ENV_FILE) ? ENV_FILE : EXAMPLE_FILE;
   const lines = fs.existsSync(base) ? fs.readFileSync(base, 'utf8').replace(/\r?\n$/, '').split(/\r?\n/) : [];
-  const done = new Set<string>();
-  const out = lines.map((line) => {
-    const key = /^\s*([A-Z_][A-Z0-9_]*)\s*=/.exec(line)?.[1];
-    if (key && key in values && !done.has(key)) { done.add(key); return `${key}=${values[key]}`; }
-    return line;
-  });
-  for (const [k, v] of Object.entries(values)) if (!done.has(k)) out.push(`${k}=${v}`);
-  fs.writeFileSync(ENV_FILE, out.join('\n') + '\n');
+  const find = (key: string, commented: boolean) =>
+    lines.findIndex((l) => new RegExp(`^\\s*${commented ? '#\\s*' : ''}${key}\\s*=`).test(l));
+  for (const [key, value] of Object.entries(values)) {
+    const active = find(key, false);
+    if (value === null) {
+      if (active >= 0) lines[active] = `# ${lines[active].trim()}`;
+      continue;
+    }
+    const i = active >= 0 ? active : find(key, true);
+    if (i >= 0) lines[i] = `${key}=${value}`;
+    else lines.push(`${key}=${value}`);
+  }
+  fs.writeFileSync(ENV_FILE, lines.join('\n') + '\n');
 }
 
 // ---------- questions ----------
@@ -185,6 +194,59 @@ async function choosePort(env: Record<string, string>): Promise<number> {
   }
 }
 
+// ---------- telnet ----------
+async function chooseTelnet(env: Record<string, string>): Promise<'on' | 'off'> {
+  console.log('  Theater keeps a telnet connection open to the receiver, so changes show up instantly.');
+  console.log('  If another app (for example Home Assistant) also needs that connection, answer no:');
+  console.log('  Theater will then check the receiver every few seconds instead.');
+  return (await confirm('Use the telnet connection?', env.AVR_TELNET !== 'off')) ? 'on' : 'off';
+}
+
+// ---------- data folder ----------
+const DEFAULT_DATA = path.join(ROOT, 'data');
+
+/** "~/x" -> home, relative -> inside the app's folder (an absolute path never depends on the working directory). */
+function resolveDir(p: string): string {
+  const home = p === '~' || p.startsWith('~/') || p.startsWith('~\\') ? path.join(os.homedir(), p.slice(1)) : p;
+  return path.resolve(ROOT, home);
+}
+
+function usable(dir: string): string | null {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.accessSync(dir, fs.constants.W_OK);
+    return null;
+  } catch (e) {
+    return (e as Error).message;
+  }
+}
+
+const hasFiles = (dir: string) => { try { return fs.readdirSync(dir).length > 0; } catch { return false; } };
+
+/** Returns the absolute folder, or null for the default (data/ inside the app's folder). */
+async function chooseDataDir(env: Record<string, string>): Promise<string | null> {
+  const current = env.DATA_DIR ? resolveDir(env.DATA_DIR) : DEFAULT_DATA;
+  console.log('  Theater keeps its settings, layouts and setup backups in a data folder.');
+  console.log(`  Press Enter to keep ${current === DEFAULT_DATA ? 'the default (data/ in the app\'s folder)' : 'the current one'}` +
+    `${current === DEFAULT_DATA ? '' : ', or type "default" to go back to data/ in the app\'s folder'}.`);
+  let dir: string;
+  for (;;) {
+    const a = await ask('Data folder', current);
+    dir = a.toLowerCase() === 'default' ? DEFAULT_DATA : resolveDir(a);
+    const problem = usable(dir);
+    if (!problem) break;
+    console.log(`  Can't use ${dir}: ${problem}`);
+    if (!interactive) process.exit(1);
+  }
+  if (path.relative(dir, current) !== '' && hasFiles(current) && !hasFiles(dir)) {
+    if (await confirm(`Copy your current settings and backups from ${current}?`)) {
+      fs.cpSync(current, dir, { recursive: true });
+      console.log('  Copied.');
+    }
+  }
+  return path.relative(dir, DEFAULT_DATA) === '' ? null : dir;
+}
+
 // ---------- addresses ----------
 const ipNum = (ip: string) => ip.split('.').reduce((n, p) => n * 256 + Number(p), 0);
 
@@ -211,8 +273,13 @@ async function configure() {
     console.log(`  Note: Theater has only been tested on the ${TESTED_MODEL}. On the ${info.model}, some panels may not work.`);
   }
   const port = await choosePort(env);
-  writeEnv({ AVR_HOST: host, PORT: String(port) });
-  console.log(`  Saved to .env (receiver ${host}, port ${port}).`);
+  console.log('');
+  const telnet = await chooseTelnet(env);
+  console.log('');
+  const dataDir = await chooseDataDir(env);
+  writeEnv({ AVR_HOST: host, PORT: String(port), AVR_TELNET: telnet, DATA_DIR: dataDir });
+  console.log('');
+  console.log(`  Saved to .env: receiver ${host}, port ${port}, telnet ${telnet}, data in ${dataDir ?? DEFAULT_DATA}.`);
   rl?.close();
 }
 

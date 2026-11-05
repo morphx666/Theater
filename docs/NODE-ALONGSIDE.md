@@ -63,7 +63,7 @@ To start Theater by hand, outside the service:
 
 ## 4. Point the service at Node 22
 
-Follow the service steps in the README's [Manual setup](../README.md#5-start-automatically-linux-with-systemd). When you edit the installed service file, set `ExecStart` to:
+Follow the service steps in [Setting up Theater by hand](MANUAL-SETUP.md#5-start-automatically-linux-with-systemd). When you edit the installed service file, set `ExecStart` to:
 
 ```ini
 ExecStart=/opt/node22/bin/node --env-file-if-exists=.env server/index.ts

@@ -36,12 +36,14 @@ Every page has a **Customize** button. Tap it, then drag panels where you want t
 
 ## 2. Install
 
+If you'd rather do each step yourself, see [Setting up Theater by hand](docs/MANUAL-SETUP.md).
+
 ```bash
 git clone https://github.com/morphx666/Theater.git
 cd Theater
 ```
 
-Then run the setup script. If you'd rather do each step yourself, see [Manual setup](#manual-setup) below.
+Then run the setup script.
 
 **Linux, Raspberry Pi or macOS:**
 
@@ -64,26 +66,16 @@ The script works out everything it can and asks only about the rest:
 - **Install and build.** It installs the app's packages and builds it.
 - **Your receiver.** It finds the receiver on your network by itself. If it can't, or if you have more than one, it asks.
 - **Port.** It uses port 8787, or asks for another if something else is already using it.
+- **Telnet and data folder.** It asks whether Theater should keep a telnet connection to the receiver (answer no if another app such as Home Assistant needs it), and where to keep settings and backups. Press Enter to accept the defaults.
 - **Start automatically.** It offers to start Theater automatically: as a service when a Linux machine boots, when you log in on macOS, or when you sign in on Windows. On Windows, it can also add a firewall rule so phones and tablets on your network can connect.
 
-When it's done, it shows the address to open.
+When it's done, it shows the address to open. To change any of your answers later, run the script again.
 
 ## 3. Open it
 
 Open the address the script showed, for example `http://192.168.1.2:8787`, in a browser on your phone, tablet or computer.
 
 To use it like an app on a phone, choose **Share → Add to Home Screen** (iOS) or **Add to Home screen** (Android).
-
-## Settings
-
-The setup script saves your settings in a file named `.env` in the app's folder. To change them, run the setup script again, or edit `.env` and restart Theater.
-
-| Setting | Default | Meaning |
-|---|---|---|
-| `AVR_HOST` | Found by setup | Your receiver's IP address. |
-| `PORT` | `8787` | The port the app listens on. |
-| `AVR_TELNET` | `on` | Set to `off` to use HTTP polling only. See [Troubleshooting](#troubleshooting). |
-| `DATA_DIR` | `data/` in the app's folder | Where app settings, layouts and setup backups are stored. Optional. If you set it, use an absolute path. |
 
 ## Updating
 
@@ -92,80 +84,7 @@ git pull
 ./setup.sh      # on Windows: powershell -ExecutionPolicy Bypass -File .\setup.ps1
 ```
 
-The setup script keeps your settings, rebuilds the app and restarts Theater. Your layouts and options in `data/` are kept too. If you set Theater up by hand, see [Updating a manual setup](#updating-a-manual-setup).
-
-## Manual setup
-
-The setup scripts do all of the following for you. Use these steps if you'd rather do it yourself, or if a script doesn't work on your system.
-
-### 1. Install Node.js
-
-Theater needs **Node.js 22.18 or newer**. Check your version with `node --version`.
-
-- On Linux, the version in your distribution's repositories is often too old. Use [NodeSource](https://github.com/nodesource/distributions) or [nvm](https://github.com/nvm-sh/nvm). To keep an older Node that other programs need, [install Node 22 alongside it](docs/NODE-ALONGSIDE.md).
-- On macOS and Windows, use the installer from [nodejs.org](https://nodejs.org).
-
-### 2. Install and build
-
-From the app's folder:
-
-```bash
-npm ci
-npm run build
-```
-
-### 3. Configure
-
-Copy the example settings file:
-
-```bash
-cp .env.example .env
-```
-
-Then edit `.env`. Set `AVR_HOST` to your receiver's IP address, which the receiver shows under **Setup → Network → Information**. The other settings are described under [Settings](#settings).
-
-### 4. Run
-
-```bash
-npm start
-```
-
-Open `http://localhost:8787` on the same computer, or `http://<computer-ip>:8787` from a phone or tablet. If other devices can't connect, allow the port through the computer's firewall.
-
-### 5. Start automatically (Linux with systemd)
-
-1. Copy the service file into systemd's folder:
-   ```bash
-   sudo cp deploy/denon-remote.service /etc/systemd/system/
-   ```
-2. Edit **the copy** in `/etc/systemd/system/`, not the one in the repo, so `git pull` never conflicts with your changes:
-   ```bash
-   sudo nano /etc/systemd/system/denon-remote.service
-   ```
-   - `User`: your Linux user name.
-   - `WorkingDirectory`: the folder you cloned into.
-   - `ExecStart`: the full path to `node`. Find it with `which node`. If you installed Node with nvm, or [alongside an older Node](docs/NODE-ALONGSIDE.md), the path won't be `/usr/bin/node`.
-
-   Keep the receiver IP and port in `.env`. The service reads them from there.
-3. Start the service, and have it start at boot:
-   ```bash
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now denon-remote
-   ```
-4. To check that it's running, use `systemctl status denon-remote`. To follow the log, use `journalctl -u denon-remote -f`.
-
-On macOS or Windows, you can keep `npm start` running in a terminal, or use a process manager such as [pm2](https://pm2.keymetrics.io/).
-
-### Updating a manual setup
-
-```bash
-git pull
-npm ci
-npm run build
-sudo systemctl restart denon-remote   # or stop and re-run npm start
-```
-
-If you installed Node 22 [alongside an older Node](docs/NODE-ALONGSIDE.md#updating-theater), use the update commands in that guide instead.
+The setup script keeps your settings, rebuilds the app and restarts Theater. Your layouts and options in `data/` are kept too. If you set Theater up by hand, see [Updating a manual setup](docs/MANUAL-SETUP.md#updating-a-manual-setup).
 
 ## Safety
 
@@ -183,7 +102,7 @@ The app can change real receiver settings, so the server checks everything the b
 The status line under the page title shows the connection state:
 
 - **Live:** connected to the receiver. Everything works.
-- **HTTP fallback:** the app can reach the receiver but can't open its telnet connection. The receiver accepts **only one telnet client at a time**, so another app or home-automation system (for example Home Assistant's Denon integration) may be holding it. Basic control still works, but updates are slower. To fix it, close the other client or switch that client to HTTP. If you'd rather keep the other client, set `AVR_TELNET=off` in `.env`.
+- **HTTP fallback:** the app can reach the receiver but can't open its telnet connection. The receiver accepts **only one telnet client at a time**, so another app or home-automation system (for example Home Assistant's Denon integration) may be holding it. Basic control still works, but updates are slower. To fix it, close the other client or switch that client to HTTP. If you'd rather keep the other client, run the setup script again and answer no to the telnet question. In a manual setup, set `AVR_TELNET=off` in `.env` instead.
 - **Receiver unreachable:** check `AVR_HOST` and confirm that **Network Control** is set to **Always On**. Also check that the computer can reach the receiver: `ping <receiver-ip>`.
 - **Server offline:** the browser can't reach the app. Check that Theater is running:
   - Linux: `systemctl status denon-remote`, and the log with `journalctl -u denon-remote -f`.
