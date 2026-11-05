@@ -26,7 +26,7 @@ Every page has a **Customize** button. Tap it, then drag panels where you want t
 
 - A Denon AVR-X1700H connected to your network by Ethernet or Wi-Fi.
 - A computer that stays on, on the same network. A Raspberry Pi works well.
-- **Node.js 22.18 or newer.** The server runs TypeScript directly, so no compile step is needed. Check your version with `node --version`.
+- **Node.js 22.18 or newer.** The server runs TypeScript directly, so no compile step is needed. Check your version with `node --version`. Need to keep an older Node for other programs? [Install Node 22 alongside it](docs/NODE-ALONGSIDE.md).
 - Git, to download the app.
 
 ## 1. Prepare the receiver
@@ -57,7 +57,7 @@ cp .env.example .env
 | `AVR_HOST` | `192.168.1.50` | Your receiver's IP address. **You must change this.** |
 | `PORT` | `8787` | The port the app listens on. |
 | `AVR_TELNET` | `on` | Set to `off` to use HTTP polling only. See [Troubleshooting](#troubleshooting). |
-| `DATA_DIR` | `./data` | Where app settings, layouts and setup backups are stored. |
+| `DATA_DIR` | `data/` in the app's folder | Where app settings, layouts and setup backups are stored. Optional. If you set it, use an absolute path. |
 
 ## 4. Run
 
@@ -71,20 +71,28 @@ To use it like an app on a phone, open it in the browser and choose **Share → 
 
 ## Run it all the time on a Raspberry Pi (or any Linux machine)
 
-1. Install Node.js 22.18 or newer. The version in the Raspberry Pi OS repositories is often too old. Use [NodeSource](https://github.com/nodesource/distributions) or [nvm](https://github.com/nvm-sh/nvm) instead.
+1. Install Node.js 22.18 or newer. The version in the Raspberry Pi OS repositories is often too old. Use [NodeSource](https://github.com/nodesource/distributions) or [nvm](https://github.com/nvm-sh/nvm) instead. To keep an existing older Node, [install Node 22 alongside it](docs/NODE-ALONGSIDE.md).
 2. Follow steps 2 and 3 above on the Pi.
-3. Edit [deploy/denon-remote.service](deploy/denon-remote.service) to match your setup:
-   - `User`: your Linux user name.
-   - `WorkingDirectory`: the folder you cloned into.
-   - `ExecStart`: the full path to `node`. Find it with `which node`. If you installed Node with nvm, the path won't be `/usr/bin/node`.
-   - `Environment=AVR_HOST=…`: remove this line, or set it to your receiver's IP. Values in this file take precedence over `.env`.
-4. Install and start the service:
+3. Copy the service file into systemd's folder:
    ```bash
    sudo cp deploy/denon-remote.service /etc/systemd/system/
+   ```
+4. Edit **the copy** in `/etc/systemd/system/`, not the one in the repo:
+   ```bash
+   sudo nano /etc/systemd/system/denon-remote.service
+   ```
+   - `User`: your Linux user name.
+   - `WorkingDirectory`: the folder you cloned into.
+   - `ExecStart`: the full path to `node`. Find it with `which node`. If you installed Node with nvm, or installed it [alongside an older Node](docs/NODE-ALONGSIDE.md), the path won't be `/usr/bin/node`.
+   - `Environment=AVR_HOST=…`: remove this line, or set it to your receiver's IP. Values in this file take precedence over `.env`.
+
+   Because you edit the copy, `git pull` never conflicts with your changes or overwrites them.
+5. Start the service, and have it start at boot:
+   ```bash
    sudo systemctl daemon-reload
    sudo systemctl enable --now denon-remote
    ```
-5. To check that it's running, use `systemctl status denon-remote`. To follow the log, use `journalctl -u denon-remote -f`.
+6. To check that it's running, use `systemctl status denon-remote`. To follow the log, use `journalctl -u denon-remote -f`.
 
 On a Mac or Windows PC, keep `npm start` running in a terminal. You can also use a process manager such as [pm2](https://pm2.keymetrics.io/) to keep it running.
 
@@ -97,7 +105,7 @@ npm run build
 sudo systemctl restart denon-remote   # or stop and re-run npm start
 ```
 
-Your settings and layouts in `data/` are kept.
+Your settings and layouts in `data/` are kept. If you installed Node 22 [alongside an older Node](docs/NODE-ALONGSIDE.md#updating-theater), use the update commands in that guide instead.
 
 ## Safety
 
