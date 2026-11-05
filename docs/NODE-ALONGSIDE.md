@@ -2,6 +2,8 @@
 
 Theater needs **Node.js 22.18 or newer**. If your machine already has an older Node that other programs depend on, you don't have to upgrade it. You can install Node 22 into its own folder and use it only for Theater.
 
+> **On Linux, `./setup.sh` does all of this for you.** When it finds that your Node is too old, it offers to install Node 22 in `/opt/node22`. It then builds the app with it and points the service at it. Use this guide only if you'd rather do it by hand.
+
 This guide is for Linux, including Raspberry Pi OS. The steps:
 
 - leave your existing Node (usually `/usr/bin/node`) untouched;
@@ -61,7 +63,7 @@ To start Theater by hand, outside the service:
 
 ## 4. Point the service at Node 22
 
-Follow the service steps in the [README](../README.md#run-it-all-the-time-on-a-raspberry-pi-or-any-linux-machine). When you edit the installed service file, set `ExecStart` to:
+Follow the service steps in [Setting up Theater by hand](MANUAL-SETUP.md#5-start-automatically-linux-with-systemd). When you edit the installed service file, set `ExecStart` to:
 
 ```ini
 ExecStart=/opt/node22/bin/node --env-file-if-exists=.env server/index.ts
