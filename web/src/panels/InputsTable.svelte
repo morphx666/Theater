@@ -68,7 +68,10 @@
                   onchange={(e) => saveName(r, e.currentTarget.value)}
                   onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
                 {#if r.auto && r.auto !== r.name}
-                  <button class="link small" onclick={() => saveName(r, r.auto)} title="Name reported by the device over HDMI">use “{r.auto}”</button>
+                  <div class="cec small">
+                    <span class="faint" title="The name a device on this input announced over HDMI-CEC. The receiver remembers it even after the device is unplugged, so it may be out of date.">HDMI device name: {r.auto}</span>
+                    <button class="link" onclick={() => saveName(r, r.auto)}>use</button>
+                  </div>
                 {/if}
               </td>
               <td>
@@ -111,7 +114,9 @@
   tr.hidden td { opacity: 0.55; }
   td input[type='text'] { min-width: 140px; }
   select { min-width: 96px; }
-  .link { background: none; border: 0; color: var(--blue); cursor: pointer; padding: 2px 0; display: block; }
+  .link { background: none; border: 0; color: var(--blue); cursor: pointer; padding: 0 0 0 6px; font: inherit; }
+  .cec { display: flex; align-items: baseline; padding-top: 3px; }
+  .cec span { cursor: help; }
   .err { color: var(--bad); }
   p { margin: 10px 0 0; }
 </style>
