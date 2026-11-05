@@ -39,6 +39,7 @@ export function lanes(node, opts = {}) {
     if (!animate || reducedMotion()) return;
     const moving = [];
     for (const c of children()) {
+      if (c.classList.contains('dragging')) continue; // follows the pointer instead
       if (fresh.has(c)) {
         c.animate([{ opacity: 0, transform: 'scale(0.96)' }, { opacity: 1, transform: 'none' }], { duration: DURATION, easing: EASING });
         continue;
@@ -150,6 +151,7 @@ export function lanes(node, opts = {}) {
       }
     }
     if (first) play(first, fresh);
+    node.dispatchEvent(new CustomEvent('laneslayout')); // lets a dragged panel re-anchor in the same frame
   }
 
   ro.observe(node);

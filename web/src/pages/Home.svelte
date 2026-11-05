@@ -32,7 +32,8 @@
   // Which slot is under the pointer, using each slot's settled layout box (offsetLeft/Top ignore the
   // transforms of running animations) — not where it happens to be mid-slide.
   let grid = $state();
-  let swapLockUntil = 0, lastSwapPt = null;
+  // Which slot is under the pointer, using each slot's settled layout box (offsetLeft/Top ignore the
+  // transforms of running animations) — not where it happens to be mid-slide.
   function slotAt(x, y) {
     const r = grid.getBoundingClientRect();
     const px = x - r.left, py = y - r.top;
@@ -44,17 +45,6 @@
     return null;
   }
 
-  function dragStart(e, id) {
-    e.preventDefault();
-    swapLockUntil = 0;
-    lastSwapPt = null;
-    dragId = id;
-    lastMoved = id;
-    dragOrder = [...saved];
-    window.addEventListener('pointermove', dragMove);
-    window.addEventListener('pointerup', dragEnd, { once: true });
-    window.addEventListener('pointercancel', dragEnd, { once: true });
-  }
   // Auto-scroll while dragging near the top/bottom edge of the window.
   let scrollSpeed = 0, scrollRaf = 0, lastPt = null;
   function autoScroll() {
@@ -63,34 +53,95 @@
     if (lastPt) dragMove(lastPt);
     scrollRaf = requestAnimationFrame(autoScroll);
   }
+
+  // ---- drag state ----
+  let dragEl = null;          // the slot element being dragged (follows the pointer)
+  let grab = { x: 0, y: 0 };  // where inside the panel it was grabbed
+  let anchor = null;          // pointer position at drag start / last reorder
+  let lockUntil = 0;          // brief pause after each reorder
+  let prevOrder = null;       // order before the last reorder (to block immediate reversals)
+
+  // Keep the lifted panel under the pointer, wherever the layout has settled it.
+  function follow() {
+    if (!dragEl || !lastPt) return;
+    const g = grid.getBoundingClientRect();
+    const tx = lastPt.clientX - grab.x - (g.left + dragEl.offsetLeft);
+    const ty = lastPt.clientY - grab.y - (g.top + dragEl.offsetTop);
+    dragEl.style.transform = `translate(${tx}px, ${ty}px) scale(1.02)`;
+  }
+  function followLoop() {
+    if (!dragId) return;
+    follow();
+    requestAnimationFrame(followLoop);
+  }
+
+  function dragStart(e, id) {
+    e.preventDefault();
+    dragEl = e.currentTarget.closest('[data-slot]');
+    const r = dragEl.getBoundingClientRect();
+    grab = { x: e.clientX - r.left, y: e.clientY - r.top };
+    lastPt = { clientX: e.clientX, clientY: e.clientY };
+    anchor = { x: e.clientX, y: e.clientY };
+    lockUntil = 0;
+    prevOrder = null;
+    dragId = id;
+    lastMoved = id;
+    dragOrder = [...saved];
+    document.body.classList.add('grabbing');
+    window.addEventListener('pointermove', dragMove);
+    window.addEventListener('pointerup', dragEnd, { once: true });
+    window.addEventListener('pointercancel', dragEnd, { once: true });
+    requestAnimationFrame(followLoop);
+  }
+
   function dragMove(e) {
     if (!dragId) return;
     lastPt = { clientX: e.clientX, clientY: e.clientY };
+    follow();
     const edge = 90;
     scrollSpeed = e.clientY < edge ? -Math.ceil((edge - e.clientY) / 6) : e.clientY > innerHeight - edge ? Math.ceil((e.clientY - innerHeight + edge) / 6) : 0;
     if (scrollSpeed && !scrollRaf) scrollRaf = requestAnimationFrame(autoScroll);
-    // Hysteresis: after a swap, wait for the pointer to travel a bit and for the slide to mostly finish,
-    // otherwise panels of different sizes can swap back and forth under a still pointer (flicker).
+
     const now = performance.now();
-    if (now < swapLockUntil) return;
-    if (lastSwapPt && Math.hypot(e.clientX - lastSwapPt.x, e.clientY - lastSwapPt.y) < 28) return;
+    if (now < lockUntil) return;
+    const dx = e.clientX - anchor.x, dy = e.clientY - anchor.y;
+    if (Math.hypot(dx, dy) < 24) return; // need some real movement since the last reorder
     const target = slotAt(e.clientX, e.clientY);
     if (!target || target === dragId) return;
-    swapLockUntil = now + 220;
-    lastSwapPt = { x: e.clientX, y: e.clientY };
+    const from = dragOrder.indexOf(dragId), to = dragOrder.indexOf(target);
+    // Mostly-vertical movement: only move the panel in the direction the pointer travels
+    // (up = earlier, down = later). In a masonry layout, the panel that lands under the pointer after
+    // a reorder is often the one just passed, which would otherwise bounce it straight back.
+    if (Math.abs(dy) > Math.abs(dx) && (dy < 0) !== (to < from)) return;
     const o = dragOrder.filter((x) => x !== dragId);
     const ti = o.indexOf(target);
-    const from = dragOrder.indexOf(dragId);
-    const to = dragOrder.indexOf(target);
-    o.splice(from < to ? ti + 1 : ti, 0, dragId); // drop after when moving forward, before when moving back
+    o.splice(from < to ? ti + 1 : ti, 0, dragId);
+    // Never immediately undo the previous reorder unless the pointer has clearly moved on.
+    if (prevOrder && o.join() === prevOrder.join() && Math.hypot(dx, dy) < 120) return;
+    prevOrder = dragOrder;
     dragOrder = o;
+    anchor = { x: e.clientX, y: e.clientY };
+    lockUntil = now + 180;
   }
   function dragEnd() {
     scrollSpeed = 0;
     window.removeEventListener('pointermove', dragMove);
     window.removeEventListener('pointerup', dragEnd);
     window.removeEventListener('pointercancel', dragEnd);
+    document.body.classList.remove('grabbing');
     if (!dragId) return;
+    // Glide the lifted panel down into its slot.
+    if (dragEl) {
+      const from = dragEl.style.transform;
+      dragEl.style.transform = '';
+      if (from && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        dragEl.style.zIndex = '50';
+        const el = dragEl;
+        const a = el.animate([{ transform: from }, { transform: 'none' }], { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+        a.onfinish = a.oncancel = () => { el.style.zIndex = ''; };
+      }
+      dragEl = null;
+    }
     const final = dragOrder;
     dragId = null;
     dragOrder = null;
@@ -117,7 +168,7 @@
   </div>
 {/if}
 
-<div class="panels" class:editing={ui.editing} use:lanes={{ animate: ui.editing }} bind:this={grid}>
+<div class="panels" class:editing={ui.editing} use:lanes={{ animate: ui.editing }} bind:this={grid} onlaneslayout={follow}>
   {#each order as id, i (id)}
     {@const p = PANELS[id]}
     <div class="slot" class:wide={p.wide} class:dragging={dragId === id} class:active={lastMoved === id} data-slot={id}>
@@ -167,10 +218,11 @@
   .bar { display: flex; align-items: center; gap: 8px; margin: -4px 0 12px; flex-wrap: wrap; }
   .bar .muted { display: inline-flex; align-items: center; gap: 4px; }
   .panels { position: relative; } /* offsetParent for slotAt() */
-  .slot { min-width: 0; position: relative; transition: opacity 0.15s; }
+  .slot { min-width: 0; position: relative; }
   .slot.wide { grid-column: 1 / -1; }
   .editing .slot { outline: 2px dashed color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 4px; border-radius: var(--radius); background: var(--bg); }
-  .slot.dragging { opacity: 0.45; }
+  .slot.dragging { z-index: 50; box-shadow: 0 28px 60px -18px rgb(0 0 0 / 0.75); outline-style: solid !important; }
+  :global(body.grabbing), :global(body.grabbing *) { cursor: grabbing !important; user-select: none; }
   .editing .content { pointer-events: none; user-select: none; }
   .edit { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
   .grip {
