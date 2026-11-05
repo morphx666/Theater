@@ -18,6 +18,8 @@
   --radius-sm: 12px;
   --shadow: 0 10px 30px -12px rgb(0 0 0 / 0.6);
   --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, sans-serif;
+  --thumb: #2b3140;
+  --thumb-ring: #9aa3b5;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 
@@ -35,6 +37,8 @@
     --accent: #e08a00;
     --accent-2: #b86f00;
     --accent-ink: #fff;
+    --thumb: #ffffff;
+    --thumb-ring: #9aa2b1;
     --shadow: 0 8px 24px -14px rgb(20 30 50 / 0.35);
   }
 }
@@ -126,10 +130,19 @@ input[type='range']::-webkit-slider-runnable-track {
 input[type='range']::-moz-range-track { height: 6px; border-radius: 99px; background: var(--line); }
 input[type='range']::-moz-range-progress { height: 6px; border-radius: 99px; background: var(--accent); }
 input[type='range']::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 22px; height: 22px; border-radius: 50%; background: #fff; margin-top: -8px;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4); border: 0;
+  -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; margin-top: -5px;
+  background: var(--thumb); border: 2px solid var(--thumb-ring); box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+  transition: border-color 0.15s, transform 0.1s;
 }
-input[type='range']::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #fff; border: 0; }
+input[type='range']::-moz-range-thumb {
+  width: 12px; height: 12px; border-radius: 50%; background: var(--thumb); border: 2px solid var(--thumb-ring);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.35);
+}
+input[type='range']:not(:disabled):hover::-webkit-slider-thumb,
+input[type='range']:not(:disabled):active::-webkit-slider-thumb { border-color: var(--accent); }
+input[type='range']:not(:disabled):active::-webkit-slider-thumb { transform: scale(1.15); }
+input[type='range']:not(:disabled):hover::-moz-range-thumb,
+input[type='range']:not(:disabled):active::-moz-range-thumb { border-color: var(--accent); }
 input[type='range']:disabled { opacity: 0.4; }
 
 input[type='text'], input[type='number'], select {

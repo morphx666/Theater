@@ -14,8 +14,7 @@
   const limit = $derived(txt(vol.doc, 'Limit'));
   const pon = $derived(txt(vol.doc, 'PowerOnLevel'));
   const mute = $derived(txt(vol.doc, 'MuteLevel'));
-  const LIMITS = [{ value: '99', label: 'Off' }, { value: '60', label: '−20 dB' }, { value: '65', label: '−15 dB' },
-    { value: '70', label: '−10 dB' }, { value: '75', label: '−5 dB' }, { value: '80', label: '0 dB' }];
+  const LIMITS = [{ value: '99', label: 'Off' }, { value: '60', label: '−20 dB' }, { value: '70', label: '−10 dB' }, { value: '80', label: '0 dB' }];
   const ponMode = $derived(pon === '99' ? 'last' : pon === '0' ? 'mute' : 'fixed');
   const ponMax = $derived(Math.min(avr.cap, limit && limit !== '99' ? Number(limit) - 80 : 18));
 
@@ -168,5 +167,5 @@
   .f { font-size: 11.5px; color: var(--muted); }
   .vert { writing-mode: vertical-lr; direction: rtl; width: 32px; height: 170px; }
   .vert::-webkit-slider-runnable-track { width: 6px; height: auto; background: var(--line); }
-  .vert::-webkit-slider-thumb { margin-top: 0; margin-left: -8px; }
+  .vert::-webkit-slider-thumb { margin-top: 0; margin-left: -5px; }
 </style>
