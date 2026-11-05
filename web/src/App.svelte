@@ -9,6 +9,7 @@
   const PAGES = [
     { id: 'home', label: 'Home', icon: 'home', comp: Home },
     { id: 'sound', label: 'Sound', icon: 'sliders', comp: Section },
+    { id: 'video', label: 'Video', icon: 'tv', comp: Section },
     { id: 'speakers', label: 'Speakers', icon: 'speaker', comp: Section },
     { id: 'zones', label: 'Zone 2', icon: 'zones', comp: Section },
     { id: 'remote', label: 'Remote', icon: 'remote', comp: Section },
@@ -40,7 +41,7 @@
     if (e.key === 'm') send(st?.mute ? 'MUOFF' : 'MUON');
     else if (e.key === '+' || e.key === '=') send('MVUP');
     else if (e.key === '-') send('MVDOWN');
-    else if (/^[1-6]$/.test(e.key)) page = PAGES[Number(e.key) - 1].id;
+    else if (/^[1-9]$/.test(e.key) && PAGES[Number(e.key) - 1]) page = PAGES[Number(e.key) - 1].id;
   }
 </script>
 

@@ -1,7 +1,7 @@
 <script>
   import Section from './Section.svelte';
 
-  const TABS = [['inputs', 'Inputs'], ['audio', 'Audio & Volume'], ['video', 'Video'], ['network', 'Network'], ['general', 'General'], ['app', 'App & Info']];
+  const TABS = [['inputs', 'Inputs'], ['audio', 'Audio & Volume'], ['network', 'Network'], ['general', 'General'], ['app', 'App & Info']];
   let tab = $state('inputs');
 </script>
 
@@ -16,5 +16,5 @@
 {/key}
 
 <style>
-  .tabs { margin-bottom: 16px; max-width: 760px; }
+  .tabs { margin-bottom: 16px; max-width: 640px; }
 </style>

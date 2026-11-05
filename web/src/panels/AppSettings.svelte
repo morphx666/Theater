@@ -25,7 +25,7 @@
       </div>
       <div class="setting stack">
         <div class="label">Keyboard shortcuts</div>
-        <div class="hint"><span class="mono">+ / −</span> volume · <span class="mono">m</span> mute · <span class="mono">1–6</span> switch page ·
+        <div class="hint"><span class="mono">+ / −</span> volume · <span class="mono">m</span> mute · <span class="mono">1–7</span> switch page ·
           arrow keys on the volume dial</div>
       </div>
 </Panel>

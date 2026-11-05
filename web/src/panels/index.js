@@ -69,10 +69,10 @@ export const PANEL_LIST = [
   { id: 'volume-main', title: 'Volume — Main Zone', section: 'setup', tab: 'audio', comp: VolumeMain },
   { id: 'volume-zone2', title: 'Volume — Zone 2', section: 'setup', tab: 'audio', comp: VolumeZone2 },
   { id: 'graphic-eq', title: 'Graphic EQ', section: 'setup', tab: 'audio', comp: GraphicEq, wide: true },
-  { id: 'hdmi-setup', title: 'HDMI setup', section: 'setup', tab: 'video', comp: HdmiSetup },
-  { id: 'video-output', title: 'Video output', section: 'setup', tab: 'video', comp: VideoOutput },
-  { id: 'on-screen', title: 'On-screen display', section: 'setup', tab: 'video', comp: OnScreen },
-  { id: 'hdcp', title: 'HDCP', section: 'setup', tab: 'video', comp: HdcpSetup },
+  { id: 'hdmi-setup', title: 'HDMI setup', section: 'video', comp: HdmiSetup },
+  { id: 'video-output', title: 'Video output', section: 'video', comp: VideoOutput },
+  { id: 'on-screen', title: 'On-screen display', section: 'video', comp: OnScreen },
+  { id: 'hdcp', title: 'HDCP', section: 'video', comp: HdcpSetup },
   { id: 'network-info', title: 'Network', section: 'setup', tab: 'network', comp: NetworkInfo },
   { id: 'network-control', title: 'Network control', section: 'setup', tab: 'network', comp: NetworkControl },
   { id: 'streaming', title: 'Streaming services', section: 'setup', tab: 'network', comp: StreamingServices },
@@ -88,4 +88,4 @@ export const PANEL_LIST = [
 
 export const PANELS = Object.fromEntries(PANEL_LIST.map((p) => [p.id, p]));
 
-export const SECTION_LABELS = { home: 'Home', sound: 'Sound', speakers: 'Speakers', zones: 'Zone 2', remote: 'Remote', setup: 'Setup' };
+export const SECTION_LABELS = { home: 'Home', sound: 'Sound', video: 'Video', speakers: 'Speakers', zones: 'Zone 2', remote: 'Remote', setup: 'Setup' };
