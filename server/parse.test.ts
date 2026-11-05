@@ -174,3 +174,22 @@ test('active channels follow the latest CV? reply; installed speakers from setup
   const xml = '<Levels><List><Speaker index="0" display="3">0</Speaker><Speaker index="26" display="3">40</Speaker><Speaker index="30" display="3">-30</Speaker></List></Levels>';
   assert.deepEqual(installedFromLevelsXml(xml), ['FL', 'FDL', 'SW']);
 });
+
+test('video / network writes: allowed ones pass, IP settings never', async () => {
+  const { validateWrite, WRITABLE } = await import('./setup.ts');
+  assert.equal(validateWrite('video', 3, '<ARC>1</ARC>', -10), null);
+  assert.equal(validateWrite('video', 11, '<Value index="1">2</Value>', -10), null);
+  assert.equal(validateWrite('network', 9, '<AirPlay>2</AirPlay>', -10), null);
+  assert.notEqual(validateWrite('network', 4, '<Settings><DHCP>2</DHCP></Settings>', -10), null);
+  assert.ok(!WRITABLE.network.includes(4));
+  assert.ok(!WRITABLE.account);
+});
+
+test('IP settings can be read but never written', async () => {
+  const { SetupApi } = await import('./setup.ts');
+  const api = new SetupApi('127.0.0.1', '/tmp');
+  assert.equal(api.canRead('network', 4), true);
+  assert.equal(api.canWrite('network', 4), false);
+  assert.equal(api.canRead('network', 7), false); // diagnostics runs a test on read
+  assert.equal(api.canRead('general', 11), false);
+});

@@ -26,7 +26,9 @@ export const WRITABLE: Record<string, number[]> = {
   audio: [7, 10], // volume limit / power-on level / mute level, graphic EQ
   speakers: [3, 4, 5, 6, 7, 11], // config, distances, levels, crossovers, bass, preset
   inputs: [2, 3, 4, 5, 6], // assignment, rename, hide, source level, input mode
-  general: [3, 4, 6, 7, 10, 14], // ECO, zone 2 setup, zone rename, quick select names, display, usage data
+  general: [2, 3, 4, 6, 7, 10, 14], // language, ECO, zone 2 setup, zone rename, quick select names, display, usage data
+  video: [3, 7, 8, 9, 11, 12, 13], // HDMI setup, OSD, 4K/8K format, TV format, HDCP, screensaver, upscaler
+  network: [5, 9, 10, 11, 12, 13], // network control, AirPlay, Spotify, Roon, TIDAL, Qobuz (never IP settings)
 };
 
 // Allowed root element(s) of the XML payload for each writable page (exactly as the official UI sends them).
@@ -51,6 +53,21 @@ const ROOTS: Record<string, string[]> = {
   'general/7': ['List'],
   'general/10': ['Dimmer', 'Channel'],
   'general/14': ['Send'],
+  'general/2': ['Language'],
+  'video/3': ['HDMIAudioOut', 'VerticalStretch', 'HDMIPassThrough', 'PassThroughSource', 'RCSelect', 'HDMIControl', 'ARC',
+    'TVAudioSwitching', 'PowerOffControl', 'PowerSaving', 'SmartMenu'],
+  'video/7': ['OnScreenDisplay'],
+  'video/8': ['Format'],
+  'video/9': ['TVFormat'],
+  'video/11': ['Value'],
+  'video/12': ['ScreenSaver'],
+  'video/13': ['HDMIScaler'],
+  'network/5': ['Control'],
+  'network/9': ['AirPlay'],
+  'network/10': ['SpotifyConnect'],
+  'network/11': ['RoonReady'],
+  'network/12': ['TidalConnect'],
+  'network/13': ['QobuzConnect'],
 };
 
 // Never pass these anywhere in a payload.
@@ -79,7 +96,17 @@ export function validateWrite(section: string, type: number, xml: string, capDb:
 const NEVER: Record<string, number[]> = {
   globals: [8], // setup lock
   general: [11, 15, 16], // firmware, setup lock, reset
-  network: [3, 4, 7], // connection, IP settings, diagnostics
+  network: [3, 4, 7], // connection, IP settings (shown read-only), diagnostics
+  advanced: [4, 5, 6, 7, 8, 9],
+  account: [2, 3, 4, 5, 6, 7, 8],
+};
+
+// Pages whose mere GET does something (runs a test, starts an action): never even read them.
+// (Everything in NEVER is still never written.)
+const NEVER_READ: Record<string, number[]> = {
+  globals: [8],
+  general: [11, 15, 16],
+  network: [3, 7],
   advanced: [4, 5, 6, 7, 8, 9],
   account: [2, 3, 4, 5, 6, 7, 8],
 };
@@ -103,7 +130,7 @@ export class SetupApi {
   }
 
   canRead(section: string, type: number): boolean {
-    return !!READABLE[section]?.includes(type) && !NEVER[section]?.includes(type);
+    return !!READABLE[section]?.includes(type) && !NEVER_READ[section]?.includes(type);
   }
   canWrite(section: string, type: number): boolean {
     return !!WRITABLE[section]?.includes(type) && !NEVER[section]?.includes(type);

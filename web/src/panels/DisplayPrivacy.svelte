@@ -23,7 +23,7 @@
           onclick={() => usage.write(`<Send>${txt(usage.doc, 'Send') === '1' ? 2 : 1}</Send>`)}></button>
       </div>
     {/if}
-    <p class="faint small">Intentionally not exposed: firmware update, factory reset, setup lock and network/IP settings.
+    <p class="faint small">Intentionally not exposed: firmware update, factory reset and setup lock. Network/IP settings are shown read-only on the Network tab.
       Use the receiver's own menu for those.</p>
 </Panel>
 

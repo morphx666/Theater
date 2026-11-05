@@ -29,6 +29,15 @@ import DisplayPrivacy from './DisplayPrivacy.svelte';
 import AppSettings from './AppSettings.svelte';
 import ReceiverInfo from './ReceiverInfo.svelte';
 import Backups from './Backups.svelte';
+import HdmiSetup from './HdmiSetup.svelte';
+import VideoOutput from './VideoOutput.svelte';
+import HdcpSetup from './HdcpSetup.svelte';
+import OnScreen from './OnScreen.svelte';
+import NetworkInfo from './NetworkInfo.svelte';
+import NetworkControl from './NetworkControl.svelte';
+import StreamingServices from './StreamingServices.svelte';
+import HeosAccount from './HeosAccount.svelte';
+import Language from './Language.svelte';
 
 /** section = page it lives on; tab = Setup sub-tab; wide = spans the full row. */
 export const PANEL_LIST = [
@@ -60,9 +69,18 @@ export const PANEL_LIST = [
   { id: 'volume-main', title: 'Volume — Main Zone', section: 'setup', tab: 'audio', comp: VolumeMain },
   { id: 'volume-zone2', title: 'Volume — Zone 2', section: 'setup', tab: 'audio', comp: VolumeZone2 },
   { id: 'graphic-eq', title: 'Graphic EQ', section: 'setup', tab: 'audio', comp: GraphicEq, wide: true },
+  { id: 'hdmi-setup', title: 'HDMI setup', section: 'setup', tab: 'video', comp: HdmiSetup },
+  { id: 'video-output', title: 'Video output', section: 'setup', tab: 'video', comp: VideoOutput },
+  { id: 'on-screen', title: 'On-screen display', section: 'setup', tab: 'video', comp: OnScreen },
+  { id: 'hdcp', title: 'HDCP', section: 'setup', tab: 'video', comp: HdcpSetup },
+  { id: 'network-info', title: 'Network', section: 'setup', tab: 'network', comp: NetworkInfo },
+  { id: 'network-control', title: 'Network control', section: 'setup', tab: 'network', comp: NetworkControl },
+  { id: 'streaming', title: 'Streaming services', section: 'setup', tab: 'network', comp: StreamingServices },
+  { id: 'heos-account', title: 'HEOS account', section: 'setup', tab: 'network', comp: HeosAccount },
   { id: 'names', title: 'Names', section: 'setup', tab: 'general', comp: Names },
   { id: 'power-eco', title: 'Power & ECO', section: 'setup', tab: 'general', comp: PowerEco },
   { id: 'display-privacy', title: 'Display & privacy', section: 'setup', tab: 'general', comp: DisplayPrivacy },
+  { id: 'language', title: 'Language', section: 'setup', tab: 'general', comp: Language },
   { id: 'app-settings', title: 'This app', section: 'setup', tab: 'app', comp: AppSettings },
   { id: 'receiver-info', title: 'Receiver', section: 'setup', tab: 'app', comp: ReceiverInfo },
   { id: 'backups', title: 'Setup backups', section: 'setup', tab: 'app', comp: Backups },
