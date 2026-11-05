@@ -71,3 +71,19 @@ export function togglePin(id, title = 'Panel') {
     toast(`${title} pinned to Home`);
   }
 }
+
+// ---- per-panel options (e.g. lock the volume dial), shared by all devices ----
+export function panelOption(panel, key) {
+  return !!avr.settings?.panelOptions?.[panel]?.[key];
+}
+
+export async function setPanelOption(panel, key, value) {
+  const po = { ...(avr.settings?.panelOptions ?? {}) };
+  po[panel] = { ...(po[panel] ?? {}), [key]: value };
+  avr.settings = { ...avr.settings, panelOptions: po }; // optimistic
+  try {
+    await api('/api/settings', { method: 'POST', body: { panelOption: { panel, key, value } } });
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}

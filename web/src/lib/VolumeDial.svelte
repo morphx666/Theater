@@ -4,6 +4,10 @@
   import { throttle } from './controls.svelte.js';
   import Icon from './Icon.svelte';
 
+  // locked: the dial still shows the live volume, but ignores dragging, the scroll wheel and arrow keys
+  // (the −/+ buttons and Mute keep working). Set from Home › Customize › "Lock dial".
+  let { locked = false } = $props();
+
   const MIN = -80;
   const SWEEP = 270; // degrees
   const START = 135; // degrees, measured clockwise from +x axis
@@ -65,7 +69,7 @@
   // Volume only changes by dragging the knob itself. Clicking/tapping elsewhere on the ring does nothing,
   // so a stray tap near the end of the arc can never jump the volume up.
   function down(e) {
-    if (off) return;
+    if (off || locked) return;
     e.preventDefault();
     e.stopPropagation();
     dragging = true;
@@ -82,7 +86,7 @@
     holdUntil = Date.now() + 900;
   }
   function wheel(e) {
-    if (off) return;
+    if (off || locked) return;
     e.preventDefault();
     step(e.deltaY < 0 ? 1 : -1);
   }
@@ -91,6 +95,7 @@
     setDb((local ?? st?.volume ?? MIN) + dir * s);
   }
   function key(e) {
+    if (locked) return;
     if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); step(1); }
     if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
   }
@@ -106,9 +111,9 @@
   const release = () => clearTimeout(repeat);
 </script>
 
-<div class="dial" class:muted class:off>
-  <svg bind:this={svg} viewBox="0 0 200 200" role="slider" tabindex="0" aria-label="Master volume"
-    aria-valuemin={MIN} aria-valuemax={cap} aria-valuenow={value}
+<div class="dial" class:muted class:off class:locked>
+  <svg bind:this={svg} viewBox="0 0 200 200" role="slider" tabindex="0" aria-label="Master volume{locked ? ' (dial locked)' : ''}"
+    aria-valuemin={MIN} aria-valuemax={cap} aria-valuenow={value} aria-readonly={locked}
     onwheel={wheel} onkeydown={key}>
     <defs>
       <linearGradient id="vg" x1="0" y1="1" x2="1" y2="0">
@@ -127,10 +132,15 @@
     {/if}
     <line x1={cx1} y1={cy1} x2={cx2} y2={cy2} class="capmark" />
     <circle cx={kx} cy={ky} r="9" class="knob" />
-    <circle cx={kx} cy={ky} r="20" class="grab" class:active={dragging} onpointerdown={down} role="presentation" />
+    {#if !locked}<circle cx={kx} cy={ky} r="20" class="grab" class:active={dragging} onpointerdown={down} role="presentation" />{/if}
     <text x="100" y="98" class="num">{off ? 'OFF' : muted ? 'MUTE' : value.toFixed(1)}</text>
     <text x="100" y="122" class="unit">{off || muted ? (off ? 'standby' : value.toFixed(1) + ' dB') : 'dB'}</text>
-    <text x="100" y="178" class="cap">limit {cap} dB</text>
+    {#if locked}
+      <g class="lockmark" transform="translate(77 167)"><path d="M3 7h10v8H3z M5 7V5a3 3 0 0 1 6 0v2" /></g>
+      <text x="95" y="179" class="cap start">dial locked</text>
+    {:else}
+      <text x="100" y="178" class="cap">limit {cap} dB</text>
+    {/if}
   </svg>
 
   <div class="row controls">
@@ -151,6 +161,9 @@
   .grab.active { cursor: grabbing; }
   .off .grab { cursor: default; }
   .knob { pointer-events: none; }
+  .locked .knob { fill: var(--muted); }
+  .cap.start { text-anchor: start; }
+  .lockmark path { fill: none; stroke: var(--muted); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
   .track { fill: none; stroke: var(--line); stroke-width: 12; stroke-linecap: round; }
   .over { fill: none; stroke: color-mix(in srgb, var(--bad) 30%, transparent); stroke-width: 12; stroke-linecap: round; }
   .fill { fill: none; stroke: url(#vg); stroke-width: 12; stroke-linecap: round; transition: d 0.12s; }

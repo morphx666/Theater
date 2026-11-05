@@ -25,6 +25,7 @@ type Layout = { order?: string[]; lanes?: Record<string, number>; spans?: Record
 type Settings = {
   volumeCapDb: number; volumeStep: number;
   layouts?: Record<string, Layout>; // per page: panel order, start column, width in columns
+  panelOptions?: Record<string, Record<string, boolean>>; // per panel, e.g. { volume: { locked: true } }
   home?: string[]; homeLanes?: Record<string, number>; homeSpans?: Record<string, number>; // legacy (migrated)
 };
 const SETTINGS_FILE = path.join(DATA, 'settings.json');
@@ -221,6 +222,11 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
         const b = await readBody(req);
         if (typeof b.volumeCapDb === 'number') settings.volumeCapDb = Math.min(18, Math.max(-60, Math.round(b.volumeCapDb * 2) / 2));
         if (typeof b.volumeStep === 'number') settings.volumeStep = [0.5, 1, 2].includes(b.volumeStep) ? b.volumeStep : 0.5;
+        if (b.panelOption && ID.test(String(b.panelOption.panel)) && /^[a-zA-Z]{1,30}$/.test(String(b.panelOption.key))) {
+          const { panel, key, value } = b.panelOption;
+          settings.panelOptions ??= {};
+          settings.panelOptions[panel] = { ...(settings.panelOptions[panel] ?? {}), [key]: !!value };
+        }
         if (b.layout && typeof b.layout === 'object' && ID.test(String(b.layout.page))) {
           const page = String(b.layout.page);
           settings.layouts ??= {};

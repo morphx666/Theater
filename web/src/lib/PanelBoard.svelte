@@ -4,7 +4,7 @@
   // columns; the width button makes it 1-3 columns wide; ✕ removes it (Home only).
   // The layout (order, start column, width) is saved per page on the server.
   import { PANELS, SECTION_LABELS } from '../panels/index.js';
-  import { getLayout, saveLayout, resetLayout, ui } from './layout.svelte.js';
+  import { getLayout, saveLayout, resetLayout, ui, panelOption, setPanelOption } from './layout.svelte.js';
   import Icon from './Icon.svelte';
   import { lanes } from './lanes.js';
 
@@ -271,6 +271,16 @@
           {/if}
         </div>
       {/if}
+      {#if ui.editing && p.options?.length}
+        <div class="opts">
+          {#each p.options as o (o.key)}
+            <label class="opt">
+              <input type="checkbox" checked={panelOption(id, o.key)} onchange={(e) => setPanelOption(id, o.key, e.currentTarget.checked)} />
+              {o.label}
+            </label>
+          {/each}
+        </div>
+      {/if}
       <div class="content" inert={ui.editing}>
         <p.comp />
       </div>
@@ -298,6 +308,14 @@
     background: color-mix(in srgb, var(--card-2) 92%, transparent); backdrop-filter: blur(8px);
     border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
   }
+  /* panel options float over the bottom edge, like the toolbar over the top edge (no height change) */
+  .opts {
+    position: absolute; bottom: -15px; left: 12px; z-index: 3; display: flex; gap: 10px; padding: 5px 10px;
+    background: color-mix(in srgb, var(--card-2) 92%, transparent); backdrop-filter: blur(8px);
+    border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); font-size: 12.5px; font-weight: 600;
+  }
+  .opt { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  .opt input { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; cursor: pointer; }
   .grip {
     width: 30px; height: 30px; border-radius: 8px; border: 0; background: none; color: var(--muted);
     cursor: grab; display: grid; place-items: center; touch-action: none; flex: none;

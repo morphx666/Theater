@@ -43,7 +43,7 @@ import SpeakerPresets from './SpeakerPresets.svelte';
 /** section = page it lives on; tab = Setup sub-tab; wide = spans the full row. */
 export const PANEL_LIST = [
   { id: 'status', title: 'Now playing', section: 'home', comp: Status },
-  { id: 'volume', title: 'Volume', section: 'home', comp: Volume },
+  { id: 'volume', title: 'Volume', section: 'home', comp: Volume, options: [{ key: 'locked', label: 'Lock dial' }] },
   { id: 'inputs', title: 'Input', section: 'home', comp: Inputs },
   { id: 'sound-mode', title: 'Sound mode', section: 'home', comp: SoundMode },
   { id: 'quick-select', title: 'Quick Select', section: 'home', comp: QuickSelect },
