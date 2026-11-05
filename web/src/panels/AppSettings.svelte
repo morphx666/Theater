@@ -4,6 +4,7 @@
   import Panel from '../lib/Panel.svelte';
   import Seg from '../lib/Seg.svelte';
   import Slider from '../lib/Slider.svelte';
+  import { idle, setIdle } from '../lib/idle.svelte.js';
 
   async function saveSettings(patch) {
     try { await api('/api/settings', { method: 'POST', body: patch }); toast('Saved'); }
@@ -22,6 +23,18 @@
         <div class="label">Volume button step</div>
         <Seg value={avr.settings.volumeStep} onchange={(v) => saveSettings({ volumeStep: v })}
           options={[{ value: 0.5, label: '0.5 dB' }, { value: 1, label: '1 dB' }, { value: 2, label: '2 dB' }]} />
+      </div>
+      <div class="setting stack">
+        <div class="label">Dim the screen when idle</div>
+        <Seg value={idle.minutes} onchange={(v) => setIdle({ minutes: v })}
+          options={[{ value: 0, label: 'Never' }, { value: 1, label: '1 min' }, { value: 5, label: '5 min' },
+            { value: 15, label: '15 min' }, { value: 30, label: '30 min' }]} />
+        {#if idle.minutes > 0}
+          <Seg value={idle.level} onchange={(v) => setIdle({ level: v })}
+            options={[{ value: 'dim', label: 'Dim' }, { value: 'dark', label: 'Darker' }, { value: 'black', label: 'Black' }]} />
+        {/if}
+        <div class="hint">Saved on this device only. Move the mouse, or tap, click or press a key to light it up again;
+          that first tap, click or key press only wakes the screen.</div>
       </div>
       <div class="setting stack">
         <div class="label">Keyboard shortcuts</div>

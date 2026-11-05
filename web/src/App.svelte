@@ -5,6 +5,7 @@
   import Section from './pages/Section.svelte';
   import Setup from './pages/Setup.svelte';
   import { ui } from './lib/layout.svelte.js';
+  import IdleDimmer from './lib/IdleDimmer.svelte';
 
   const PAGES = [
     { id: 'home', label: 'Home', icon: 'home', comp: Home },
@@ -90,6 +91,8 @@
 {#if avr.toast}
   <div class="toast {avr.toast.kind}" role="status">{avr.toast.text}</div>
 {/if}
+
+<IdleDimmer />
 
 <style>
   .shell { display: flex; min-height: 100dvh; }
