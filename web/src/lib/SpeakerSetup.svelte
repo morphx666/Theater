@@ -3,6 +3,7 @@
   import { txt } from './setup.js';
   import Seg from './Seg.svelte';
   import Icon from './Icon.svelte';
+  import Slider from './Slider.svelte';
 
   const preset = useSetup('speakers', 11, { reloadDelay: 5000 });
   const config = useSetup('speakers', 3);
@@ -70,7 +71,7 @@
     db: Number(n.textContent) / 10, edit: n.getAttribute('display') === '3',
   })));
   const lv = (r) => (r.idx in levelEdits ? levelEdits[r.idx] : r.db);
-  function bump(r, d) { levelEdits[r.idx] = Math.max(-12, Math.min(12, Math.round((lv(r) + d) * 2) / 2)); if (levelEdits[r.idx] === r.db) delete levelEdits[r.idx]; }
+  function setLevel(r, v) { if (v === r.db) delete levelEdits[r.idx]; else levelEdits[r.idx] = v; }
   async function saveLevels() {
     const xml = `<List>${Object.entries(levelEdits).map(([i, v]) => `<Speaker index="${i}">${Math.round(v * 10)}</Speaker>`).join('')}</List>`;
     if (await levels.write(xml)) levelEdits = {};
@@ -96,7 +97,7 @@
 
 <section class="card">
   <h2>Speaker setup</h2>
-  <p class="muted small" style="margin:-6px 0 6px">The receiver's stored calibration. Changes apply instantly and are backed up first.</p>
+  <p class="muted small" style="margin:-6px 0 6px">The receiver's stored calibration. Levels and distances are sent when you press Save; other options apply instantly. Previous values are always backed up first.</p>
 
   {#if preset.doc && preset.doc.textContent.trim() !== '0'}
     <div class="setting stack">
@@ -106,6 +107,24 @@
         options={[{ value: '1', label: 'Preset 1' }, { value: '2', label: 'Preset 2' }]} />
     </div>
   {/if}
+
+  <details open>
+    <summary>Levels</summary>
+    {#if levels.doc}
+      <div class="rows">
+        {#each levelRows as r (r.idx)}
+          <div class="lvl" class:changed={r.idx in levelEdits}>
+            <Slider label={r.name} min={-12} max={12} step={0.5} center disabled={!r.edit} value={lv(r)}
+              format={(v) => fmt(v) + ' dB'} onchange={(v) => setLevel(r, v)} />
+          </div>
+        {/each}
+      </div>
+      <div class="actions">
+        <button class="btn" disabled={!Object.keys(levelEdits).length} onclick={() => (levelEdits = {})}>Revert</button>
+        <button class="btn primary" disabled={!Object.keys(levelEdits).length || levels.saving} onclick={saveLevels}><Icon name="save" size={18} />Save levels</button>
+      </div>
+    {/if}
+  </details>
 
   <details open>
     <summary>Distances <span class="faint">({unitLabel})</span></summary>
@@ -131,28 +150,6 @@
       <div class="actions">
         <button class="btn" disabled={!distDirty} onclick={() => (distEdits = {})}>Revert</button>
         <button class="btn primary" disabled={!distDirty || !spreadOk || dist.saving} onclick={saveDist}><Icon name="save" size={18} />Save distances</button>
-      </div>
-    {/if}
-  </details>
-
-  <details open>
-    <summary>Levels</summary>
-    {#if levels.doc}
-      <div class="rows">
-        {#each levelRows as r (r.idx)}
-          <div class="r">
-            <span>{r.name}</span>
-            <div class="row" style="gap:6px">
-              <button class="btn icon sm" disabled={!r.edit} aria-label="{r.name} down" onclick={() => bump(r, -0.5)}><Icon name="minus" size={16} /></button>
-              <span class="mono val" class:changed={r.idx in levelEdits}>{fmt(lv(r))}</span>
-              <button class="btn icon sm" disabled={!r.edit} aria-label="{r.name} up" onclick={() => bump(r, 0.5)}><Icon name="plus" size={16} /></button>
-            </div>
-          </div>
-        {/each}
-      </div>
-      <div class="actions">
-        <button class="btn" disabled={!Object.keys(levelEdits).length} onclick={() => (levelEdits = {})}>Revert</button>
-        <button class="btn primary" disabled={!Object.keys(levelEdits).length || levels.saving} onclick={saveLevels}><Icon name="save" size={18} />Save levels</button>
       </div>
     {/if}
   </details>
@@ -224,9 +221,8 @@
   .rows { display: grid; gap: 2px; }
   .r { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 0; }
   .r input, .r select { width: 130px; flex: none; }
-  .val { min-width: 48px; text-align: center; }
-  .val.changed { color: var(--accent); font-weight: 700; }
-  .sm { width: 34px; min-height: 34px; height: 34px; }
+  .lvl { padding: 4px 0 2px 10px; border-left: 3px solid transparent; }
+  .lvl.changed { border-left-color: var(--accent); }
   .actions { display: flex; justify-content: flex-end; gap: 8px; margin: 10px 0 6px; }
   .warn { display: flex; gap: 8px; align-items: center; color: var(--accent); margin: 0 0 8px; }
   .bad { color: var(--bad); }
