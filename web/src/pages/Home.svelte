@@ -3,7 +3,7 @@
   // "Customize" mode: drag the grip (mouse or touch) or use ↑/↓ to reorder, ✕ to unpin, "Add panels" to pin more.
   import { setContext } from 'svelte';
   import { PANELS, PANEL_LIST, SECTION_LABELS } from '../panels/index.js';
-  import { homeIds, homeLanes, setHome, resetHome, ui, DEFAULT_HOME } from '../lib/layout.svelte.js';
+  import { homeIds, homeLanes, homeSpans, setHome, resetHome, ui, DEFAULT_HOME } from '../lib/layout.svelte.js';
   import Icon from '../lib/Icon.svelte';
   import { lanes } from '../lib/lanes.js';
 
@@ -11,6 +11,7 @@
 
   const saved = $derived(homeIds().filter((id) => PANELS[id]));
   const savedLanes = $derived(homeLanes());
+  const savedSpans = $derived(homeSpans());
   let dragOrder = $state(null); // live order while dragging
   let dragLanes = $state(null); // live column choices while dragging
   let dragId = $state(null);
@@ -25,7 +26,7 @@
       .map(([sec, label]) => ({ label, panels: PANEL_LIST.filter((p) => p.section === sec && !saved.includes(p.id)) }))
       .filter((g) => g.panels.length),
   );
-  const isDefault = $derived(JSON.stringify(saved) === JSON.stringify(DEFAULT_HOME) && !Object.keys(savedLanes).length);
+  const isDefault = $derived(JSON.stringify(saved) === JSON.stringify(DEFAULT_HOME) && !Object.keys(savedLanes).length && !Object.keys(savedSpans).length);
 
   function remove(id) { setHome(saved.filter((x) => x !== id)); }
   function add(id) { setHome([...saved, id]); }
@@ -38,21 +39,42 @@
     for (const el of grid?.querySelectorAll(':scope > [data-slot]') ?? []) out[el.dataset.slot] = Number(el.dataset.lane ?? 0);
     return out;
   }
-  /** Panels of one column, top to bottom. */
+  /** Panels that occupy a given column (wider panels occupy several), in order. */
   function columnOf(lanesMap, ord, lane) {
-    return ord.filter((id) => !PANELS[id].wide && (lanesMap[id] ?? -1) === lane);
+    return ord.filter((id) => {
+      const st = lanesMap[id];
+      return st !== undefined && lane >= st && lane < st + (spanMap[id] ?? 1);
+    });
+  }
+  function colWidth() {
+    const r = grid.getBoundingClientRect();
+    return (r.width - 16 * (cols - 1)) / cols;
   }
   function colAt(x) {
     const r = grid.getBoundingClientRect();
     const w = (r.width - 16 * (cols - 1)) / cols;
     return Math.max(0, Math.min(cols - 1, Math.floor((x - r.left + 8) / (w + 16))));
   }
-  let laneMap = $state({}); // panel -> column, as currently laid out (drives the arrow buttons)
+  let laneMap = $state({}); // panel -> start column, as currently laid out (drives the arrow buttons)
+  let spanMap = $state({}); // panel -> width in columns, as currently laid out
   function onLayout(e) {
     cols = e.detail?.cols ?? cols;
     const m = currentLanes();
     if (JSON.stringify(m) !== JSON.stringify(laneMap)) laneMap = m;
+    const sp = {};
+    for (const el of grid?.querySelectorAll(':scope > [data-slot]') ?? []) sp[el.dataset.slot] = Number(el.dataset.span ?? 1);
+    if (JSON.stringify(sp) !== JSON.stringify(spanMap)) spanMap = sp;
     follow();
+  }
+
+  // ---- width: 1× → 2× → 3× (up to the number of columns on screen) ----
+  function cycleSpan(id) {
+    lastMoved = id;
+    const cur = spanMap[id] ?? 1;
+    const next = cur >= cols ? 1 : cur + 1;
+    const l = currentLanes();
+    l[id] = Math.min(l[id] ?? 0, cols - next); // keep it on screen
+    setHome([...saved], l, { ...savedSpans, [id]: next });
   }
 
   // ---- buttons: ↑ ↓ within the column, ← → to the neighbouring column ----
@@ -61,7 +83,7 @@
     const l = currentLanes();
     const ord = [...saved];
     if (dir === 'left' || dir === 'right') {
-      l[id] = Math.max(0, Math.min(cols - 1, l[id] + (dir === 'left' ? -1 : 1)));
+      l[id] = Math.max(0, Math.min(cols - (spanMap[id] ?? 1), l[id] + (dir === 'left' ? -1 : 1)));
       setHome(ord, l);
       return;
     }
@@ -75,10 +97,10 @@
     setHome(ord, l);
   }
   function canNudge(id, dir) {
-    if (PANELS[id].wide || laneMap[id] === undefined) return false;
+    if (laneMap[id] === undefined) return false;
     const lane = laneMap[id];
     if (dir === 'left') return lane > 0;
-    if (dir === 'right') return lane < cols - 1;
+    if (dir === 'right') return lane + (spanMap[id] ?? 1) < cols;
     const col = columnOf(laneMap, order, lane);
     const k = col.indexOf(id);
     return dir === 'up' ? k > 0 : k >= 0 && k < col.length - 1;
@@ -139,20 +161,28 @@
     const edge = 90;
     scrollSpeed = e.clientY < edge ? -Math.ceil((edge - e.clientY) / 6) : e.clientY > innerHeight - edge ? Math.ceil((e.clientY - innerHeight + edge) / 6) : 0;
     if (scrollSpeed && !scrollRaf) scrollRaf = requestAnimationFrame(autoScroll);
-    if (PANELS[dragId].wide || cols < 1) return;
+    if (cols < 1) return;
 
-    const lane = colAt(e.clientX);
-    const py = e.clientY - grid.getBoundingClientRect().top;
-    const others = columnOf(dragLanes, dragOrder, lane).filter((id) => id !== dragId);
-    let before = null; // insert before this panel; null = end of column
-    for (const id of others) {
-      const el = grid.querySelector(`[data-slot="${id}"]`);
+    // Start column = the column nearest the lifted card's left edge (for 1-wide panels: under the card).
+    const span = Math.min(cols, spanMap[dragId] ?? 1);
+    const r = grid.getBoundingClientRect();
+    const cardLeft = e.clientX - grab.x - r.left;
+    const lane = Math.max(0, Math.min(cols - span, Math.round(cardLeft / (colWidth() + 16))));
+    const py = e.clientY - r.top;
+    // Panels in any of the columns this one would cover, top to bottom.
+    const covered = new Set();
+    for (let c = lane; c < lane + span; c++) for (const id of columnOf(dragLanes, dragOrder, c)) if (id !== dragId) covered.add(id);
+    const others = [...covered]
+      .map((id) => ({ id, el: grid.querySelector(`[data-slot="${id}"]`) }))
+      .sort((a, b) => a.el.offsetTop - b.el.offsetTop);
+    let before = null; // insert before this panel; null = after all of them
+    for (const { id, el } of others) {
       if (py < el.offsetTop + el.offsetHeight / 2) { before = id; break; }
     }
     const o = dragOrder.filter((x) => x !== dragId);
     let ins;
     if (before) ins = o.indexOf(before);
-    else if (others.length) ins = o.indexOf(others[others.length - 1]) + 1;
+    else if (others.length) ins = Math.max(...others.map((x) => o.indexOf(x.id))) + 1;
     else ins = o.length;
     o.splice(ins, 0, dragId);
     const laneChanged = dragLanes[dragId] !== lane;
@@ -210,7 +240,7 @@
   </div>
 {/if}
 
-<div class="panels" class:editing={ui.editing} use:lanes={{ animate: ui.editing, hints }} bind:this={grid} onlaneslayout={onLayout}>
+<div class="panels" class:editing={ui.editing} use:lanes={{ animate: ui.editing, hints, spans: savedSpans }} bind:this={grid} onlaneslayout={onLayout}>
   {#each order as id, i (id)}
     {@const p = PANELS[id]}
     <div class="slot" class:wide={p.wide} class:dragging={dragId === id} class:active={lastMoved === id} data-slot={id}>
@@ -228,6 +258,12 @@
             {#if cols > 1 && !p.wide}
               <button class="btn icon sm ghost" aria-label="Move {p.title} to the right column" disabled={!canNudge(id, 'right')} onclick={() => nudge(id, 'right')}><Icon name="right" size={16} /></button>
             {/if}
+          {#if cols > 1}
+            <button class="btn sm ghost width" aria-label="Width of {p.title}: {spanMap[id] ?? 1} column(s). Click to change"
+              title="Width: {spanMap[id] ?? 1}× (click to change)" onclick={() => cycleSpan(id)}>
+              <Icon name="width" size={15} />{spanMap[id] ?? 1}×
+            </button>
+          {/if}
           <button class="btn icon sm ghost danger" aria-label="Unpin {p.title}" onclick={() => remove(id)}><Icon name="x" size={16} /></button>
         </div>
       {/if}
@@ -265,6 +301,7 @@
   .bar { display: flex; align-items: center; gap: 8px; margin: -4px 0 12px; flex-wrap: wrap; }
   .bar .muted { display: inline-flex; align-items: center; gap: 4px; }
   .panels { position: relative; } /* offsetParent for slotAt() */
+  .panels.editing { margin-top: 26px; }
   .slot { min-width: 0; position: relative; }
   .slot.wide { grid-column: 1 / -1; }
   .editing .slot { outline: 2px dashed color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 4px; border-radius: var(--radius); background: var(--bg); }
@@ -274,16 +311,18 @@
   /* Floating toolbar over the panel's header: adds no height, so the layout while editing is exactly
      the layout you get after "Done" (a masonry layout depends on panel heights). */
   .edit {
-    position: absolute; top: 8px; right: 8px; z-index: 3; display: flex; align-items: center; gap: 2px; padding: 3px;
+    /* docked on the panel's top edge (over the dashed outline), clear of the panel's own title */
+    position: absolute; top: -17px; right: 12px; z-index: 3; display: flex; align-items: center; gap: 1px; padding: 2px;
     background: color-mix(in srgb, var(--card-2) 92%, transparent); backdrop-filter: blur(8px);
     border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
   }
   .grip {
-    width: 34px; height: 34px; border-radius: 9px; border: 0; background: none; color: var(--muted);
+    width: 30px; height: 30px; border-radius: 8px; border: 0; background: none; color: var(--muted);
     cursor: grab; display: grid; place-items: center; touch-action: none; flex: none;
   }
   .grip:active { cursor: grabbing; color: var(--accent); }
-  .sm { width: 34px; min-height: 34px; height: 34px; }
+  .sm { width: 30px; min-height: 30px; height: 30px; border-radius: 8px; }
+  .width { width: auto; padding: 0 7px; gap: 4px; font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
   .sheet { width: min(460px, 100%); max-height: 80dvh; overflow: auto; }
   .group { display: grid; gap: 4px; }
   .group h2 { margin: 8px 0 4px; }

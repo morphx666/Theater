@@ -7,7 +7,7 @@ export const ui = $state({ editing: false });
 
 // While a change is being saved, show the local version: a routine state broadcast from the server can
 // still carry the previous layout and would otherwise make panels jump back and forth.
-const pending = $state({ home: null, lanes: null, seq: 0 });
+const pending = $state({ home: null, lanes: null, spans: null, seq: 0 });
 
 export function homeIds() {
   if (pending.home) return pending.home;
@@ -22,18 +22,27 @@ export function homeLanes() {
   return l && typeof l === 'object' ? l : {};
 }
 
-export async function setHome(ids, lanes = homeLanes()) {
+/** Width of each panel in columns ({ id: 1|2|3 }); missing = default (1, or full width for wide panels). */
+export function homeSpans() {
+  if (pending.home) return pending.spans ?? {};
+  const s = avr.settings?.homeSpans;
+  return s && typeof s === 'object' ? s : {};
+}
+
+export async function setHome(ids, lanes = homeLanes(), spans = homeSpans()) {
   const seq = ++pending.seq;
-  const keep = Object.fromEntries(Object.entries(lanes).filter(([id]) => ids.includes(id)));
+  const only = (m) => Object.fromEntries(Object.entries(m).filter(([id]) => ids.includes(id)));
+  const keepLanes = only(lanes), keepSpans = only(spans);
   pending.home = ids;
-  pending.lanes = keep;
+  pending.lanes = keepLanes;
+  pending.spans = keepSpans;
   try {
-    const saved = await api('/api/settings', { method: 'POST', body: { home: ids, homeLanes: keep } });
-    if (seq === pending.seq) avr.settings = { ...avr.settings, home: saved.home, homeLanes: saved.homeLanes };
+    const saved = await api('/api/settings', { method: 'POST', body: { home: ids, homeLanes: keepLanes, homeSpans: keepSpans } });
+    if (seq === pending.seq) avr.settings = { ...avr.settings, home: saved.home, homeLanes: saved.homeLanes, homeSpans: saved.homeSpans };
   } catch (e) {
     toast(e.message, 'error');
   } finally {
-    if (seq === pending.seq) { pending.home = null; pending.lanes = null; } // newest save finished; follow the server again
+    if (seq === pending.seq) { pending.home = null; pending.lanes = null; pending.spans = null; } // follow the server again
   }
 }
 
@@ -41,7 +50,8 @@ export async function resetHome() {
   pending.seq++;
   pending.home = null;
   pending.lanes = null;
-  avr.settings = { ...avr.settings, home: undefined, homeLanes: undefined };
+  pending.spans = null;
+  avr.settings = { ...avr.settings, home: undefined, homeLanes: undefined, homeSpans: undefined };
   try { await api('/api/settings', { method: 'POST', body: { home: null } }); } catch (e) { toast(e.message, 'error'); }
 }
 

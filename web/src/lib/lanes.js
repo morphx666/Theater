@@ -18,7 +18,7 @@ const EASING = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
 const reducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function lanes(node, opts = {}) {
-  let { min = 340, gap = 16, animate = false, hints = null } = opts;
+  let { min = 340, gap = 16, animate = false, hints = null, spans = null } = opts;
   let raf = 0;
   const heights = new Map();
   const lastPos = new WeakMap(); // child -> {x, y} relative to container (native mode only)
@@ -92,7 +92,7 @@ export function lanes(node, opts = {}) {
     mo.observe(node, { childList: true });
     requestAnimationFrame(record);
     return {
-      update(o) { ({ min = 340, gap = 16, animate = false, hints = null } = o ?? {}); },
+      update(o) { ({ min = 340, gap = 16, animate = false, hints = null, spans = null } = o ?? {}); },
       destroy() { mo.disconnect(); node.classList.remove('lanes-native'); },
     };
   }
@@ -138,23 +138,27 @@ export function lanes(node, opts = {}) {
     const fresh = new Set(children().filter((c) => !c.style.gridRow)); // just added: nothing to glide from
     for (const c of children()) {
       const h = Math.ceil(Math.max(1, c.offsetHeight)); // offsetHeight ignores transforms
-      if (c.classList.contains('wide') || cols === 1) {
-        const top = Math.max(...lane);
-        c.dataset.lane = '0';
-        c.style.gridColumn = '1 / -1';
-        c.style.gridRow = `${top + 1} / span ${h}`;
-        lane.fill(top + h + gap);
-      } else {
-        // A column hint (user's choice) wins; otherwise the shortest lane, earliest wins ties.
-        const hint = hints?.[c.dataset.slot];
-        let best = 0;
-        if (Number.isInteger(hint) && hint >= 0 && hint < cols) best = hint;
-        else for (let i = 1; i < cols; i++) if (lane[i] < lane[best] - 1) best = i;
-        c.dataset.lane = String(best);
-        c.style.gridColumn = `${best + 1}`;
-        c.style.gridRow = `${lane[best] + 1} / span ${h}`;
-        lane[best] += h + gap;
+      const id = c.dataset.slot;
+      // Width in columns: the user's choice, else full width for "wide" panels, else 1.
+      const want = spans?.[id] ?? (c.classList.contains('wide') ? cols : 1);
+      const span = Math.max(1, Math.min(cols, Number(want) || 1));
+      // Start column: the user's choice (clamped so the panel fits), else wherever it sits highest.
+      const hint = hints?.[id];
+      let start = 0;
+      if (Number.isInteger(hint) && hint >= 0 && hint < cols) start = Math.min(hint, cols - span);
+      else {
+        let bestTop = Infinity;
+        for (let i = 0; i <= cols - span; i++) {
+          const t = Math.max(...lane.slice(i, i + span));
+          if (t < bestTop - 1) { bestTop = t; start = i; } // earliest wins ties
+        }
       }
+      const top = Math.max(...lane.slice(start, start + span));
+      c.dataset.lane = String(start);
+      c.dataset.span = String(span);
+      c.style.gridColumn = `${start + 1} / span ${span}`;
+      c.style.gridRow = `${top + 1} / span ${h}`;
+      for (let i = start; i < start + span; i++) lane[i] = top + h + gap;
     }
     if (first) play(first, fresh);
     node.dispatchEvent(new CustomEvent('laneslayout', { detail: { cols } })); // lets a dragged panel re-anchor in the same frame
@@ -166,7 +170,7 @@ export function lanes(node, opts = {}) {
   layout();
 
   return {
-    update(o) { ({ min = 340, gap = 16, animate = false, hints = null } = o ?? {}); schedule(); },
+    update(o) { ({ min = 340, gap = 16, animate = false, hints = null, spans = null } = o ?? {}); schedule(); },
     destroy() {
       ro.disconnect();
       mo.disconnect();
