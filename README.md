@@ -4,6 +4,8 @@ Theater is a fast web remote for the **Denon AVR-X1700H** receiver. You run it o
 
 > **Tested only on the AVR-X1700H.** Other recent Denon and Marantz receivers use similar protocols, but they haven't been tested. On another model, some panels may be empty or not work.
 
+<img width="1668" height="1142" alt="image" src="https://github.com/user-attachments/assets/750b4348-c965-4201-9507-dc78d2014093" />
+
 ## Features
 
 | Page | What you get |
