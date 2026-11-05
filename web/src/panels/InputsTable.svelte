@@ -68,9 +68,11 @@
                   onchange={(e) => saveName(r, e.currentTarget.value)}
                   onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
                 {#if r.auto && r.auto !== r.name}
-                  <div class="cec small">
-                    <span class="faint" title="The name a device on this input announced over HDMI-CEC. The receiver remembers it even after the device is unplugged, so it may be out of date.">HDMI device name: {r.auto}</span>
-                    <button class="link" onclick={() => saveName(r, r.auto)}>use</button>
+                  <div class="cec">
+                    <span class="cec-label" title="The name a device on this input announced over HDMI-CEC. The receiver remembers it even after the device is unplugged, so it may be out of date.">Device name:</span>
+                    <strong class="cec-name">{r.auto}</strong>
+                    <button class="btn small" aria-label="Set the name of {r.def} to {r.auto}" disabled={rename.saving}
+                      onclick={() => saveName(r, r.auto)}>Set</button>
                   </div>
                 {/if}
               </td>
@@ -114,9 +116,10 @@
   tr.hidden td { opacity: 0.55; }
   td input[type='text'] { min-width: 140px; }
   select { min-width: 96px; }
-  .link { background: none; border: 0; color: var(--blue); cursor: pointer; padding: 0 0 0 6px; font: inherit; }
-  .cec { display: flex; align-items: baseline; padding-top: 3px; }
-  .cec span { cursor: help; }
+  .cec { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding-top: 6px; font-size: 13px; }
+  .cec-label { color: var(--muted); cursor: help; }
+  .cec-name { color: var(--text); font-weight: 600; }
+  .cec .btn { min-height: 28px; padding: 2px 12px; }
   .err { color: var(--bad); }
   p { margin: 10px 0 0; }
 </style>
