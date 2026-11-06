@@ -82,6 +82,13 @@ test('parses a real capture', () => {
   assert.equal(st.quick, 0);
 });
 
+test('NON audio info means unknown', () => {
+  const st = emptyState();
+  applyLine(st, 'SSINFAISFSV 48K');
+  applyLine(st, 'SSINFAISFSV NON');
+  assert.equal(st.sampleRate, null);
+});
+
 test('change detection', () => {
   const st = emptyState();
   assert.equal(applyLine(st, 'MV40'), true);

@@ -242,9 +242,11 @@ function applySS(st: AvrState, r: string): void {
     if (m[1] === 'LIM') st.volumeLimit = v; else if (m[1] === 'PON') st.powerOnLevel = v; else st.muteLevel = v;
     return;
   }
-  if (r.startsWith('INFAISFSV')) { st.sampleRate = r.slice(9).trim(); return; }
-  if (r.startsWith('INFAISSIG')) { st.signal = r.slice(9).trim(); return; }
-  if (r.startsWith('INFAISFOR')) { st.audioFormat = r.slice(9).trim(); return; }
+  // The receiver answers "NON" when it has no value, e.g. no sample rate for a Dolby/DTS bitstream.
+  const info = (s: string) => { const v = s.trim(); return v && v !== 'NON' ? v : null; };
+  if (r.startsWith('INFAISFSV')) { st.sampleRate = info(r.slice(9)); return; }
+  if (r.startsWith('INFAISSIG')) { st.signal = info(r.slice(9)); return; }
+  if (r.startsWith('INFAISFOR')) { st.audioFormat = info(r.slice(9)); return; }
   if ((m = r.match(/^INFSIG(HDR|FRL) ([IO])(.*)$/))) {
     st.video[`${m[1].toLowerCase()}${m[2] === 'I' ? 'In' : 'Out'}` as 'hdrIn'] = m[3].trim();
     return;

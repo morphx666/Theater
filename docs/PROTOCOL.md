@@ -68,7 +68,7 @@ SSSOD ?          -> SSSODSAT/CBL USE             (USE / DEL = shown / hidden inp
 SSQSNZMA ?       -> SSQSNZMAQS1 Fire TV Stick    (Quick Select names)
 SSLEV ?          -> SSLEVC 53 ...                (Audyssey/setup speaker levels, 50 = 0 dB)
 SSVCTZMA ?       -> LIM OFF / PON LAS / DIS REL / MLV MUT  (volume limit, power-on level, display, mute level)
-SSINFAISFSV ?    -> 48K                          (input sample rate)
+SSINFAISFSV ?    -> 48K                          (input sample rate; NON when none, e.g. Dolby bitstream)
 SSINFFRM ?       -> firmware versions
 SSINFAISFOR ?    -> 3/2/.1                       (source channel format: front/surround/LFE)
 SYSDV ?          -> SYSDVIN 4K24, SYSDVOUT 4K24, SYSDV END   (HDMI resolution in/out)
