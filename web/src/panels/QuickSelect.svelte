@@ -41,11 +41,9 @@
   <div class="modal" role="dialog" aria-modal="true">
     <div class="card">
       <h3>Save Quick Select {confirmSave}?</h3>
-      <p class="muted">This stores the current settings into Quick Select {confirmSave}, replacing
-        “{st.quickNames[confirmSave - 1] || 'empty'}”: input, sound mode, Audyssey, Restorer, channel levels, speaker
-        preset and All Zone Stereo, plus the volume if the receiver is set to remember it. On the tuner, Internet radio
-        or Spotify, the current station is saved too.</p>
-      <p class="muted small">Recalling it from this app never goes above your volume cap ({avr.cap} dB).</p>
+      <p class="muted">Replaces “{st.quickNames[confirmSave - 1] || 'empty'}” with the current input, sound mode and audio settings
+        (and the volume, if enabled).</p>
+      <p class="muted small">Recalling it stays within your volume cap ({avr.cap} dB).</p>
       <div class="row" style="justify-content:flex-end">
         <button class="btn" onclick={() => (confirmSave = null)}>Cancel</button>
         <button class="btn primary" onclick={doSave}><Icon name="save" size={18} />Save</button>

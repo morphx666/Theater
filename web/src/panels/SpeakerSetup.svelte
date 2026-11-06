@@ -120,11 +120,11 @@
 </script>
 
 <Panel id="speaker-setup" title="Speaker setup">
-  <p class="muted small" style="margin:-6px 0 6px">The receiver's stored calibration. Levels and distances are sent when you press Save; other options apply instantly. Previous values are always backed up first.</p>
+  <p class="muted small" style="margin:-6px 0 6px">Levels and distances apply when you press Save; everything else applies right away.</p>
 
   {#if preset.doc && preset.doc.textContent.trim() !== '0'}
     <div class="setting stack">
-      <div><div class="label">Active speaker preset</div><div class="hint">Each preset stores a complete speaker setup + Audyssey result</div></div>
+      <div><div class="label">Active speaker preset</div><div class="hint">Edits below save to the active preset</div></div>
       <Seg value={preset.doc.textContent.trim()} disabled={preset.saving}
         onchange={setPreset}
         options={[{ value: '1', label: 'Preset 1' }, { value: '2', label: 'Preset 2' }]} />
@@ -202,8 +202,8 @@
     {#if bass.doc}
       <div class="setting stack">
         <div><div class="label">Subwoofer mode</div><div class="hint">{bassEditable('SubwooferMode')
-          ? 'LFE: the sub also gets the bass of speakers set to Small. LFE + Main: it gets the bass of all speakers.'
-          : 'Needs a subwoofer in the speaker configuration'}</div></div>
+          ? 'LFE + Main sends all bass to the sub'
+          : 'Needs a subwoofer in the speaker config'}</div></div>
         <Seg value={txt(bass.doc, 'SubwooferMode')} disabled={bass.saving || !bassEditable('SubwooferMode')} onchange={setSubwooferMode}
           options={[{ value: '1', label: 'LFE' }, { value: '2', label: 'LFE + Main' }]} />
       </div>
@@ -217,7 +217,7 @@
 
   <details use:remember={'speaker-setup.config'}>
     <summary>Speaker configuration <span class="faint">(advanced)</span></summary>
-    <p class="warn small"><Icon name="info" size={16} />Changing sizes or removing speakers changes bass management and which channels play. Re-run Audyssey afterwards.</p>
+    <p class="warn small"><Icon name="info" size={16} />Adding a speaker requires re-running Audyssey.</p>
     {#each kinds as k (k.idx)}
       <label class="r"><span>{k.name}</span>
         <select value={k.value} disabled={k.opts.length < 2 || config.saving}
@@ -232,7 +232,7 @@
   <div class="modal" role="dialog" aria-modal="true">
     <div class="card">
       <h3>Change {confirmCfg.k.name} to “{SIZE[confirmCfg.value]}”?</h3>
-      <p class="muted">This changes the receiver's speaker configuration. The previous setup is backed up, and you can switch it back here.</p>
+      <p class="muted">{confirmCfg.k.value === '1' ? 'Audyssey will be unavailable until you re-run it. ' : ''}The previous setup is backed up.</p>
       <div class="row" style="justify-content:flex-end">
         <button class="btn" onclick={() => (confirmCfg = null)}>Cancel</button>
         <button class="btn primary" onclick={() => { setConfig(confirmCfg.k.idx, confirmCfg.value); confirmCfg = null; }}>Change</button>

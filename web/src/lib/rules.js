@@ -16,36 +16,36 @@ const isDolby = () => /DOLBY/i.test(decoder());
 const isDts = () => /DTS/i.test(decoder());
 const known = () => !!decoder();
 
-const DIRECT = 'Not available in Direct or Pure Direct';
+const DIRECT = 'Not in Direct or Pure Direct';
 
 /** Specific reason for each setting, given the current state (only used while the setting is unavailable). */
 const WHY = {
   // p.158: not in Direct / Pure Direct, nor in DTS Virtual:X or "+Virtual:X" modes.
-  MULTEQ: () => (isDirect() ? DIRECT : isVirtual() ? 'Not available in Virtual:X sound modes' : null),
+  MULTEQ: () => (isDirect() ? DIRECT : isVirtual() ? 'Not in Virtual:X modes' : null),
   // p.159: "This item cannot be set when MultEQ XT … is set to Off."
-  DYNEQ: () => WHY.MULTEQ() ?? (ps().MULTEQ === 'OFF' ? 'Turn on MultEQ to use this' : null),
-  DYNVOL: () => WHY.MULTEQ() ?? (ps().MULTEQ === 'OFF' ? 'Turn on MultEQ to use this' : null),
+  DYNEQ: () => WHY.MULTEQ() ?? (ps().MULTEQ === 'OFF' ? 'Needs MultEQ on' : null),
+  DYNVOL: () => WHY.MULTEQ() ?? (ps().MULTEQ === 'OFF' ? 'Needs MultEQ on' : null),
   // p.159: "Setting is enabled when Dynamic EQ is On."
-  REFLEV: () => WHY.MULTEQ() ?? (ps().DYNEQ !== 'ON' ? 'Turn on Dynamic EQ to use this' : null),
+  REFLEV: () => WHY.MULTEQ() ?? (ps().DYNEQ !== 'ON' ? 'Needs Dynamic EQ on' : null),
   // p.151: not in Direct, Stereo or the original sound mode.
-  'CINEMA EQ': () => 'Not available in Direct, Pure Direct, Stereo or the original sound mode',
+  'CINEMA EQ': () => 'Not in Direct, Stereo or original modes',
   // p.152: Dolby Digital, Dolby Digital Plus, Dolby TrueHD and Dolby Atmos only.
-  LOM: () => 'Only with Dolby sources (Dolby Digital, Dolby Digital Plus, TrueHD, Atmos)',
+  LOM: () => 'Dolby sources only',
   // p.152: Dolby or DTS sources, and only while Loudness Management is on.
-  DRC: () => (ps().LOM !== undefined && ps().LOM !== 'ON' ? 'Turn on Loudness management to adjust this'
-    : 'Only with Dolby or DTS sources'),
+  DRC: () => (ps().LOM !== undefined && ps().LOM !== 'ON' ? 'Needs Loudness management on'
+    : 'Dolby or DTS sources only'),
   // p.153: only when the input contains an LFE signal, from Dolby Digital, DTS or DVD-Audio.
-  LFE: () => 'Only with Dolby Digital or DTS sources that include an LFE channel',
+  LFE: () => 'Dolby Digital or DTS sources only',
   // p.153: Center Spread only in Dolby Surround.
-  CES: () => 'Only in the Dolby Surround sound mode',
+  CES: () => 'Dolby Surround mode only',
   // p.154: Neural:X only in the DTS:X / DTS:X MSTR sound modes.
-  NEURAL: () => 'Only in the DTS:X sound modes',
+  NEURAL: () => 'DTS:X modes only',
   // p.155: Direct or Stereo mode, with Subwoofer Mode set to LFE+Main.
-  SWR: () => 'Only in Direct or Stereo mode, with Subwoofer mode set to LFE + Main (Speakers)',
+  SWR: () => 'Direct or Stereo mode with LFE + Main only',
   // p.156: analog or 44.1/48 kHz PCM only, and not in Direct.
-  RSTR: () => (isDirect() ? DIRECT : 'Only with analog or 44.1/48 kHz PCM sources'),
+  RSTR: () => (isDirect() ? DIRECT : 'Analog or 44.1/48 kHz PCM only'),
   // p.110: not in Direct or Virtual (Pure Direct behaves like Direct).
-  DEH: () => (isDirect() || isVirtual() ? 'Not available in Direct, Pure Direct or Virtual' : null),
+  DEH: () => (isDirect() || isVirtual() ? 'Not in Direct, Pure Direct or Virtual' : null),
 };
 
 /**

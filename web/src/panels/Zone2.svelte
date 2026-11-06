@@ -36,7 +36,7 @@
       </button>
       <button class="btn icon" disabled={!canVolume || (z.volume ?? -80) >= maxDb} aria-label="Zone 2 volume up" onclick={() => send('Z2UP')}><Icon name="plus" /></button>
     </div>
-    {#if fixedLevel !== null}<p class="hint">Zone 2 is set to a fixed level ({fixedLevel} dB) in Setup, so its volume can't be changed here.</p>{/if}
+    {#if fixedLevel !== null}<p class="hint">Fixed at {fixedLevel} dB in Setup</p>{/if}
   </div>
   <div class="setting stack">
     <div class="label">Source</div>
@@ -45,7 +45,7 @@
         <button class="btn" class:on={z.source === s.code} disabled={!on} onclick={() => send('Z2' + s.code)}>{s.name}</button>
       {/each}
     </div>
-    <p class="hint">With a specific input, Zone 2 plays only analog-connected devices. For HDMI or optical sources, choose “Same as Main”, which follows the main zone's input.</p>
+    <p class="hint">Specific inputs play analog sources only. For HDMI, use Same as Main.</p>
   </div>
 </Panel>
 

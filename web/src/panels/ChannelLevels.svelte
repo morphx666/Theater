@@ -32,8 +32,7 @@
     {#snippet actions()}
       <button class="btn small" disabled={!anyTrim} onclick={() => send('CVZRL')}><Icon name="reset" size={16} />Reset all</button>
     {/snippet}
-    <p class="muted small" style="margin:-6px 0 12px">Each speaker shows its <strong>effective level</strong> = speaker setup level + listening trim.
-      Tap one to trim it (same as the receiver's <em>Option → Channel Level Adjust</em>). Stored levels are edited in <em>Speaker setup → Levels</em>.</p>
+    <p class="muted small" style="margin:-6px 0 12px">Level = setup level + trim. Tap a speaker to trim it for this input.</p>
 
     <svg class="room" viewBox="-4 -4 108 108" role="group" aria-label="Speaker layout">
       <rect x="0" y="0" width="100" height="100" rx="6" class="floor" />

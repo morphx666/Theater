@@ -16,8 +16,7 @@
       <div class="setting stack">
         <Slider label="Volume safety cap" min={-40} max={10} step={1} value={avr.settings.volumeCapDb}
           format={(v) => (v > 0 ? '+' : '') + v + ' dB'} onchange={(v) => saveSettings({ volumeCapDb: v })} />
-        <div class="hint">The app never lets the main or Zone 2 volume go above this. If the receiver's own Volume Limit is
-          lower, that wins (effective cap now: <strong>{avr.cap} dB</strong>).</div>
+        <div class="hint">Main and Zone 2 never go above this. Now: <strong>{avr.cap} dB</strong>.</div>
       </div>
       <div class="setting stack">
         <div class="label">Volume button step</div>
@@ -33,8 +32,7 @@
           <Seg value={idle.level} repeat onchange={(v) => { setIdle({ level: v }); preview(); }}
             options={[{ value: 'dim', label: 'Dim' }, { value: 'dark', label: 'Darker' }, { value: 'black', label: 'Black' }]} />
         {/if}
-        <div class="hint">Saved on this device only. Pick a darkness to preview it for 2 seconds. Move the mouse, or tap, click or press a key to light it up again;
-          that first tap, click or key press only wakes the screen.</div>
+        <div class="hint">This device only. The first tap or key press just wakes the screen.</div>
       </div>
       <div class="setting stack">
         <div class="label">Keyboard shortcuts</div>

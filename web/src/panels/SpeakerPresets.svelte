@@ -43,8 +43,7 @@
         </button>
       {/each}
     </div>
-    <p class="faint small">Each preset is a complete speaker setup: sizes, distances, levels, crossovers and Audyssey calibration.
-      Switching takes a few seconds.</p>
+    <p class="faint small">Each preset has its own speaker setup, Audyssey and EQ. Switching takes a few seconds.</p>
   {/if}
 </Panel>
 

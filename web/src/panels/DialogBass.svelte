@@ -29,7 +29,7 @@
 <Panel id="dialog-bass" title="Dialog & bass" needsPower>
   {#if has('DEH')}
     <div class="setting stack">
-      <div><div class="label">Dialog Enhancer</div><div class="hint">{hint('DEH', 'Makes voices clearer (saved for each input)')}</div></div>
+      <div><div class="label">Dialog Enhancer</div><div class="hint">{hint('DEH', 'Makes voices clearer')}</div></div>
       <Seg value={ps.DEH} disabled={locked('DEH')} onchange={(v) => send('PSDEH ' + v)} options={[
         { value: 'OFF', label: 'Off' }, { value: 'LOW', label: 'Low' }, { value: 'MED', label: 'Medium' }, { value: 'HIGH', label: 'High' }]} />
     </div>
@@ -52,7 +52,7 @@
       <Slider label="LFE level" min={-10} max={0} step={1} value={-Number(ps.LFE)} format={(v) => fmtDb(v) + ' dB'}
         disabled={locked('LFE')} onchange={setLfe} />
       {#if locked('LFE')}<div class="hint">{hint('LFE', '')}</div>
-      {:else if lfeIgnored}<div class="hint">The receiver didn't apply this change. It doesn't allow adjusting LFE for the current signal.</div>{/if}
+      {:else if lfeIgnored}<div class="hint">Not applied by the receiver for this signal</div>{/if}
     </div>
   {/if}
   {#if has('CINEMA EQ')}

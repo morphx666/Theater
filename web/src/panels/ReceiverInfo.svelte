@@ -18,7 +18,7 @@
           <span class="dot {avr.conn.heos ? 'good' : 'bad'}" style="margin-left:10px"></span> HEOS
           {#if !avr.conn.telnet}<span class="dot {avr.conn.http ? 'warn' : 'bad'}" style="margin-left:10px"></span> HTTP{/if}
         </dd>
-        <dt>Volume limit</dt><dd>{st.volumeLimit === 'OFF' ? 'Off' : st.volumeLimit ? Number(st.volumeLimit) - 80 + ' dB' : '—'}</dd>
+        <dt>Volume limit (main)</dt><dd>{st.volumeLimit === 'OFF' ? 'Off' : st.volumeLimit ? Number(st.volumeLimit) - 80 + ' dB' : '—'}</dd>
         <dt>Max volume</dt><dd>{st.volumeMax != null ? st.volumeMax + ' dB' : '—'}</dd>
       </dl>
 </Panel>

@@ -14,7 +14,7 @@
   {#if nc.doc}
     <div class="setting stack">
       <div><div class="label">Keep network on in standby</div>
-        <div class="hint">Needed to turn the receiver on from this app, HEOS, AirPlay or Spotify. Uses a little more power in standby.</div></div>
+        <div class="hint">Needed to turn the receiver on from this app. Uses more standby power.</div></div>
       <Seg value={val} disabled={nc.saving || nc.doc.querySelector('Control')?.getAttribute('display') !== '3'}
         options={[{ value: '1', label: 'Always on' }, { value: '2', label: 'Off in standby' }]}
         onchange={(v) => (v === '2' ? (confirmOff = true) : nc.write('<Control>1</Control>'))} />

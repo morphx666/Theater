@@ -27,6 +27,8 @@
   let holdUntil = 0;
   const value = $derived(local ?? st?.volume ?? MIN);
   const muted = $derived(!!st?.mute);
+  // Mute Level: "MUT" mutes fully; a number (e.g. 40) only lowers the sound by that many dB (manual p.157).
+  const muteDb = $derived(/^\d+$/.test(st?.muteLevel ?? '') ? Number(st.muteLevel) : null);
   const off = $derived(st?.zoneMain === false);
 
   const frac = (v) => (v - MIN) / (max - MIN);
@@ -141,7 +143,7 @@
     <circle cx={kx} cy={ky} r="9" class="knob" />
     {#if !locked}<circle cx={kx} cy={ky} r="20" class="grab" class:active={dragging} onpointerdown={down} role="presentation" />{/if}
     <text x="100" y="98" class="num">{off ? 'OFF' : muted ? 'MUTE' : value.toFixed(1)}</text>
-    <text x="100" y="122" class="unit">{off || muted ? (off ? 'standby' : value.toFixed(1) + ' dB') : 'dB'}</text>
+    <text x="100" y="122" class="unit">{off ? 'standby' : muted ? (muteDb ? `−${muteDb} dB` : value.toFixed(1) + ' dB') : 'dB'}</text>
     {#if locked}
       <!-- icon (16 wide) + 4 gap + text, centred as one unit using the text's measured width -->
       <g class="lockmark" transform="translate({lockX} 167)"><path d="M3 7h10v8H3z M5 7V5a3 3 0 0 1 6 0v2" /></g>

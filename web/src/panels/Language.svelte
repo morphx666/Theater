@@ -17,7 +17,7 @@
 <Panel id="language" title="Language">
   {#if lang.doc}
     <div class="setting stack">
-      <div><div class="label">Menu language</div><div class="hint">On-screen menu and front display</div></div>
+      <div><div class="label">Menu language</div><div class="hint">For the on-screen menu</div></div>
       <Seg value={lang.doc.textContent.trim()} {options} disabled={lang.saving}
         onchange={(v) => lang.write(`<Language>${v}</Language>`)} />
     </div>

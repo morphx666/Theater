@@ -30,7 +30,7 @@
   <div class:dim={uncalibrated}>
     {#if has('MULTEQ')}
       <div class="setting stack">
-        <div><div class="label">MultEQ room correction</div><div class="hint">{why('MULTEQ') || 'Reference is recommended (tuned for movies). Flat suits small rooms where you sit close to the speakers.'}</div></div>
+        <div><div class="label">MultEQ room correction</div><div class="hint">{why('MULTEQ') || 'Reference recommended; Flat for small rooms'}</div></div>
         <Seg value={ps.MULTEQ} disabled={locked('MULTEQ')} onchange={(v) => send('PSMULTEQ:' + v)} options={[
           { value: 'AUDYSSEY', label: 'Reference' }, { value: 'BYP.LR', label: 'L/R Bypass' },
           { value: 'FLAT', label: 'Flat' }, { value: 'OFF', label: 'Off' }]} />
@@ -38,20 +38,20 @@
     {/if}
     {#if has('DYNEQ')}
       <div class="setting">
-        <div><div class="label">Dynamic EQ</div><div class="hint">{why('DYNEQ') || 'Keeps bass and surround full at low volume. Turns off Tone while on.'}</div></div>
+        <div><div class="label">Dynamic EQ</div><div class="hint">{why('DYNEQ') || 'Fuller sound at low volume; disables Tone'}</div></div>
         <button class="switch" class:on={dynEqOn} disabled={locked('DYNEQ')} aria-label="Dynamic EQ" onclick={() => send('PSDYNEQ ' + (dynEqOn ? 'OFF' : 'ON'))}></button>
       </div>
     {/if}
     {#if has('REFLEV')}
       <div class="setting stack">
-        <div><div class="label">Reference level offset</div><div class="hint">{why('REFLEV') || '0 dB for movies, 5 for classical, 10 for jazz and TV, 15 for pop and rock'}</div></div>
+        <div><div class="label">Reference level offset</div><div class="hint">{why('REFLEV') || 'Movies 0 · Classical 5 · Jazz/TV 10 · Pop/rock 15'}</div></div>
         <Seg value={ps.REFLEV} disabled={locked('REFLEV')} onchange={(v) => send('PSREFLEV ' + v)} options={[
           { value: '0', label: '0 dB' }, { value: '5', label: '5 dB' }, { value: '10', label: '10 dB' }, { value: '15', label: '15 dB' }]} />
       </div>
     {/if}
     {#if has('DYNVOL')}
       <div class="setting stack">
-        <div><div class="label">Dynamic Volume</div><div class="hint">{why('DYNVOL') || 'Evens out loud ads and quiet dialog — great for late nights'}</div></div>
+        <div><div class="label">Dynamic Volume</div><div class="hint">{why('DYNVOL') || 'Evens out loud and quiet parts'}</div></div>
         <Seg value={ps.DYNVOL} disabled={locked('DYNVOL')} onchange={(v) => send('PSDYNVOL ' + v)} options={[
           { value: 'OFF', label: 'Off' }, { value: 'LIT', label: 'Light' }, { value: 'MED', label: 'Medium' }, { value: 'HEV', label: 'Heavy' }]} />
       </div>

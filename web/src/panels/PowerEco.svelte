@@ -14,28 +14,28 @@
     {#if eco.doc}
       {#if ecoShown('Mode')}
         <div class="setting stack">
-          <div class="label">ECO mode</div>
+          <div><div class="label">ECO mode</div><div class="hint">Use Off if loud passages distort</div></div>
           <Seg value={txt(eco.doc, 'Mode')} disabled={locked('Mode')} onchange={(v) => eco.write(`<Mode>${v}</Mode>`)}
             options={[{ value: '1', label: 'On' }, { value: '2', label: 'Auto' }, { value: '3', label: 'Off' }]} />
         </div>
       {/if}
       {#if ecoShown('PowerOnDefault')}
         <div class="setting stack">
-          <div><div class="label">ECO at power-on</div></div>
+          <div><div class="label">ECO at power-on</div><div class="hint">Last keeps the previous setting</div></div>
           <Seg value={txt(eco.doc, 'PowerOnDefault')} disabled={locked('PowerOnDefault')} onchange={(v) => eco.write(`<PowerOnDefault>${v}</PowerOnDefault>`)}
             options={[{ value: '3', label: 'Last' }, { value: '1', label: 'On' }, { value: '2', label: 'Auto' }, { value: '4', label: 'Off' }]} />
         </div>
       {/if}
       {#if ecoShown('OnScreenDisplay')}
         <div class="setting stack">
-          <div class="label">ECO meter on screen</div>
+          <div><div class="label">ECO meter on screen</div><div class="hint">Power meter on the TV</div></div>
           <Seg value={txt(eco.doc, 'OnScreenDisplay')} disabled={locked('OnScreenDisplay')} onchange={(v) => eco.write(`<OnScreenDisplay>${v}</OnScreenDisplay>`)}
             options={[{ value: '1', label: 'Always' }, { value: '2', label: 'Auto' }, { value: '3', label: 'Off' }]} />
         </div>
       {/if}
       {#if ecoShown('AutoStandby > MainZone')}
         <div class="setting stack">
-          <div><div class="label">Auto standby — Main</div><div class="hint">After no signal & no operation</div></div>
+          <div><div class="label">Auto standby — Main</div><div class="hint">After this long without audio or video</div></div>
           <Seg value={txt(eco.doc, 'AutoStandby > MainZone')} disabled={locked('AutoStandby > MainZone')}
             onchange={(v) => eco.write(`<AutoStandby><MainZone>${v}</MainZone></AutoStandby>`)}
             options={[{ value: '1', label: '15 min' }, { value: '2', label: '30 min' }, { value: '3', label: '60 min' }, { value: '4', label: 'Off' }]} />
@@ -43,7 +43,7 @@
       {/if}
       {#if ecoShown('AutoStandby > Zone2')}
         <div class="setting stack">
-          <div class="label">Auto standby — Zone 2</div>
+          <div><div class="label">Auto standby — Zone 2</div><div class="hint">Zone 2 turns off after this long</div></div>
           <Seg value={txt(eco.doc, 'AutoStandby > Zone2')} disabled={locked('AutoStandby > Zone2')}
             onchange={(v) => eco.write(`<AutoStandby><Zone2>${v}</Zone2></AutoStandby>`)}
             options={[{ value: '1', label: '2 h' }, { value: '2', label: '4 h' }, { value: '3', label: '8 h' }, { value: '4', label: 'Off' }]} />

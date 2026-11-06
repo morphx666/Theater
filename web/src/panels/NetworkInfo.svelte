@@ -24,8 +24,7 @@
       <dt>MAC (Ethernet)</dt><dd class="mono">{mac(txt(info.doc, 'MacAddress > Ethernet'))}</dd>
       <dt>MAC (Wi-Fi)</dt><dd class="mono">{mac(txt(info.doc, 'MacAddress > WiFi'))}</dd>
     </dl>
-    <p class="faint small">To change these, use the receiver's own menu (Setup → Network). They're read-only here so a typo can't
-      take the receiver off your network. Tip: give it a DHCP reservation in your router so its address never changes.</p>
+    <p class="faint small">Read-only. Change these in the receiver's menu (Setup → Network).</p>
   {/if}
 </Panel>
 

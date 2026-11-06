@@ -1,5 +1,5 @@
 <script>
-  import { avr, connect, send } from './lib/avr.svelte.js';
+  import { avr, connect, send, toast } from './lib/avr.svelte.js';
   import Icon from './lib/Icon.svelte';
   import Home from './pages/Home.svelte';
   import Section from './pages/Section.svelte';
@@ -65,7 +65,7 @@
         <div class="row small muted"><span class="dot {link.cls}"></span>{link.text} · {name}</div>
       </div>
       <button class="power" class:on aria-label="Power" disabled={!st}
-        onclick={() => send(on ? 'ZMOFF' : 'ZMON')}>
+        onclick={() => { send(on ? 'ZMOFF' : 'ZMON'); if (on && st?.zone2?.power) toast('Main zone off. Zone 2 is still on.'); }}>
         <Icon name="power" size={22} stroke={2.4} />
       </button>
     </header>

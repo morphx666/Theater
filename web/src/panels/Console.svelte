@@ -44,7 +44,7 @@
       <input type="text" class="mono" placeholder="e.g. PSDYNEQ ? or MSQUICK1" bind:value={cmd} autocapitalize="characters" autocomplete="off" spellcheck="false" />
       <button class="btn primary" type="submit"><Icon name="terminal" size={18} />Send</button>
     </form>
-    <p class="faint small">Commands pass through the same safety filter as the rest of the app (no reset/firmware/lock, volume capped).</p>
+    <p class="faint small">Commands pass the same safety filter as the rest of the app.</p>
   {:else}
     <p class="muted small">Watch the raw telnet protocol live and send commands by hand.</p>
   {/if}

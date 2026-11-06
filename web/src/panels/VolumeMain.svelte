@@ -25,7 +25,7 @@
     {#if vol.doc}
       <div class="setting stack">
         <div><div class="label">Volume limit</div>
-          <div class="hint">The receiver itself will never go louder than this — from any remote, app or the knob.</div></div>
+          <div class="hint">Applies to every remote, app and the knob.</div></div>
         <Seg value={limitOn ? 'on' : 'off'} disabled={vol.saving}
           options={[{ value: 'off', label: 'Off' }, { value: 'on', label: 'Limit' }]}
           onchange={(v) => vol.write(`<Limit>${v === 'on' ? 70 : 99}</Limit>`)} />

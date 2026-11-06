@@ -17,8 +17,7 @@
       </div>
       <span class="dot {signedIn ? 'good' : 'bad'}"></span>
     </div>
-    <p class="faint small">HEOS favorites and streaming accounts come from this HEOS account. Sign in or out from the HEOS app —
-      your password never passes through this app.</p>
+    <p class="faint small">Sign in or out in the HEOS app (Music › Settings › HEOS Account).</p>
   {/if}
 </Panel>
 

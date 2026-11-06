@@ -21,8 +21,8 @@
     'Rear Height R', 'Surround Dolby L', 'Surround Dolby R', 'Back Dolby L', 'Back Dolby R', 'Center Height'];
   const geqOn = $derived(txt(geq.doc, ':scope > Enable') === '1');
   // Manual p.160: the Graphic EQ (Manual EQ) works only with MultEQ off, and not in Direct / Pure Direct.
-  const blocked = $derived(isDirect() ? 'Not available in Direct or Pure Direct'
-    : avr.state.ps?.MULTEQ && avr.state.ps.MULTEQ !== 'OFF' ? 'Turn off MultEQ (Audyssey panel) to use the Graphic EQ' : null);
+  const blocked = $derived(isDirect() ? 'Not in Direct or Pure Direct'
+    : avr.state.ps?.MULTEQ && avr.state.ps.MULTEQ !== 'OFF' ? 'Needs MultEQ off (Audyssey)' : null);
   const canEdit = $derived(geqOn && !blocked);
   const selMode = $derived(txt(geq.doc, 'SpeakerSelection'));
   const channels = $derived.by(() => {
@@ -56,7 +56,7 @@
     {/snippet}
     {#if geq.error}<p class="err">{geq.error}</p>{/if}
     {#if geq.doc}
-      <p class="muted small" style="margin:-6px 0 12px">{blocked ?? 'Manual per-speaker EQ, used while Audyssey MultEQ is off. Saved with the active speaker preset.'}</p>
+      <p class="muted small" style="margin:-6px 0 12px">{blocked ?? 'Per-speaker EQ, used when MultEQ is off'}</p>
       <div class="row wrap" style="gap:12px;margin-bottom:12px">
         <Seg value={selMode} disabled={geq.saving || !canEdit} onchange={(v) => geq.write(`<GraphicEQ><SpeakerSelection>${v}</SpeakerSelection></GraphicEQ>`)}
           options={[{ value: '1', label: 'All' }, { value: '3', label: 'L/R pairs' }, { value: '2', label: 'Each' }]} />

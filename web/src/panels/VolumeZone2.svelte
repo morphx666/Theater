@@ -25,6 +25,9 @@
 
 <Panel id="volume-zone2" title="Volume — Zone 2">
     {#if z2.error}<p class="err">{z2.error}</p>{/if}
+    {#if z2.doc && !['VolumeLimit', 'PowerOnVolume', 'VolumeLevel'].some(z2edit)}
+      <p class="faint small">Needs Amp Assign set to Zone 2 (Speakers).</p>
+    {/if}
     {#if z2.doc}
       {#if z2edit('VolumeLimit')}
         <div class="setting stack">
@@ -47,7 +50,7 @@
       {/if}
       {#if z2edit('VolumeLevel')}
         <div class="setting">
-          <div><div class="label">Variable volume</div><div class="hint">Off = fixed line-level output (for an external amp)</div></div>
+          <div class="label">Volume level</div>
           <span class="pill">{txt(z2.doc, 'VolumeLevel') === '99' ? 'Variable' : 'Fixed ' + (Number(txt(z2.doc, 'VolumeLevel')) - 80) + ' dB'}</span>
         </div>
       {/if}

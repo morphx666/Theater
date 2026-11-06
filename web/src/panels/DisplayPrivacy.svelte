@@ -18,13 +18,12 @@
     {/if}
     {#if usage.doc?.querySelector('Send')?.getAttribute('display') === '3'}
       <div class="setting">
-        <div><div class="label">Send usage data to Denon</div></div>
+        <div><div class="label">Send usage data to Denon</div><div class="hint">Anonymous usage statistics</div></div>
         <button class="switch" class:on={txt(usage.doc, 'Send') === '1'} aria-label="Send usage data"
           onclick={() => usage.write(`<Send>${txt(usage.doc, 'Send') === '1' ? 2 : 1}</Send>`)}></button>
       </div>
     {/if}
-    <p class="faint small">Intentionally not exposed: firmware update, factory reset and setup lock. Network/IP settings are shown read-only on the Network tab.
-      Use the receiver's own menu for those.</p>
+    <p class="faint small">Firmware update, reset and setup lock aren't available here.</p>
 </Panel>
 
 <style>

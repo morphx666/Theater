@@ -20,7 +20,7 @@
 {#snippet drc()}
   <div class="sub">
     <div class="label">Dynamic compression</div>
-    <div class="hint">{hint('DRC', 'How much loud passages are reduced')}</div>
+    <div class="hint">{hint('DRC', 'Reduces loud peaks')}</div>
     <Seg value={ps.DRC} disabled={locked('DRC')} onchange={(v) => send('PSDRC ' + v)} options={drcOptions} />
   </div>
 {/snippet}
@@ -29,7 +29,7 @@
   {#if has('LOM')}
     <div class="setting stack">
       <div class="row between">
-        <div><div class="label">Loudness management</div><div class="hint">{hint('LOM', 'Dialog normalization and Dynamic compression; only affects Dolby sources')}</div></div>
+        <div><div class="label">Loudness management</div><div class="hint">{hint('LOM', 'Affects Dolby sources only')}</div></div>
         <button class="switch" class:on={ps.LOM === 'ON'} disabled={locked('LOM')} aria-label="Loudness management" onclick={() => toggle('LOM', 'PSLOM')}></button>
       </div>
       {#if has('DRC')}{@render drc()}{/if}
@@ -39,20 +39,20 @@
   {/if}
   {#if has('RSTR')}
     <div class="setting stack">
-      <div><div class="label">Compressed audio restorer</div><div class="hint">{hint('RSTR', 'Restores detail lost in compressed audio such as MP3 or AAC (saved for each input)')}</div></div>
+      <div><div class="label">Compressed audio restorer</div><div class="hint">{hint('RSTR', 'Improves compressed audio (MP3, AAC)')}</div></div>
       <Seg value={ps.RSTR} disabled={locked('RSTR')} onchange={(v) => send('PSRSTR ' + v)} options={[
         { value: 'OFF', label: 'Off' }, { value: 'LOW', label: 'Low' }, { value: 'MED', label: 'Medium' }, { value: 'HI', label: 'High' }]} />
     </div>
   {/if}
   {#if has('NEURAL')}
     <div class="setting">
-      <div><div class="label">DTS Neural:X</div><div class="hint">{hint('NEURAL', 'Expands non-object-based audio to fit your speaker layout')}</div></div>
+      <div><div class="label">DTS Neural:X</div><div class="hint">{hint('NEURAL', 'Upmixes to your speaker layout')}</div></div>
       <button class="switch" class:on={ps.NEURAL === 'ON'} disabled={locked('NEURAL')} aria-label="Neural X" onclick={() => toggle('NEURAL', 'PSNEURAL')}></button>
     </div>
   {/if}
   {#if has('CES')}
     <div class="setting">
-      <div><div class="label">Center spread</div><div class="hint">{hint('CES', 'Spreads the center channel to the front speakers for a wider image (best for stereo music)')}</div></div>
+      <div><div class="label">Center spread</div><div class="hint">{hint('CES', 'Widens the center into the front speakers')}</div></div>
       <button class="switch" class:on={ps.CES === 'ON'} disabled={locked('CES')} aria-label="Center spread" onclick={() => toggle('CES', 'PSCES')}></button>
     </div>
   {/if}
