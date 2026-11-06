@@ -20,6 +20,8 @@
   const st = $derived(avr.state);
   const cap = $derived(avr.cap);
   const max = $derived(Math.min(18, st?.volumeMax ?? 18));
+  // The receiver's maximum depends on the input signal and channel levels (manual p.69); never ask for more.
+  const top = $derived(Math.min(cap, max));
   let local = $state(null);
   let dragging = $state(false);
   let holdUntil = 0;
@@ -45,7 +47,7 @@
 
   function setDb(db) {
     db = Math.round(db * 2) / 2;
-    db = Math.max(MIN, Math.min(cap, db));
+    db = Math.max(MIN, Math.min(top, db));
     local = db;
     holdUntil = Date.now() + 900;
     sendVol(db);
@@ -118,7 +120,7 @@
 
 <div class="dial" class:muted class:off class:locked>
   <svg bind:this={svg} viewBox="0 0 200 200" role="slider" tabindex="0" aria-label="Master volume{locked ? ' (dial locked)' : ''}"
-    aria-valuemin={MIN} aria-valuemax={cap} aria-valuenow={value} aria-readonly={locked}
+    aria-valuemin={MIN} aria-valuemax={top} aria-valuenow={value} aria-readonly={locked}
     onwheel={wheel} onkeydown={key}>
     <defs>
       <linearGradient id="vg" x1="0" y1="1" x2="1" y2="0">
@@ -155,7 +157,7 @@
     <button class="btn mute" class:on={muted} disabled={off} onclick={() => send(muted ? 'MUOFF' : 'MUON')}>
       <Icon name={muted ? 'mute' : 'vol'} /> {muted ? 'Muted' : 'Mute'}
     </button>
-    <button class="btn icon big" aria-label="Volume up" disabled={off || value >= cap}
+    <button class="btn icon big" aria-label="Volume up" disabled={off || value >= top}
       onpointerdown={() => hold(1)} onpointerup={release} onpointerleave={release}><Icon name="plus" size={22} /></button>
   </div>
 </div>

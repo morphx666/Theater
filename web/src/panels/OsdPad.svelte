@@ -4,7 +4,7 @@
   import Panel from '../lib/Panel.svelte';
 </script>
 
-<Panel id="osd" title="On-screen menu">
+<Panel id="osd" title="On-screen menu" needsPower>
   {#snippet actions()}<span class="faint small">controls the TV menu</span>{/snippet}
   <div class="pad">
     <button class="btn k up" aria-label="Up" onclick={() => send('MNCUP')}><Icon name="up" size={26} /></button>

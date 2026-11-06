@@ -70,6 +70,13 @@
     })),
   ]);
   const distDirty = $derived(Object.keys(distEdits).length > 0);
+  // Speaker distances: 0-18 m / 0-60 ft. Dolby speaker-to-ceiling: 0.90-3.30 m / 3.0-11.0 ft (manual p.193).
+  const distRange = (r) => (r.dolby ? (unit === '1' ? [0.9, 3.3] : [3, 11]) : (unit === '1' ? [0, 18] : [0, 60]));
+  function setDist(r, value) {
+    const [lo, hi] = distRange(r);
+    const v = Math.min(hi, Math.max(lo, value));
+    if (v === fromRaw(r.raw)) delete distEdits[r.key]; else distEdits[r.key] = v;
+  }
   const spreadOk = $derived.by(() => {
     const vals = distRows.filter((r) => !r.dolby).map((r) => (r.key in distEdits ? toRaw(distEdits[r.key]) : r.raw));
     return !vals.length || unit === '3' || Math.max(...vals) - Math.min(...vals) <= 600;
@@ -149,9 +156,9 @@
         {#each distRows as r (r.key)}
           <label class="r">
             <span>{r.name}</span>
-            <input type="number" min="0" max={unit === '1' ? 18 : 60} step={unitStep} disabled={!r.edit}
+            <input type="number" min={distRange(r)[0]} max={distRange(r)[1]} step={unitStep} disabled={!r.edit}
               value={r.key in distEdits ? distEdits[r.key] : fromRaw(r.raw)}
-              onchange={(e) => { const v = Number(e.currentTarget.value); if (v === fromRaw(r.raw)) delete distEdits[r.key]; else distEdits[r.key] = v; }} />
+              onchange={(e) => setDist(r, Number(e.currentTarget.value))} />
           </label>
         {/each}
       </div>

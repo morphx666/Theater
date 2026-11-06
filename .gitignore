@@ -4,6 +4,5 @@ data/
 .env
 .DS_Store
 *.log
-FOR_XAVIER.md
 # Denon owner's manual (copyrighted; kept locally for reference, not redistributed)
 docs/AVRX1700H_NA_EN.pdf

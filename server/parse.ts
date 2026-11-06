@@ -41,7 +41,8 @@ export type AvrState = {
   dimmer: string | null; // BRI | DIM | DAR | OFF
   autoStandby: string | null; // 15M | 30M | 60M | OFF
   speakerPreset: string | null; // 1 | 2
-  btTx: string | null;
+  btTx: string | null; // ON | OFF
+  btOutput: string | null; // SP = Bluetooth + speakers, BT = Bluetooth only (manual p.78)
   allZoneStereo: boolean | null;
   volumeLimit: string | null; // "OFF" | "060" | "070" | "080"
   powerOnLevel: string | null; // "LAS" | "MUT" | "040" ...
@@ -57,7 +58,7 @@ export function emptyState(): AvrState {
     video: { resIn: null, resOut: null, hdrIn: null, hdrOut: null, cos: null, pix: null, frlIn: null, frlOut: null },
     ps: {}, channels: {}, activeChannels: [], installed: [], setupLevels: {}, inputs: {}, quickNames: ['', '', '', ''], quick: null,
     zone2: { power: null, source: null, volume: null, mute: null },
-    sleep: null, eco: null, dimmer: null, autoStandby: null, speakerPreset: null, btTx: null, allZoneStereo: null,
+    sleep: null, eco: null, dimmer: null, autoStandby: null, speakerPreset: null, btTx: null, btOutput: null, allZoneStereo: null,
     volumeLimit: null, powerOnLevel: null, muteLevel: null,
     tuner: { band: null, freq: null, preset: null, presets: {}, skipped: [] }, firmware: {},
   };
@@ -183,7 +184,12 @@ function applyInner(st: AvrState, l: string): void {
   if (l.startsWith('DIM')) { st.dimmer = l.slice(3).trim(); return; }
   if (l.startsWith('STBY')) { st.autoStandby = l.slice(4).trim(); return; }
   if (l.startsWith('SPPR')) { st.speakerPreset = l.slice(4).trim(); return; }
-  if (l.startsWith('BTTX')) { const v = l.slice(4).trim(); if (v === 'ON' || v === 'OFF') st.btTx = v; return; }
+  if (l.startsWith('BTTX')) {
+    const v = l.slice(4).trim();
+    if (v === 'ON' || v === 'OFF') st.btTx = v;
+    else if (v === 'SP' || v === 'BT') st.btOutput = v;
+    return;
+  }
   if (l.startsWith('MNZST')) { st.allZoneStereo = l.slice(5).trim() === 'ON'; return; }
   // TFAN009510 = 95.10 MHz. Status words such as TFANCMP ("tuning complete") are not frequencies.
   if (l.startsWith('TFAN')) { const v = l.slice(4).trim(); if (/^\d{4,6}$/.test(v)) st.tuner.freq = v; return; }

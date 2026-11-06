@@ -278,3 +278,14 @@ test('Quick Select recall above the cap is brought back down', () => {
   assert.equal(quickRecallCorrection('Z270', -20), 'Z260');
   assert.equal(quickRecallCorrection('MUON', -20), null);
 });
+
+test('Bluetooth transmitter: on/off and output mode are separate replies', () => {
+  const st = emptyState();
+  assert.equal(applyLine(st, 'BTTX ON'), true);
+  assert.equal(applyLine(st, 'BTTX BT'), true);
+  assert.equal(st.btTx, 'ON');
+  assert.equal(st.btOutput, 'BT');
+  applyLine(st, 'BTTX SP');
+  assert.equal(st.btOutput, 'SP');
+  assert.equal(st.btTx, 'ON');
+});

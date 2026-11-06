@@ -1,6 +1,7 @@
 <script>
   import { avr, send } from '../lib/avr.svelte.js';
-  import { useAvailability, state, REASON } from '../lib/availability.svelte.js';
+  import { useAvailability } from '../lib/availability.svelte.js';
+  import { locked as ruleLocked, reason } from '../lib/rules.js';
   import Panel from '../lib/Panel.svelte';
   import Seg from '../lib/Seg.svelte';
   import Icon from '../lib/Icon.svelte';
@@ -11,8 +12,8 @@
   const av = useAvailability();
   // Until Audyssey has been run, the receiver greys out all of these (they'd have nothing to apply).
   const uncalibrated = $derived(av.audysseyCalibrated === false);
-  const locked = (k) => uncalibrated || state(k) !== 'on';
-  const why = (k) => (uncalibrated ? '' : state(k) !== 'on' ? REASON[state(k)] : '');
+  const locked = (k) => uncalibrated || ruleLocked(k) || (k === 'REFLEV' && !dynEqOn);
+  const why = (k) => (uncalibrated || !locked(k) ? '' : reason(k));
 </script>
 
 <Panel id="audyssey" title="Audyssey" needsPower>
@@ -29,7 +30,7 @@
   <div class:dim={uncalibrated}>
     {#if has('MULTEQ')}
       <div class="setting stack">
-        <div><div class="label">MultEQ room correction</div><div class="hint">{why('MULTEQ') || 'Uses your Audyssey calibration'}</div></div>
+        <div><div class="label">MultEQ room correction</div><div class="hint">{why('MULTEQ') || 'Reference is recommended (tuned for movies). Flat suits small rooms where you sit close to the speakers.'}</div></div>
         <Seg value={ps.MULTEQ} disabled={locked('MULTEQ')} onchange={(v) => send('PSMULTEQ:' + v)} options={[
           { value: 'AUDYSSEY', label: 'Reference' }, { value: 'BYP.LR', label: 'L/R Bypass' },
           { value: 'FLAT', label: 'Flat' }, { value: 'OFF', label: 'Off' }]} />
@@ -37,14 +38,14 @@
     {/if}
     {#if has('DYNEQ')}
       <div class="setting">
-        <div><div class="label">Dynamic EQ</div><div class="hint">{why('DYNEQ') || 'Keeps bass and surround full at low volume'}</div></div>
+        <div><div class="label">Dynamic EQ</div><div class="hint">{why('DYNEQ') || 'Keeps bass and surround full at low volume. Turns off Tone while on.'}</div></div>
         <button class="switch" class:on={dynEqOn} disabled={locked('DYNEQ')} aria-label="Dynamic EQ" onclick={() => send('PSDYNEQ ' + (dynEqOn ? 'OFF' : 'ON'))}></button>
       </div>
     {/if}
     {#if has('REFLEV')}
       <div class="setting stack">
-        <div><div class="label">Reference level offset</div><div class="hint">{why('REFLEV') || 'Higher = less bass/surround boost (for loud mixes)'}</div></div>
-        <Seg value={ps.REFLEV} disabled={locked('REFLEV') || !dynEqOn} onchange={(v) => send('PSREFLEV ' + v)} options={[
+        <div><div class="label">Reference level offset</div><div class="hint">{why('REFLEV') || '0 dB for movies, 5 for classical, 10 for jazz and TV, 15 for pop and rock'}</div></div>
+        <Seg value={ps.REFLEV} disabled={locked('REFLEV')} onchange={(v) => send('PSREFLEV ' + v)} options={[
           { value: '0', label: '0 dB' }, { value: '5', label: '5 dB' }, { value: '10', label: '10 dB' }, { value: '15', label: '15 dB' }]} />
       </div>
     {/if}

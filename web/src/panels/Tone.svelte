@@ -14,7 +14,7 @@
   {#if ps['TONE CTRL'] !== undefined}
     <div class="setting">
       <div><div class="label">Tone control</div>
-        <div class="hint">{toneLocked ? (pureMode ? 'Not available in Direct / Pure Direct' : 'Turn off Dynamic EQ to use tone controls') : 'Bass & treble adjustments'}</div></div>
+        <div class="hint">{toneLocked ? (pureMode ? 'Not available in Direct / Pure Direct' : 'Turn off Dynamic EQ to use tone controls') : 'Bass & treble for the front speakers (saved for each input)'}</div></div>
       <button class="switch" class:on={ps['TONE CTRL'] === 'ON'} disabled={toneLocked} aria-label="Tone control"
         onclick={() => send('PSTONE CTRL ' + (ps['TONE CTRL'] === 'ON' ? 'OFF' : 'ON'))}></button>
     </div>
@@ -25,6 +25,6 @@
         disabled={off} onchange={(v) => send('PSTRE ' + (50 + v))} />
     </div>
   {:else}
-    <p class="faint small">Not available for the current input.</p>
+    <p class="faint small">Not available right now: tone needs an audio signal, and doesn't work while HDMI audio goes to the TV.</p>
   {/if}
 </Panel>

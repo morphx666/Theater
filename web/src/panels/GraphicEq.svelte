@@ -6,6 +6,7 @@
   import Slider from '../lib/Slider.svelte';
   import Icon from '../lib/Icon.svelte';
   import Panel from '../lib/Panel.svelte';
+  import { isDirect } from '../lib/rules.js';
 
   const geq = useSetup('audio', 10, { reloadDelay: 2000 });
 
@@ -19,6 +20,10 @@
     'Top Rear L', 'Top Rear R', 'Surround Height L', 'Surround Height R', 'Top Surround', 'Rear Height L', 'Front Dolby L', 'Front Dolby R',
     'Rear Height R', 'Surround Dolby L', 'Surround Dolby R', 'Back Dolby L', 'Back Dolby R', 'Center Height'];
   const geqOn = $derived(txt(geq.doc, ':scope > Enable') === '1');
+  // Manual p.160: the Graphic EQ (Manual EQ) works only with MultEQ off, and not in Direct / Pure Direct.
+  const blocked = $derived(isDirect() ? 'Not available in Direct or Pure Direct'
+    : avr.state.ps?.MULTEQ && avr.state.ps.MULTEQ !== 'OFF' ? 'Turn off MultEQ (Audyssey panel) to use the Graphic EQ' : null);
+  const canEdit = $derived(geqOn && !blocked);
   const selMode = $derived(txt(geq.doc, 'SpeakerSelection'));
   const channels = $derived.by(() => {
     const digits = txt(geq.doc, selMode === '2' ? 'SelectableSpeaker > Each' : 'SelectableSpeaker > LR') ?? '';
@@ -46,25 +51,25 @@
 
 <Panel id="graphic-eq" title="Graphic EQ" class="wide">
     {#snippet actions()}
-      {#if geq.doc}<button class="switch" class:on={geqOn} aria-label="Graphic EQ" disabled={geq.saving}
+      {#if geq.doc}<button class="switch" class:on={geqOn} aria-label="Graphic EQ" disabled={geq.saving || !!blocked}
         onclick={() => geq.write(`<GraphicEQ><Enable>${geqOn ? 2 : 1}</Enable></GraphicEQ>`)}></button>{/if}
     {/snippet}
     {#if geq.error}<p class="err">{geq.error}</p>{/if}
     {#if geq.doc}
-      <p class="muted small" style="margin:-6px 0 12px">Manual per-speaker EQ (used when Audyssey MultEQ is off).</p>
+      <p class="muted small" style="margin:-6px 0 12px">{blocked ?? 'Manual per-speaker EQ, used while Audyssey MultEQ is off. Saved with the active speaker preset.'}</p>
       <div class="row wrap" style="gap:12px;margin-bottom:12px">
-        <Seg value={selMode} disabled={geq.saving || !geqOn} onchange={(v) => geq.write(`<GraphicEQ><SpeakerSelection>${v}</SpeakerSelection></GraphicEQ>`)}
+        <Seg value={selMode} disabled={geq.saving || !canEdit} onchange={(v) => geq.write(`<GraphicEQ><SpeakerSelection>${v}</SpeakerSelection></GraphicEQ>`)}
           options={[{ value: '1', label: 'All' }, { value: '3', label: 'L/R pairs' }, { value: '2', label: 'Each' }]} />
         {#if selMode !== '1'}
-          <select style="max-width:240px" value={channel} disabled={!geqOn} onchange={(e) => pickChannel(e.currentTarget.value)}>
+          <select style="max-width:240px" value={channel} disabled={!canEdit} onchange={(e) => pickChannel(e.currentTarget.value)}>
             {#each channels as c}<option value={c.code}>{c.name}</option>{/each}
           </select>
         {/if}
       </div>
       {#if curve}
-        <div class="eq" class:off={!geqOn}>
+        <div class="eq" class:off={!canEdit}>
           {#each BANDS as b, i}
-            {@const locked = !geqOn || (isDolby && i >= 5)}
+            {@const locked = !canEdit || (isDolby && i >= 5)}
             <div class="band">
               <span class="v mono">{curve[i] > 0 ? '+' : ''}{curve[i].toFixed(1)}</span>
               <input type="range" class="vert" min="-20" max="6" step="0.5" value={curve[i]} disabled={locked}
@@ -76,7 +81,7 @@
         {#if isDolby}<p class="faint small">Dolby (up-firing) speakers only use the 63 Hz–1 kHz bands.</p>{/if}
         <div class="row" style="justify-content:flex-end;margin-top:10px">
           <button class="btn" disabled={!dirty} onclick={() => pickChannel(channel)}>Revert</button>
-          <button class="btn" disabled={!geqOn} onclick={() => (curve = BANDS.map(() => 0))}>Flatten</button>
+          <button class="btn" disabled={!canEdit} onclick={() => (curve = BANDS.map(() => 0))}>Flatten</button>
           <button class="btn primary" disabled={!dirty || geq.saving} onclick={saveCurve}><Icon name="save" size={18} />Apply</button>
         </div>
       {/if}

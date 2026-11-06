@@ -13,7 +13,8 @@
   const limit = $derived(txt(vol.doc, 'Limit'));
   const pon = $derived(txt(vol.doc, 'PowerOnLevel'));
   const mute = $derived(txt(vol.doc, 'MuteLevel'));
-  const LIMITS = [{ value: '99', label: 'Off' }, { value: '60', label: '−20 dB' }, { value: '70', label: '−10 dB' }, { value: '80', label: '0 dB' }];
+  // Limit: 99 = Off, or 60-80 (-20 dB to 0 dB) in 1 dB steps (manual p.157).
+  const limitOn = $derived(!!limit && limit !== '99');
   const ponMode = $derived(pon === '99' ? 'last' : pon === '0' ? 'mute' : 'fixed');
   const ponMax = $derived(Math.min(avr.cap, limit && limit !== '99' ? Number(limit) - 80 : 18));
 
@@ -25,8 +26,13 @@
       <div class="setting stack">
         <div><div class="label">Volume limit</div>
           <div class="hint">The receiver itself will never go louder than this — from any remote, app or the knob.</div></div>
-        <Seg value={LIMITS.some((l) => l.value === limit) ? limit : null} options={LIMITS} disabled={vol.saving}
-          onchange={(v) => vol.write(`<Limit>${v}</Limit>`)} />
+        <Seg value={limitOn ? 'on' : 'off'} disabled={vol.saving}
+          options={[{ value: 'off', label: 'Off' }, { value: 'on', label: 'Limit' }]}
+          onchange={(v) => vol.write(`<Limit>${v === 'on' ? 70 : 99}</Limit>`)} />
+        {#if limitOn}
+          <Slider min={-20} max={0} step={1} value={Number(limit) - 80} format={(v) => v + ' dB'}
+            onchange={(v) => vol.write(`<Limit>${v + 80}</Limit>`, { quiet: true })} />
+        {/if}
         {#if limit === '99'}<div class="warn small"><Icon name="info" size={16} />No limit set — the knob can reach +18 dB. A limit of −10 dB is a sensible safety net.</div>{/if}
       </div>
       <div class="setting stack">

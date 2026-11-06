@@ -1,14 +1,14 @@
 <script>
   import { avr, send, fmtDb, level2 } from '../lib/avr.svelte.js';
   import Panel from '../lib/Panel.svelte';
-  import { useAvailability, state as avail, REASON } from '../lib/availability.svelte.js';
+  import { useAvailability } from '../lib/availability.svelte.js';
+  import { locked, hint } from '../lib/rules.js';
   import Seg from '../lib/Seg.svelte';
   import Slider from '../lib/Slider.svelte';
 
   const ps = $derived(avr.state.ps ?? {});
   const has = (k) => ps[k] !== undefined;
   useAvailability();
-  const off = (k) => avail(k) !== 'on';
   const lvl = (raw) => (raw == null ? 0 : (raw.length === 3 ? Number(raw) / 10 : Number(raw)) - 50);
 
   // For some signals the receiver reports LFE as adjustable but silently ignores changes (Denon's own web UI
@@ -29,8 +29,8 @@
 <Panel id="dialog-bass" title="Dialog & bass" needsPower>
   {#if has('DEH')}
     <div class="setting stack">
-      <div><div class="label">Dialog Enhancer</div><div class="hint">Makes voices clearer</div></div>
-      <Seg value={ps.DEH} onchange={(v) => send('PSDEH ' + v)} options={[
+      <div><div class="label">Dialog Enhancer</div><div class="hint">{hint('DEH', 'Makes voices clearer (saved for each input)')}</div></div>
+      <Seg value={ps.DEH} disabled={locked('DEH')} onchange={(v) => send('PSDEH ' + v)} options={[
         { value: 'OFF', label: 'Off' }, { value: 'LOW', label: 'Low' }, { value: 'MED', label: 'Medium' }, { value: 'HIGH', label: 'High' }]} />
     </div>
   {/if}
@@ -42,23 +42,23 @@
   {/if}
   {#if has('SWR')}
     <div class="setting">
-      <div><div class="label">Subwoofer</div>{#if off('SWR')}<div class="hint">{REASON[avail('SWR')]}</div>{/if}</div>
-      <button class="switch" class:on={ps.SWR === 'ON'} disabled={off('SWR')} aria-label="Subwoofer on/off"
+      <div><div class="label">Subwoofer</div>{#if locked('SWR')}<div class="hint">{hint('SWR', '')}</div>{/if}</div>
+      <button class="switch" class:on={ps.SWR === 'ON'} disabled={locked('SWR')} aria-label="Subwoofer on/off"
         onclick={() => send('PSSWR ' + (ps.SWR === 'ON' ? 'OFF' : 'ON'))}></button>
     </div>
   {/if}
   {#if has('LFE')}
     <div class="setting stack">
       <Slider label="LFE level" min={-10} max={0} step={1} value={-Number(ps.LFE)} format={(v) => fmtDb(v) + ' dB'}
-        disabled={off('LFE')} onchange={setLfe} />
-      {#if off('LFE')}<div class="hint">{REASON[avail('LFE')]}</div>
+        disabled={locked('LFE')} onchange={setLfe} />
+      {#if locked('LFE')}<div class="hint">{hint('LFE', '')}</div>
       {:else if lfeIgnored}<div class="hint">The receiver didn't apply this change. It doesn't allow adjusting LFE for the current signal.</div>{/if}
     </div>
   {/if}
   {#if has('CINEMA EQ')}
     <div class="setting">
-      <div><div class="label">Cinema EQ</div><div class="hint">{off('CINEMA EQ') ? REASON[avail('CINEMA EQ')] : 'Softens harsh treble in movie soundtracks'}</div></div>
-      <button class="switch" class:on={ps['CINEMA EQ'] === 'ON'} disabled={off('CINEMA EQ')} aria-label="Cinema EQ" onclick={() => send('PSCINEMA EQ.' + (ps['CINEMA EQ'] === 'ON' ? 'OFF' : 'ON'))}></button>
+      <div><div class="label">Cinema EQ</div><div class="hint">{hint('CINEMA EQ', 'Softens harsh treble in movie soundtracks')}</div></div>
+      <button class="switch" class:on={ps['CINEMA EQ'] === 'ON'} disabled={locked('CINEMA EQ')} aria-label="Cinema EQ" onclick={() => send('PSCINEMA EQ.' + (ps['CINEMA EQ'] === 'ON' ? 'OFF' : 'ON'))}></button>
     </div>
   {/if}
 </Panel>
