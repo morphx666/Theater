@@ -152,6 +152,11 @@ test('setup write validation', async () => {
   bad('inputs', 3, '<Hide index="1">2</Hide>');
   bad('inputs', 3, '<Source index="1">a</Source><Reboot>1</Reboot>');
   bad('general', 11, '<AutoUpdate>1</AutoUpdate>');
+  ok('speakers', 2, '<AmpAssign><AssignMode>10</AssignMode></AmpAssign>');
+  ok('speakers', 2, '<AmpAssign><AssignMode>2</AssignMode></AmpAssign>');
+  bad('speakers', 2, '<AmpAssign><AssignMode>16</AssignMode></AmpAssign>');
+  bad('speakers', 2, '<AmpAssign><CustomSettings><Terminal index="1">1</Terminal></CustomSettings></AmpAssign>');
+  bad('speakers', 2, '<AssignMode>10</AssignMode>');
 });
 
 test('sleep timer clears when the main zone turns off', () => {

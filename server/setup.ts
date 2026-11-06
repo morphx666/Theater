@@ -24,7 +24,7 @@ export const READABLE: Record<string, number[]> = {
 export const WRITABLE: Record<string, number[]> = {
   globals: [3], // friendly name
   audio: [7, 10], // volume limit / power-on level / mute level, graphic EQ
-  speakers: [3, 4, 5, 6, 7, 11], // config, distances, levels, crossovers, bass, preset
+  speakers: [2, 3, 4, 5, 6, 7, 11], // amp assign (mode only), config, distances, levels, crossovers, bass, preset
   inputs: [2, 3, 4, 5, 6], // assignment, rename, hide, source level, input mode
   general: [2, 3, 4, 6, 7, 10, 14], // language, ECO, zone 2 setup, zone rename, quick select names, display, usage data
   video: [3, 7, 8, 9, 11, 12, 13], // HDMI setup, OSD, 4K/8K format, TV format, HDCP, screensaver, upscaler
@@ -36,6 +36,7 @@ const ROOTS: Record<string, string[]> = {
   'globals/3': ['FriendlyName'],
   'audio/7': ['Limit', 'PowerOnLevel', 'MuteLevel'],
   'audio/10': ['GraphicEQ'],
+  'speakers/2': ['AmpAssign'],
   'speakers/3': ['Speaker'],
   'speakers/4': ['Distances', 'Unit'],
   'speakers/5': ['List'],
@@ -84,6 +85,9 @@ export function validateWrite(section: string, type: number, xml: string, capDb:
   const m = xml.trim().match(/^<([A-Za-z][\w]*)[\s>][\s\S]*<\/\1>$/);
   if (!m || !roots.includes(m[1])) return `unexpected payload for ${section}/${type}`;
   if (/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(xml)) return 'control characters not allowed';
+  // Amp Assign re-routes the power amps: allow only the X1700H's Assign Mode values, nothing else on that page.
+  if (section === 'speakers' && type === 2 && !/^<AmpAssign><AssignMode>(1|2|5|6|7|8|9|10|11)<\/AssignMode><\/AmpAssign>$/.test(xml.trim()))
+    return 'only Assign Mode can be changed';
   const pon = xml.match(/<(PowerOnLevel|PowerOnVolume)>(\d+)</);
   if (pon) {
     const n = Number(pon[2]);

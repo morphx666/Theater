@@ -13,6 +13,7 @@
   const levels = useSetup('speakers', 5);
   const xo = useSetup('speakers', 6);
   const bass = useSetup('speakers', 7);
+  const amp = useSetup('speakers', 2, { reloadDelay: 2000 });
 
   // Each speaker preset holds its own config, distances, levels, crossovers and bass (manual p.197), and the
   // config decides which speakers the other pages list. Re-read the affected pages after these changes, or
@@ -28,6 +29,16 @@
     if (await bass.write(`<SubwooferMode>${v}</SubwooferMode>`)) xo.reload(); // crossovers depend on it (p.188)
   }
   const bassEditable = (tag) => editable(bass.doc?.querySelector(`:scope > ${tag}`));
+
+  // Amp Assign: what the Surround Back / Height amp channels drive (manual p.187-188, AmpType 3 = 7ch).
+  const AMP_MODES = { 1: 'Surround Back', 5: 'Front Height', 8: 'Top Front', 9: 'Top Middle', 10: 'Front Dolby', 11: 'Surround Dolby',
+    2: 'Zone 2', 7: 'Bi-Amp', 6: 'Front B' };
+  const ampMode = $derived(txt(amp.doc, 'AssignMode'));
+  const ampSettable = $derived(txt(amp.doc, 'AmpType') === '3' && ampMode in AMP_MODES);
+  let confirmAmp = $state(null);
+  async function setAmp(v) {
+    if (await amp.write(`<AmpAssign><AssignMode>${v}</AssignMode></AmpAssign>`)) reloadAll(config, dist, levels, xo, bass);
+  }
 
   // Each setup page numbers channels differently (see docs/SETUP-API.md §4).
   const LEVEL_NAMES = ['Front L', 'Center', 'Front R', 'Front Wide R', 'Surround R', 'Surr. Back R', 'Surr. Back', 'Surr. Back L', 'Surround L',
@@ -218,6 +229,16 @@
   <details use:remember={'speaker-setup.config'}>
     <summary>Speaker configuration <span class="faint">(advanced)</span></summary>
     <p class="warn small"><Icon name="info" size={16} />Adding a speaker requires re-running Audyssey.</p>
+    {#if amp.doc && ampMode}
+      <label class="r"><span>Amp assign</span>
+        {#if ampSettable}
+          <select value={ampMode} disabled={amp.saving}
+            onchange={(e) => { confirmAmp = e.currentTarget.value; e.currentTarget.value = ampMode; }}>
+            {#each Object.entries(AMP_MODES) as [v, name]}<option value={v}>{name}</option>{/each}
+          </select>
+        {:else}<span class="muted">{AMP_MODES[ampMode] ?? 'Mode ' + ampMode}</span>{/if}
+      </label>
+    {/if}
     {#each kinds as k (k.idx)}
       <label class="r"><span>{k.name}</span>
         <select value={k.value} disabled={k.opts.length < 2 || config.saving}
@@ -227,6 +248,20 @@
     {/each}
   </details>
 </Panel>
+
+{#if confirmAmp}
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="card">
+      <h3>Set Amp Assign to “{AMP_MODES[confirmAmp]}”?</h3>
+      <p class="warn"><Icon name="info" size={18} />Rewire your speakers to match first.</p>
+      <p class="muted">This changes which speaker terminals the amps drive. With the wrong wiring, speakers can get the wrong signal and be damaged. The available channels change too, so re-run Audyssey afterward. The previous setting is backed up.</p>
+      <div class="row" style="justify-content:flex-end">
+        <button class="btn" onclick={() => (confirmAmp = null)}>Cancel</button>
+        <button class="btn primary" onclick={() => { setAmp(confirmAmp); confirmAmp = null; }}>Change</button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 {#if confirmCfg}
   <div class="modal" role="dialog" aria-modal="true">
