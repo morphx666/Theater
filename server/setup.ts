@@ -11,7 +11,7 @@ import path from 'node:path';
 export const READABLE: Record<string, number[]> = {
   globals: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
   home: [1],
-  audio: [3, 4, 5, 7, 9, 10],
+  audio: [1, 3, 4, 5, 7, 9, 10], // 1 = which audio menus are active (Restorer etc.)
   speakers: [2, 3, 4, 5, 6, 7, 8, 10, 11, 18],
   inputs: [2, 3, 4, 5, 6],
   video: [3, 4, 7, 8, 9, 11, 12, 13],

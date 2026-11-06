@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyLine, emptyState, volToDb, dbToVol, levelToDb, dbToLevel } from './parse.ts';
+import { applyLine, emptyState, volToDb, dbToVol, levelToDb, dbToLevel, REFRESH_QUERIES } from './parse.ts';
 import { guard, effectiveCap } from './guard.ts';
 
 // Real lines captured from the X1700H.
@@ -258,4 +258,15 @@ test('tuner preset name / number validation', async () => {
   assert.equal(validPreset(0), false);
   assert.equal(validPreset(57), false);
   assert.equal(validPreset(1.5), false);
+});
+
+test('audio delay is PSDELAY (PSDEL is a different parameter)', () => {
+  const st = emptyState();
+  assert.equal(applyLine(st, 'PSDELAY 045'), true);
+  assert.equal(st.ps.DELAY, '045');
+  applyLine(st, 'PSDEL 000');
+  assert.equal(st.ps.DELAY, '045');
+  assert.equal(st.ps.DEL, '000');
+  assert.ok(REFRESH_QUERIES.includes('PSDELAY ?'));
+  assert.equal(guard('PSDELAY 045', st, -10).ok, true);
 });

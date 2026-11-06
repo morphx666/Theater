@@ -36,7 +36,8 @@ PSTONE CTRL ON|OFF   PSBAS 50 / PSTRE 50   (44..56 = -6..+6 dB)   current: BAS 5
 PSMULTEQ:AUDYSSEY|BYP.LR|FLAT|OFF   PSDYNEQ ON|OFF   PSREFLEV 0|5|10|15   PSDYNVOL OFF|LIT|MED|HEV
 PSCINEMA EQ.ON|OFF   PSDRC AUTO|LOW|MID|HI|OFF   PSLFE 00..10 (0..-10 dB)   PSSWL 50 (38..62)   PSSWR ON|OFF
 PSDEH OFF|LOW|MED|HIGH (Dialog Enhancer)   PSRSTR OFF|LOW|MED|HI (Restorer)   PSLOM ON|OFF (Loudness Mgmt)
-PSDEL 000..200 (ms, audio delay)   PSNEURAL ON|OFF   PSCES ON|OFF (Center Spread)   PSDIC 00
+PSDELAY 000..200 (ms, audio delay / lip-sync)   PSNEURAL ON|OFF   PSCES ON|OFF (Center Spread)   PSDIC 00
+PSDEL 000 (a different "delay" parameter; this receiver answers but ignores changes, so don't use it for lip-sync)
 PSLFC ON|OFF   PSCNTAMT 01..07 (Audyssey LFC)
 ```
 - `PSSWR` (Subwoofer on/off) only works in some sound modes. Setup page audio/4 reports `<Subwoofer display="1"/>`
@@ -45,6 +46,11 @@ PSLFC ON|OFF   PSCNTAMT 01..07 (Audyssey LFC)
   Seen with SAT/CBL in Dolby Audio – Dolby Surround, source format `3/2/.1`, `SSINFAISSIG 02`: `PSLFE 01`,
   `PSLFE DOWN` and the official web UI all left it at 0, while `PSCINEMA EQ.ON` sent the same way worked.
   The app notices when an LFE change doesn't stick and says so.
+- `PSDRC` (Dynamic Compression) is only adjustable while `PSLOM ON` (Loudness Management): audio/4 then
+  reports `<DynamicCompression display="3">`, and `display="2"` (greyed) when LOM is off.
+- `PSRSTR` (Restorer) is ignored when the audio menu list (audio type 1) shows `<Restorer gray="3">2</Restorer>`.
+  In that list the display code is the element's **text**, not an attribute. The same list shows
+  `<AudioDelay>1</AudioDelay>` (hidden), yet `PSDELAY` works over telnet.
 
 ### Channel levels (current listening adjustment)
 ```

@@ -2,8 +2,10 @@
 // (the same information Denon's menus use to grey options out):
 //   audio/9  Audyssey      — <Setup>2</Setup> = calibration never run; per-setting display attributes
 //   audio/4  Surround parameters — display attributes per setting for the current mode / signal
+//   audio/1  Audio menu list — the display code is the element's text, e.g. <Restorer gray="3">2</Restorer>
 // display: 1 = not available, 2 = greyed (read-only), 3 = adjustable.
-// Re-read automatically when the sound mode, signal, input, power or Audyssey settings change.
+// Re-read automatically when the sound mode, signal, input, power, Audyssey or Loudness Management change
+// (Dynamic Compression is only adjustable while Loudness Management is on).
 
 import { avr } from './avr.svelte.js';
 import { getXml } from './setup.js';
@@ -20,6 +22,8 @@ const SURROUND_MAP = {
   CES: 'CenterSpread', NEURAL: 'DTSNeuralX', SWR: 'Subwoofer',
 };
 const AUDYSSEY_MAP = { MULTEQ: 'MultEQ', DYNEQ: 'DynamicEQ', REFLEV: 'ReferenceLevelOffset', DYNVOL: 'DynamicVolume' };
+// Not AudioDelay: the menu list reports it hidden (1), yet PSDELAY works over telnet.
+const MENU_MAP = { RSTR: 'Restorer' };
 
 let users = 0;
 let timer = null;
@@ -27,10 +31,11 @@ let lastKey = '';
 
 async function load() {
   try {
-    const [aud, sur] = await Promise.all([getXml('audio', 9), getXml('audio', 4)]);
+    const [aud, sur, menu] = await Promise.all([getXml('audio', 9), getXml('audio', 4), getXml('audio', 1).catch(() => null)]);
     const d = {};
     for (const [k, tag] of Object.entries(AUDYSSEY_MAP)) d[k] = aud.querySelector(`:scope > ${tag}`)?.getAttribute('display') ?? '3';
     for (const [k, tag] of Object.entries(SURROUND_MAP)) d[k] = sur.querySelector(`:scope > ${tag}`)?.getAttribute('display') ?? '3';
+    for (const [k, tag] of Object.entries(MENU_MAP)) d[k] = menu?.querySelector(`:scope > ${tag}`)?.textContent.trim() || '3';
     availability.display = d;
     availability.audysseyCalibrated = aud.querySelector(':scope > Setup')?.textContent.trim() !== '2';
     availability.loaded = true;
@@ -54,7 +59,7 @@ export function useAvailability() {
   $effect(() => {
     const st = avr.state;
     if (!st) return;
-    const key = [st.zoneMain, st.source, st.surround, st.decoder, st.signal, st.ps?.MULTEQ, st.ps?.DYNEQ].join('|');
+    const key = [st.zoneMain, st.source, st.surround, st.decoder, st.signal, st.ps?.MULTEQ, st.ps?.DYNEQ, st.ps?.LOM].join('|');
     if (key !== lastKey) {
       if (lastKey) schedule();
       lastKey = key;

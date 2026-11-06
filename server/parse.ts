@@ -256,7 +256,7 @@ export const REFRESH_QUERIES = [
   'PW?', 'ZM?', 'MV?', 'MU?', 'SI?', 'MS?', 'CV?', 'SYMO',
   'PSTONE CTRL ?', 'PSBAS ?', 'PSTRE ?', 'PSMULTEQ: ?', 'PSDYNEQ ?', 'PSDYNVOL ?', 'PSREFLEV ?',
   'PSCINEMA EQ. ?', 'PSDRC ?', 'PSLFE ?', 'PSSWL ?', 'PSSWR ?', 'PSDEH ?', 'PSRSTR ?', 'PSLOM ?',
-  'PSDEL ?', 'PSNEURAL ?', 'PSCES ?',
+  'PSDELAY ?', 'PSNEURAL ?', 'PSCES ?',
   'Z2?', 'Z2MU?', 'SLP?', 'ECO?', 'DIM ?', 'STBY?', 'SPPR ?', 'BTTX ?', 'MSQUICK ?', 'MNZST ?',
   'SSSOD ?', 'SSFUN ?', 'SSQSNZMA ?', 'SSLEV ?', 'SSVCTZMA ?', 'SSINFAISFSV ?', 'SSINFAISSIG ?', 'SSINFFRM ?',
   'TFAN?', 'TMAN?', 'TPAN?', 'OPTPN ?',
