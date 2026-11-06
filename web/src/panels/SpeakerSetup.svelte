@@ -230,7 +230,7 @@
     <summary>Speaker configuration <span class="faint">(advanced)</span></summary>
     <p class="warn small"><Icon name="info" size={16} />Adding a speaker requires re-running Audyssey.</p>
     {#if amp.doc && ampMode}
-      <label class="r"><span>Amp assign</span>
+      <label class="r amp"><span>Amp assign</span>
         {#if ampSettable}
           <select value={ampMode} disabled={amp.saving}
             onchange={(e) => { confirmAmp = e.currentTarget.value; e.currentTarget.value = ampMode; }}>
@@ -282,6 +282,7 @@
   .rows { display: grid; gap: 2px; }
   .r { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 0; }
   .r input, .r select { width: 130px; flex: none; }
+  .r.amp { border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 5px; }
   .lvl { padding: 4px 0 2px 10px; border-left: 3px solid transparent; }
   .lvl.changed { border-left-color: var(--accent); }
   .actions { display: flex; justify-content: flex-end; gap: 8px; margin: 10px 0 6px; }
