@@ -43,17 +43,19 @@
         <div class="chips">
           <div class="line"><span class="pill accent mode" title={st.soundModeText ?? ''}><Icon name="wave" size={14} /><span class="txt">{st.soundModeText ?? '—'}</span></span></div>
           <div class="line">
+            <span class="lead" title="Audio"><Icon name="vol" size={14} /></span>
             <span class="pill" title={st.audioFormat ? `Channels in the source: ${st.audioFormat} (front/surround/LFE)` : ''}>{st.decoder || '—'}</span>
             {#if st.sampleRate}<span class="pill">{st.sampleRate}Hz</span>{/if}
             {#if layout}<span class="pill"><Icon name="speaker" size={14} />{layout}</span>{/if}
           </div>
           <div class="line">
+            <span class="lead" title="Video"><Icon name="tv" size={14} /></span>
             {#if video?.length}
-              {#each video as c, i (c.title)}
-                <span class="pill" title={c.title}>{#if i === 0}<Icon name="tv" size={14} />{/if}{c.text}</span>
+              {#each video as c (c.title)}
+                <span class="pill" title={c.title}>{c.text}</span>
               {/each}
             {:else}
-              <span class="pill faint-pill"><Icon name="tv" size={14} />No video</span>
+              <span class="pill faint-pill">No video</span>
             {/if}
           </div>
         </div>
@@ -75,6 +77,7 @@
   .line { display: flex; gap: 6px; min-width: 0; overflow: hidden; }
   .line .pill { flex: none; }
   .mode { max-width: 100%; min-width: 0; flex: 0 1 auto !important; }
+  .lead { flex: none; display: grid; place-items: center; margin-right: -2px; color: var(--faint); }
   .faint-pill { opacity: 0.55; }
   .mode .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 </style>
