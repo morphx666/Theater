@@ -77,7 +77,7 @@
   .line { display: flex; gap: 6px; min-width: 0; overflow: hidden; }
   .line .pill { flex: none; }
   .mode { max-width: 100%; min-width: 0; flex: 0 1 auto !important; }
-  .lead { flex: none; display: grid; place-items: center; margin-right: -2px; color: var(--faint); }
+  .lead { flex: none; display: grid; place-items: center; margin-right: -2px; color: var(--muted); }
   .faint-pill { opacity: 0.55; }
   .mode .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 </style>
