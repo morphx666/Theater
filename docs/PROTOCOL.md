@@ -39,6 +39,12 @@ PSDEH OFF|LOW|MED|HIGH (Dialog Enhancer)   PSRSTR OFF|LOW|MED|HI (Restorer)   PS
 PSDEL 000..200 (ms, audio delay)   PSNEURAL ON|OFF   PSCES ON|OFF (Center Spread)   PSDIC 00
 PSLFC ON|OFF   PSCNTAMT 01..07 (Audyssey LFC)
 ```
+- `PSSWR` (Subwoofer on/off) only works in some sound modes. Setup page audio/4 reports `<Subwoofer display="1"/>`
+  (not available) in Dolby Surround, and the receiver ignores the command.
+- `PSLFE` can be **silently ignored** even when audio/4 says `<LowFrequencyEffects display="3">` (adjustable).
+  Seen with SAT/CBL in Dolby Audio – Dolby Surround, source format `3/2/.1`, `SSINFAISSIG 02`: `PSLFE 01`,
+  `PSLFE DOWN` and the official web UI all left it at 0, while `PSCINEMA EQ.ON` sent the same way worked.
+  The app notices when an LFE change doesn't stick and says so.
 
 ### Channel levels (current listening adjustment)
 ```

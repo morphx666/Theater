@@ -17,7 +17,7 @@ export const availability = $state({
 // telnet PS key -> element on the receiver's setup pages
 const SURROUND_MAP = {
   'CINEMA EQ': 'CinemaEQ', LOM: 'LoudnessManagement', DRC: 'DynamicCompression', LFE: 'LowFrequencyEffects',
-  CES: 'CenterSpread', NEURAL: 'DTSNeuralX',
+  CES: 'CenterSpread', NEURAL: 'DTSNeuralX', SWR: 'Subwoofer',
 };
 const AUDYSSEY_MAP = { MULTEQ: 'MultEQ', DYNEQ: 'DynamicEQ', REFLEV: 'ReferenceLevelOffset', DYNVOL: 'DynamicVolume' };
 
