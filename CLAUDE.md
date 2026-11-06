@@ -65,3 +65,7 @@ Everything the browser sends goes through a guard, and these limits are delibera
 - Volume: `MV375` means 37.5 − 80 = −42.5 dB. Three digits mean a half step, and `99` means minimum. Use `volToDb` and `dbToVol` (server) or `vol2` (client).
 - Channel and tone levels: 50 means 0 dB (see `level2` and `levelToDb`).
 - Some queries need a space before the `?` (`PSDYNEQ ?`, `OPTPN ?`). Check [docs/PROTOCOL.md](docs/PROTOCOL.md), which also covers the undocumented `SS…` status queries, before adding commands.
+
+### Owner's manual
+
+The receiver's owner's manual, **North American edition** (edition code `3520 10812 00AD`, ©2021, 284 pages), is at `docs/AVRX1700H_NA_EN.pdf`. It's gitignored because it's Denon's copyrighted document, so a fresh clone won't have it; download it from https://manuals.denon.com/AVRX1700H/NA/EN/. Use it as the authority for when a setting is available, what it does, and its range; for example, LFE works only with Dolby Digital or DTS sources. Get searchable text with `pdftotext -layout docs/AVRX1700H_NA_EN.pdf out.txt`. Page numbers are in the footer lines ("Rear panel  NNN"). Don't use the international edition (AVR-X1700H / DAB, 304 pages): it omits **Pure Direct**, which this US unit has. In the NA manual, most restrictions for "Direct" also apply to "Pure Direct". The receiver's own `display` flags (see availability.svelte.js) still decide whether a control is enabled; use the manual to choose the reason text.
