@@ -29,7 +29,7 @@
   {#if has('LOM')}
     <div class="setting stack">
       <div class="row between">
-        <div><div class="label">Loudness management</div><div class="hint">{hint('LOM', 'Dolby dialog normalization')}</div></div>
+        <div><div class="label">Loudness management</div><div class="hint">{hint('LOM', 'Dialog normalization and Dynamic compression; only affects Dolby sources')}</div></div>
         <button class="switch" class:on={ps.LOM === 'ON'} disabled={locked('LOM')} aria-label="Loudness management" onclick={() => toggle('LOM', 'PSLOM')}></button>
       </div>
       {#if has('DRC')}{@render drc()}{/if}

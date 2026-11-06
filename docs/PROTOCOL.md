@@ -47,7 +47,9 @@ PSLFC ON|OFF   PSCNTAMT 01..07 (Audyssey LFC)
   `PSLFE DOWN` and the official web UI all left it at 0, while `PSCINEMA EQ.ON` sent the same way worked.
   The app notices when an LFE change doesn't stick and says so.
 - `PSDRC` (Dynamic Compression) is only adjustable while `PSLOM ON` (Loudness Management): audio/4 then
-  reports `<DynamicCompression display="3">`, and `display="2"` (greyed) when LOM is off.
+  reports `<DynamicCompression display="3">`, and `display="2"` (greyed) when LOM is off. With a PCM signal
+  (`SYSDA PCM`) it still reports `display="3"` but **ignores** `PSDRC` (manual p.152: Dolby / DTS only).
+  `PSLOM ON` is accepted with PCM, though it only affects Dolby sources.
 - `PSRSTR` (Restorer) is ignored when the audio menu list (audio type 1) shows `<Restorer gray="3">2</Restorer>`.
   In that list the display code is the element's **text**, not an attribute. The same list shows
   `<AudioDelay>1</AudioDelay>` (hidden), yet `PSDELAY` works over telnet.

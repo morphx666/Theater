@@ -51,9 +51,11 @@ const WHY = {
 /**
  * Settings the receiver reports as adjustable but silently ignores in some states (found on this unit).
  * LFE: with PCM it stays at 0 dB whatever is sent (p.153: Dolby Digital / DTS / DVD-Audio only).
+ * DRC: with PCM and Loudness Management on, audio/4 says display="3" but PSDRC is ignored (p.152: Dolby / DTS only).
  */
 const IGNORED = {
   LFE: () => known() && !isDolby() && !isDts(),
+  DRC: () => known() && !isDolby() && !isDts(),
   DEH: () => isDirect() || isVirtual(), // p.110; the receiver has no display flag for it
 };
 
