@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyLine, emptyState, volToDb, dbToVol, levelToDb, dbToLevel, REFRESH_QUERIES } from './parse.ts';
-import { guard, effectiveCap } from './guard.ts';
+import { guard, effectiveCap, quickRecallCorrection } from './guard.ts';
 
 // Real lines captured from the X1700H.
 const CAPTURE = `PWON
@@ -269,4 +269,12 @@ test('audio delay is PSDELAY (PSDEL is a different parameter)', () => {
   assert.equal(st.ps.DEL, '000');
   assert.ok(REFRESH_QUERIES.includes('PSDELAY ?'));
   assert.equal(guard('PSDELAY 045', st, -10).ok, true);
+});
+
+test('Quick Select recall above the cap is brought back down', () => {
+  assert.equal(quickRecallCorrection('MV70', -20), 'MV60'); // -10 dB recalled, cap -20 dB
+  assert.equal(quickRecallCorrection('MV355', -20), null); // -44.5 dB is fine
+  assert.equal(quickRecallCorrection('MVMAX 98', -20), null); // not a volume report
+  assert.equal(quickRecallCorrection('Z270', -20), 'Z260');
+  assert.equal(quickRecallCorrection('MUON', -20), null);
 });

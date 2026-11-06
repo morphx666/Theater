@@ -11,7 +11,7 @@ import { Heos, emptyNowPlaying } from './heos.ts';
 import { SetupApi, HttpError, READABLE, WRITABLE } from './setup.ts';
 import { applyLine, emptyState, REFRESH_QUERIES, POWER_ON_QUERIES, SIGNAL_QUERIES, installedFromLevelsXml } from './parse.ts';
 import { decodeVideo, learnFromInformation, loadCodes, saveCodes } from './signal.ts';
-import { guard, effectiveCap } from './guard.ts';
+import { guard, effectiveCap, quickRecallCorrection } from './guard.ts';
 import { pollAsTelnetLines } from './http-status.ts';
 import { TunerPresets, PRESET_COUNT, pad, validPreset, validName } from './tuner-presets.ts';
 
@@ -183,6 +183,7 @@ telnet.on('line', (line: string) => {
     log(`receiver reported: ${line}`);
   }
   if (applyLine(state, line)) scheduleBroadcast();
+  capAfterQuickRecall(line);
   // Parameters depend on power state and input; re-read them after transitions.
   if ((line === 'ZMON' && prevPower === false) || (line.startsWith('SI') && prevSource && line.slice(2) !== prevSource)) {
     setTimeout(() => telnet.sendMany(POWER_ON_QUERIES), 1500);
@@ -225,7 +226,7 @@ setInterval(async () => {
     const lines = await pollAsTelnetLines(HOST);
     conn.http = true;
     let changed = false;
-    for (const l of lines) changed = applyLine(state, l) || changed;
+    for (const l of lines) { changed = applyLine(state, l) || changed; capAfterQuickRecall(l); }
     if (changed) scheduleBroadcast();
   } catch {
     if (conn.http) { conn.http = false; scheduleBroadcast(); }
@@ -264,10 +265,21 @@ function broadcastRaw(line: string) {
   for (const c of rawSubscribers) if (c.readyState === WebSocket.OPEN) c.send(s);
 }
 
+// Quick Select recall can raise the volume past the app's cap (see quickRecallCorrection in guard.ts).
+// For a few seconds after the app recalls one, any reported volume above the cap is brought back down.
+let quickRecallUntil = 0;
+function capAfterQuickRecall(line: string) {
+  if (Date.now() > quickRecallUntil) return;
+  const cap = effectiveCap(settings.volumeCapDb, state);
+  const fix = quickRecallCorrection(line, cap);
+  if (fix) { log(`Quick Select set ${line}, above the ${cap} dB cap; sending ${fix}`); telnet.send(fix); }
+}
+
 function sendCommand(raw: string, source = ''): { ok: boolean; cmd?: string; reason?: string } {
   const r = guard(raw, state, effectiveCap(settings.volumeCapDb, state));
   if (!r.ok) { log(`rejected: ${raw} (${r.reason})`); return r; }
   if (!r.cmd.endsWith('?')) log(`sent: ${r.cmd}${source ? ` (from ${source})` : ''}`); // audit trail (queries omitted)
+  if (/^MSQUICK[1-4]$/.test(r.cmd)) quickRecallUntil = Date.now() + 6000;
   telnet.send(r.cmd);
   if (r.cmd.startsWith('TPANMEM')) { // saving into a deleted (skipped) slot brings it back
     const n = Number(r.cmd.slice(7));

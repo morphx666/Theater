@@ -16,8 +16,8 @@
     {#if name.doc}
       <div class="setting stack">
         <div><div class="label">Receiver name</div><div class="hint">Shown in HEOS, AirPlay and Spotify Connect</div></div>
-        <input type="text" maxlength="63" value={name.doc.textContent.trim()}
-          onchange={(e) => e.currentTarget.value.trim() && name.write(el('FriendlyName', esc(ascii(e.currentTarget.value.trim(), 63))))} />
+        <input type="text" maxlength="30" value={name.doc.textContent.trim()}
+          onchange={(e) => e.currentTarget.value.trim() && name.write(el('FriendlyName', esc(ascii(e.currentTarget.value.trim(), 30))))} />
       </div>
     {/if}
     {#each zoneList as z (z.idx)}

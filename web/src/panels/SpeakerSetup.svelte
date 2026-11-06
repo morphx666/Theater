@@ -1,6 +1,6 @@
 <script>
   import { useSetup } from '../lib/useSetup.svelte.js';
-  import { txt } from '../lib/setup.js';
+  import { txt, editable } from '../lib/setup.js';
   import Seg from '../lib/Seg.svelte';
   import Icon from '../lib/Icon.svelte';
   import Slider from '../lib/Slider.svelte';
@@ -13,6 +13,21 @@
   const levels = useSetup('speakers', 5);
   const xo = useSetup('speakers', 6);
   const bass = useSetup('speakers', 7);
+
+  // Each speaker preset holds its own config, distances, levels, crossovers and bass (manual p.197), and the
+  // config decides which speakers the other pages list. Re-read the affected pages after these changes, or
+  // they keep showing the previous values.
+  const reloadAll = (...pages) => Promise.all(pages.map((p) => p.reload()));
+  async function setPreset(v) {
+    if (await preset.write(`<SpeakerPreset>${v}</SpeakerPreset>`)) reloadAll(config, dist, levels, xo, bass);
+  }
+  async function setConfig(idx, value) {
+    if (await config.write(`<Speaker index="${idx}">${value}</Speaker>`)) reloadAll(dist, levels, xo, bass);
+  }
+  async function setSubwooferMode(v) {
+    if (await bass.write(`<SubwooferMode>${v}</SubwooferMode>`)) xo.reload(); // crossovers depend on it (p.188)
+  }
+  const bassEditable = (tag) => editable(bass.doc?.querySelector(`:scope > ${tag}`));
 
   // Each setup page numbers channels differently (see docs/SETUP-API.md §4).
   const LEVEL_NAMES = ['Front L', 'Center', 'Front R', 'Front Wide R', 'Surround R', 'Surr. Back R', 'Surr. Back', 'Surr. Back L', 'Surround L',
@@ -104,7 +119,7 @@
     <div class="setting stack">
       <div><div class="label">Active speaker preset</div><div class="hint">Each preset stores a complete speaker setup + Audyssey result</div></div>
       <Seg value={preset.doc.textContent.trim()} disabled={preset.saving}
-        onchange={(v) => preset.write(`<SpeakerPreset>${v}</SpeakerPreset>`)}
+        onchange={setPreset}
         options={[{ value: '1', label: 'Preset 1' }, { value: '2', label: 'Preset 2' }]} />
     </div>
   {/if}
@@ -179,12 +194,15 @@
     {/if}
     {#if bass.doc}
       <div class="setting stack">
-        <div><div class="label">Subwoofer mode</div><div class="hint">LFE+Main also sends front bass to the sub</div></div>
-        <Seg value={txt(bass.doc, 'SubwooferMode')} disabled={bass.saving} onchange={(v) => bass.write(`<SubwooferMode>${v}</SubwooferMode>`)}
+        <div><div class="label">Subwoofer mode</div><div class="hint">{bassEditable('SubwooferMode')
+          ? 'LFE: the sub also gets the bass of speakers set to Small. LFE + Main: it gets the bass of all speakers.'
+          : 'Needs a subwoofer in the speaker configuration'}</div></div>
+        <Seg value={txt(bass.doc, 'SubwooferMode')} disabled={bass.saving || !bassEditable('SubwooferMode')} onchange={setSubwooferMode}
           options={[{ value: '1', label: 'LFE' }, { value: '2', label: 'LFE + Main' }]} />
       </div>
       <label class="r"><span>LPF for LFE</span>
-        <select value={txt(bass.doc, 'LPFforLFE')} onchange={(e) => bass.write(`<LPFforLFE>${e.currentTarget.value}</LPFforLFE>`)}>
+        <select value={txt(bass.doc, 'LPFforLFE')} disabled={bass.saving || !bassEditable('LPFforLFE')}
+          onchange={(e) => bass.write(`<LPFforLFE>${e.currentTarget.value}</LPFforLFE>`)}>
           {#each [...bass.doc.querySelectorAll('SelectableValue LPFforLFE Item')].map((i) => i.textContent.trim()) as v}<option value={v}>{v} Hz</option>{/each}
         </select></label>
     {/if}
@@ -210,7 +228,7 @@
       <p class="muted">This changes the receiver's speaker configuration. The previous setup is backed up, and you can switch it back here.</p>
       <div class="row" style="justify-content:flex-end">
         <button class="btn" onclick={() => (confirmCfg = null)}>Cancel</button>
-        <button class="btn primary" onclick={() => { config.write(`<Speaker index="${confirmCfg.k.idx}">${confirmCfg.value}</Speaker>`); confirmCfg = null; }}>Change</button>
+        <button class="btn primary" onclick={() => { setConfig(confirmCfg.k.idx, confirmCfg.value); confirmCfg = null; }}>Change</button>
       </div>
     </div>
   </div>

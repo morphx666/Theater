@@ -13,6 +13,14 @@
   const z2node = (t) => z2.doc?.querySelector(t);
   const z2edit = (t) => z2node(t)?.getAttribute('display') === '3';
 
+  // Power-on volume: 99 = last used, 0 = muted, 1-98 = fixed (value - 80 dB). A fixed level may not exceed
+  // Zone 2's own Volume Limit (1 Off, 2 -20, 3 -10, 4 0 dB) or the app's cap.
+  const Z2_LIMIT_DB = { 1: 18, 2: -20, 3: -10, 4: 0 };
+  const pon = $derived(txt(z2.doc, 'PowerOnVolume'));
+  const ponMode = $derived(pon === '99' ? 'last' : pon === '0' ? 'mute' : 'fixed');
+  const ponMax = $derived(Math.min(avr.cap, Z2_LIMIT_DB[txt(z2.doc, 'VolumeLimit')] ?? 18));
+  const setPon = (mode) => z2.write(`<PowerOnVolume>${mode === 'last' ? 99 : mode === 'mute' ? 0 : Math.min(-40, ponMax) + 80}</PowerOnVolume>`);
+
 </script>
 
 <Panel id="volume-zone2" title="Volume — Zone 2">
@@ -28,9 +36,13 @@
       {#if z2edit('PowerOnVolume')}
         <div class="setting stack">
           <div class="label">Power-on volume</div>
-          <Seg value={txt(z2.doc, 'PowerOnVolume') === '99' ? 'last' : txt(z2.doc, 'PowerOnVolume') === '0' ? 'mute' : 'fixed'} disabled={z2.saving}
+          <Seg value={ponMode} disabled={z2.saving}
             options={[{ value: 'last', label: 'Last used' }, { value: 'mute', label: 'Muted' }, { value: 'fixed', label: 'Fixed' }]}
-            onchange={(v) => z2.write(`<PowerOnVolume>${v === 'last' ? 99 : v === 'mute' ? 0 : 40}</PowerOnVolume>`)} />
+            onchange={setPon} />
+          {#if ponMode === 'fixed'}
+            <Slider min={-79} max={ponMax} step={1} value={Math.min(Number(pon) - 80, ponMax)} format={(v) => v + ' dB'}
+              onchange={(v) => z2.write(`<PowerOnVolume>${v + 80}</PowerOnVolume>`, { quiet: true })} />
+          {/if}
         </div>
       {/if}
       {#if z2edit('VolumeLevel')}

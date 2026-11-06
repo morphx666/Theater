@@ -104,7 +104,7 @@
       </table>
     </div>
     <p class="faint small">Changes are sent to the receiver immediately; the previous values are backed up first.
-      Assigning a connector that another input already uses moves it.</p>
+      The same connector can be assigned to more than one input.</p>
 </Panel>
 
 

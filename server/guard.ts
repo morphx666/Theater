@@ -75,6 +75,19 @@ export function guard(raw: string, st: AvrState, capDb: number): GuardResult {
   return { ok: true, cmd };
 }
 
+/**
+ * Recalling a Quick Select (MSQUICKn) makes the receiver jump to the volume saved in that slot (when volume is
+ * memorised; manual p.134). That jump happens inside the receiver, so `guard()` never sees it. Shortly after a
+ * recall from the app, pass each reported volume line here: it returns the command that brings the volume back
+ * down to the cap, or null if no correction is needed.
+ */
+export function quickRecallCorrection(line: string, capDb: number): string | null {
+  const m = line.match(/^(MV|Z2)(\d{2,3})$/);
+  if (!m) return null;
+  const db = volToDb(m[2]);
+  return db !== null && db > capDb ? `${m[1]}${dbToVol(capDb)}` : null;
+}
+
 /** Effective cap = the stricter of the app setting and the receiver's own Volume Limit. */
 export function effectiveCap(appCapDb: number, st: AvrState): number {
   let cap = appCapDb;
