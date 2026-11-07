@@ -20,11 +20,11 @@ node --test --test-name-pattern="guard enforces" server/parse.test.ts   # run a 
 
 `npm run dev` uses `cmd & vite; wait`. That only works in a POSIX shell. On Windows (npm runs scripts with cmd.exe), run `dev:server` and `dev:web` in two terminals instead.
 
-There is no linter or type-check script. Tests cover only the pure server logic: the telnet parser, the guard, and setup-write validation.
+There is no linter or type-check script. Tests cover only the pure server logic: the telnet parser, the guard, setup-write validation, and the speaker preset parsers, payloads and engine (against a fake receiver).
 
 End users install with `./setup.sh` (Linux/macOS) or `setup.ps1` (Windows). These platform wrappers find or install Node 22, run `npm ci` and the build, and generate the autostart entry: a systemd unit, a launchd agent, or a Scheduled Task plus firewall rule. The cross-platform part is [scripts/setup.ts](scripts/setup.ts). It finds the receiver with SSDP and confirms it through `:8080/goform/Deviceinfo.xml`, picks a free port, asks about telnet and the data folder, and writes `.env`. Its `writeEnv` keeps comments, and a `null` value comments a setting out. Re-running a script is also how users update: each script first runs a fast-forward-only `git fetch` + `git merge` (skipped with `--no-update` / `-NoUpdate`, or when there's no `.git`, no upstream, or no network) and, if that pulled anything, re-launches the new copy of itself with `THEATER_UPDATED=1` so the updated setup logic runs. Keep `setup.ps1` plain ASCII and compatible with Windows PowerShell 5.1.
 
-Configuration comes from `.env` (copy `.env.example`): `AVR_HOST`, `PORT`, `AVR_TELNET=off` (HTTP polling only), and `DATA_DIR`. Runtime data lives in `data/` and is gitignored: `settings.json`, `backups/`, and `signal-codes.json`.
+Configuration comes from `.env` (copy `.env.example`): `AVR_HOST`, `PORT`, `AVR_TELNET=off` (HTTP polling only), and `DATA_DIR`. Runtime data lives in `data/` and is gitignored: `settings.json`, `backups/`, `signal-codes.json`, and `speaker-presets.json`.
 
 ## Architecture
 
@@ -43,6 +43,7 @@ The receiver has four interfaces, and the server uses all of them ([docs/PROTOCO
 - **One state object, many lines.** Every telnet line goes through `applyLine(state, line)` in [parse.ts](server/parse.ts). That function is pure and returns whether anything changed. The HTTP poller converts its results into telnet-style lines so the same parser handles both. A change calls `scheduleBroadcast()`, which waits 40 ms and then sends a full `snapshot()` (state, nowPlaying, conn, settings, cap) to every WebSocket client.
 - **Re-query rules.** Many values exist only for the current power state, input, sound mode, or speaker preset. The `telnet.on('line')` handler re-sends query batches after the relevant transitions (`POWER_ON_QUERIES`, `CV?`, `SIGNAL_QUERIES`, `refreshInstalled`). If you add a new state field, check whether it also needs a re-query trigger there.
 - **Settings** (`data/settings.json`) hold the volume cap, the volume step, per-page `layouts`, and `panelOptions`. They are written only through `POST /api/settings`, which validates every field. Settings are part of every snapshot, so all devices stay in sync.
+- **Speaker presets** ([speaker-presets.ts](server/speaker-presets.ts), design in [docs/SPEAKER-PRESETS.md](docs/SPEAKER-PRESETS.md)): any number of app presets on top of the receiver's two slots. Each one uses one slot's Audyssey calibration and stores the rest of that slot's settings in groups (`GROUPS`), and applying it writes only what differs, muted. Setup writes made from the browser call `noteWrite`, which auto-saves into the active preset. If you add a per-preset setting, add it as a group.
 - **Video signal codes** ([signal.ts](server/signal.ts)) are learned at runtime. When an unknown color-space or pixel-depth code appears, the server reads the slow Information page once (about 30 s; it blocks the setup server while it loads) and saves the mapping.
 
 ### Safety layer (do not weaken)

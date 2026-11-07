@@ -13,7 +13,7 @@ Theater is a fast web remote for the **Denon AVR-X1700H** receiver. You run it o
 | **Home** | A volume dial, mute, power, input tiles, sound modes, Quick Select 1–4, what's playing on HEOS (with album art and transport controls), HEOS favorites, and a line showing the current audio format. You can pin any panel from another page here. |
 | **Audio** | Audyssey (MultEQ, Dynamic EQ, Reference Level Offset, Dynamic Volume), Dialog Enhancer, subwoofer level, tone, DRC, Cinema EQ, Neural:X and more. Settings the receiver doesn't allow for the current sound mode are greyed out, with the reason. |
 | **Video** | HDMI setup, video output, on-screen display and HDCP. |
-| **Speakers** | A room map with tap-to-adjust channel levels, plus the stored calibration: distances, levels, crossovers, subwoofer mode and speaker presets. |
+| **Speakers** | A room map with tap-to-adjust channel levels, plus the stored calibration: distances, levels, crossovers and subwoofer mode. Unlimited speaker presets on top of the receiver's two. |
 | **Zone 2** | Power, source, volume, mute and All Zone Stereo. |
 | **Remote** | An on-screen menu pad, an FM/AM tuner with presets, quick settings (sleep, dimmer, ECO, auto-standby) and a live protocol console. |
 | **Setup** | Rename, hide and assign inputs; set source levels, volume limits and the graphic EQ; change names, ECO and display options; set this app's own settings; view setup backups. |

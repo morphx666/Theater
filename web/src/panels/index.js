@@ -39,6 +39,7 @@ import StreamingServices from './StreamingServices.svelte';
 import HeosAccount from './HeosAccount.svelte';
 import Language from './Language.svelte';
 import SpeakerPresets from './SpeakerPresets.svelte';
+import SpeakerPresetManager from './SpeakerPresetManager.svelte';
 
 /** section = page it lives on; tab = Setup sub-tab; wide = spans the full row. */
 export const PANEL_LIST = [
@@ -58,6 +59,7 @@ export const PANEL_LIST = [
 
   { id: 'channel-levels', title: 'Channel levels', section: 'speakers', comp: ChannelLevels },
   { id: 'speaker-setup', title: 'Speaker setup', section: 'speakers', comp: SpeakerSetup },
+  { id: 'speaker-preset-manager', title: 'Speaker preset manager', section: 'speakers', comp: SpeakerPresetManager },
 
   { id: 'zone2', title: 'Zone 2', section: 'zones', comp: Zone2 },
   { id: 'all-zone-stereo', title: 'All Zone Stereo', section: 'zones', comp: AllZoneStereo },

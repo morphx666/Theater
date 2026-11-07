@@ -294,6 +294,7 @@ Writes are **bare leaves, no `<Audyssey>` wrapper**, type 9, via `setAudioConfig
 <MultEQ>1</MultEQ>
 GET /ajax/audio/set_config?type=9&data=%3CMultEQ%3E1%3C%2FMultEQ%3E
 ```
+**Tested on this unit (uncalibrated):** `GET /ajax/audio/set_config?type=9&data=<MultEQ>4</MultEQ>` returns **HTTP 500**, even though it writes the current value. The app sets these over telnet instead (`PSMULTEQ:`, `PSDYNEQ`, `PSREFLEV`, `PSDYNVOL`).
 The interdependencies are handled by the firmware: after a write, re-GET to see the new `display` values. Without a completed Audyssey calibration (`Setup=2`), MultEQ Reference/Flat probably either have no effect or are refused. **Inferred.**
 
 ### 2.10 Graphic EQ (type 10): supported, per speaker preset
@@ -736,7 +737,7 @@ Example: `GET /ajax/speakers/set_config?type=6&data=%3CSpeaker%20index%3D%221%22
 
 **cfg:** `<FrontSpeaker>1<SpeakerPreset display="3"/></FrontSpeaker>` (text = 1).
 
-The values are 1 = A, 2 = B, 3 = A+B. Write: `<FrontSpeaker>2</FrontSpeaker>` (`type=8`). For example, `GET /ajax/speakers/set_config?type=8&data=%3CFrontSpeaker%3E2%3C%2FFrontSpeaker%3E`. This is only meaningful when Amp Assign = Front B (6). Today the unit is on Front Dolby, so B would have no amp. It is not dangerous, but choosing B with nothing assigned silences the fronts.
+The values are 1 = A, 2 = B, 3 = A+B. Write: `<FrontSpeaker>2</FrontSpeaker>` (`type=8`). For example, `GET /ajax/speakers/set_config?type=8&data=%3CFrontSpeaker%3E2%3C%2FFrontSpeaker%3E`. Writing the current value (`1`) answers 200 on this unit. This is only meaningful when Amp Assign = Front B (6). Today the unit is on Front Dolby, so B would have no amp. It is not dangerous, but choosing B with nothing assigned silences the fronts.
 
 ### Type 10: "Subwoofer" (2-ch receiver subwoofer page, `<Subwoofer>`)
 

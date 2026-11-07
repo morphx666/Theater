@@ -7,6 +7,7 @@ export const avr = $state({
   progress: { position: null, duration: null },
   conn: { telnet: false, heos: false, http: false },
   settings: { volumeCapDb: -10, volumeStep: 0.5 },
+  speakerPresets: null, // { supported, list: [{id, name, slot, captured, layout}], active, incomplete, busy: {id, step}, rev }
   cap: -10,
   toast: null,
 });
@@ -36,6 +37,7 @@ export function connect() {
       avr.progress = msg.progress;
       avr.conn = msg.conn;
       avr.settings = msg.settings;
+      avr.speakerPresets = msg.speakerPresets ?? null;
       avr.cap = msg.cap;
     } else if (msg.type === 'progress') {
       avr.progress = { position: msg.position, duration: msg.duration };

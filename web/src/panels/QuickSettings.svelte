@@ -3,6 +3,7 @@
   import Icon from '../lib/Icon.svelte';
   import Panel from '../lib/Panel.svelte';
   import Seg from '../lib/Seg.svelte';
+  import PresetPicker from '../lib/PresetPicker.svelte';
 
   const st = $derived(avr.state);
   const on = $derived(st.zoneMain === true);
@@ -35,10 +36,10 @@
       <Seg value={st.autoStandby} onchange={(v) => send('STBY' + v)} options={[
         { value: '15M', label: '15 min' }, { value: '30M', label: '30 min' }, { value: '60M', label: '60 min' }, { value: 'OFF', label: 'Off' }]} />
     </div>
-    {#if st.speakerPreset}
-      <div class="setting stack">
-        <div><div class="label">Speaker preset</div><div class="hint">Two saved speaker setups</div></div>
-        <Seg value={st.speakerPreset} onchange={(v) => send('SPPR ' + v)} options={[{ value: '1', label: 'Preset 1' }, { value: '2', label: 'Preset 2' }]} />
+    {#if avr.speakerPresets?.list.length}
+      <div class="setting">
+        <div><div class="label">Speaker preset</div><div class="hint">{avr.speakerPresets.busy ? avr.speakerPresets.busy.step + '…' : 'Saved speaker setups'}</div></div>
+        <PresetPicker />
       </div>
     {/if}
     {#if st.btTx}

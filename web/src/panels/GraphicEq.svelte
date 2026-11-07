@@ -1,4 +1,5 @@
 <script>
+  import { untrack } from 'svelte';
   import { avr, toast } from '../lib/avr.svelte.js';
   import { useSetup } from '../lib/useSetup.svelte.js';
   import { getXml, txt } from '../lib/setup.js';
@@ -9,6 +10,13 @@
   import { isDirect } from '../lib/rules.js';
 
   const geq = useSetup('audio', 10, { reloadDelay: 2000 });
+  // A speaker preset was applied: the EQ belongs to the preset, so re-read it.
+  let seenRev = null;
+  $effect(() => {
+    const sp = avr.speakerPresets;
+    if (seenRev !== null && sp?.rev !== seenRev && !sp?.busy) untrack(() => geq.reload());
+    if (!sp?.busy) seenRev = sp?.rev;
+  });
 
   // ---- Graphic EQ ----
   const BANDS = ['63Hz', '125Hz', '250Hz', '500Hz', '1kHz', '2kHz', '4kHz', '8kHz', '16kHz'];

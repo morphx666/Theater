@@ -9,11 +9,12 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { AvrTelnet } from './telnet.ts';
 import { Heos, emptyNowPlaying } from './heos.ts';
 import { SetupApi, HttpError, READABLE, WRITABLE } from './setup.ts';
-import { applyLine, emptyState, REFRESH_QUERIES, POWER_ON_QUERIES, SIGNAL_QUERIES, installedFromLevelsXml } from './parse.ts';
+import { applyLine, emptyState, REFRESH_QUERIES, POWER_ON_QUERIES, SIGNAL_QUERIES, installedFromLevelsXml, LEVEL_INDEX_TO_CODE } from './parse.ts';
 import { decodeVideo, learnFromInformation, loadCodes, saveCodes } from './signal.ts';
 import { guard, effectiveCap, quickRecallCorrection } from './guard.ts';
 import { pollAsTelnetLines } from './http-status.ts';
 import { TunerPresets, PRESET_COUNT, pad, validPreset, validName } from './tuner-presets.ts';
+import { SpeakerPresets, PresetError } from './speaker-presets.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = process.env.AVR_HOST ?? '192.168.1.50';
@@ -126,6 +127,27 @@ async function presetAction(b: any, who: string) {
   rereadPresets();
 }
 
+// ---------- speaker presets (as many as the user wants, on top of the receiver's two slots) ----------
+const speakerPresets = new SpeakerPresets(DATA, {
+  io: {
+    get: (section, type, extra) => setup.get(section, type, extra),
+    set: async (section, type, xml) => {
+      log(`setup write ${section}/${type} (speaker preset): ${xml.slice(0, 200)}`);
+      await setup.set(section, type, xml, effectiveCap(settings.volumeCapDb, state));
+    },
+    cmd: (c) => { const r = sendCommand(c, 'speaker preset'); if (!r.ok) throw new Error(r.reason); },
+    wait: (ms) => new Promise((r) => setTimeout(r, ms)),
+  },
+  zoneOn: () => state.zoneMain === true,
+  muted: () => state.mute,
+  log: (m) => log(m),
+  changed: () => scheduleBroadcast(),
+  applied: () => { setTimeout(() => telnet.sendMany(REFRESH_QUERIES), 800); setTimeout(refreshInstalled, 1500); },
+  levelCodes: (lv) => Object.keys(lv).map((i) => LEVEL_INDEX_TO_CODE[Number(i)]).filter(Boolean),
+});
+await speakerPresets.load();
+speakerPresets.slotChanged(); // first sync shortly after start
+
 // ---------- HDMI signal info ----------
 const signalCodes = await loadCodes(DATA);
 let signalTimer: NodeJS.Timeout | undefined;
@@ -182,12 +204,16 @@ telnet.on('line', (line: string) => {
     if (line.startsWith('PW')) prevPowerLine = line;
     log(`receiver reported: ${line}`);
   }
-  if (applyLine(state, line)) scheduleBroadcast();
+  const changed = applyLine(state, line);
+  if (changed) scheduleBroadcast();
   capAfterQuickRecall(line);
+  // Audyssey settings are part of the active speaker preset (auto-saved like the setup pages).
+  if (changed && /^PS(MULTEQ|DYNEQ|REFLEV|DYNVOL)/.test(line)) speakerPresets.noteWrite('audio', 9);
   // Parameters depend on power state and input; re-read them after transitions.
   if ((line === 'ZMON' && prevPower === false) || (line.startsWith('SI') && prevSource && line.slice(2) !== prevSource)) {
     setTimeout(() => telnet.sendMany(POWER_ON_QUERIES), 1500);
     querySignal(4000); // the HDMI handshake takes a few seconds
+    if (line === 'ZMON') speakerPresets.slotChanged(); // read in changes made while the app couldn't see them
   }
   // New content often means a new video format too (e.g. a movie switching to 4K24 HDR).
   const sigKey = line.startsWith('SYSDA') ? 'sig:SYSDA' : line.startsWith('SSINFAISSIG') ? 'sig:AIS' : null;
@@ -200,6 +226,7 @@ telnet.on('line', (line: string) => {
   if (/^SPPR [12]$/.test(line) && line !== lastModeLine.SPPR) {
     const first = lastModeLine.SPPR === undefined;
     lastModeLine.SPPR = line;
+    speakerPresets.slotChanged(); // follow switches made on the receiver or its remote
     if (!first) {
       setTimeout(() => telnet.sendMany(['SSLEV ?', 'CV?', ...POWER_ON_QUERIES]), 2500);
       setTimeout(refreshInstalled, 5000);
@@ -245,6 +272,7 @@ function snapshot() {
     progress,
     conn,
     settings,
+    speakerPresets: speakerPresets.summary(),
     cap: effectiveCap(settings.volumeCapDb, state),
   };
 }
@@ -377,6 +405,27 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
       await presetAction(await readBody(req), req.socket.remoteAddress ?? 'http');
       return json(res, 200, { ok: true });
     }
+    if (p === '/api/speaker-presets') {
+      if (req.method === 'GET') return json(res, 200, speakerPresets.summary());
+      if (req.method === 'POST') {
+        const b = await readBody(req);
+        try {
+          switch (b?.action) {
+            case 'apply': return json(res, 200, { ok: true, ...(await speakerPresets.apply(b.id, { confirmAmp: b.confirmAmp === true })) });
+            case 'create': return json(res, 200, { ok: true, id: (await speakerPresets.create(b.name, b.from, b.slot)).id });
+            case 'rename': await speakerPresets.rename(b.id, b.name); break;
+            case 'slot': await speakerPresets.setSlot(b.id, b.slot); break;
+            case 'delete': await speakerPresets.remove(b.id); break;
+            default: throw new HttpError(400, 'unknown action');
+          }
+          return json(res, 200, { ok: true });
+        } catch (e) {
+          if (!(e instanceof PresetError)) throw e;
+          if (!e.confirm) log(`speaker preset ${b?.action}: ${e.message}`);
+          return json(res, e.status, { error: e.message, confirm: e.confirm });
+        }
+      }
+    }
     if (p === '/api/setup/capabilities') return json(res, 200, { readable: READABLE, writable: WRITABLE });
     if (p === '/api/setup/backups') return json(res, 200, await setup.listBackups());
     let m = p.match(/^\/api\/setup\/backups\/([\w.\-]+\.xml)$/);
@@ -396,6 +445,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
         // Telnet-visible values may have changed.
         setTimeout(() => telnet.sendMany(REFRESH_QUERIES), 800);
         if (m[1] === 'speakers') setTimeout(refreshInstalled, 1500);
+        speakerPresets.noteWrite(m[1], Number(m[2])); // auto-save into the active speaker preset
         return json(res, 200, { ok: true });
       }
     }

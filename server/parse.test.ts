@@ -164,6 +164,9 @@ test('setup write validation', async () => {
   bad('speakers', 2, '<AmpAssign><AssignMode>16</AssignMode></AmpAssign>');
   bad('speakers', 2, '<AmpAssign><CustomSettings><Terminal index="1">1</Terminal></CustomSettings></AmpAssign>');
   bad('speakers', 2, '<AssignMode>10</AssignMode>');
+  ok('speakers', 8, '<FrontSpeaker>3</FrontSpeaker>');
+  bad('speakers', 8, '<FrontSpeaker>4</FrontSpeaker>');
+  bad('speakers', 8, '<FrontSpeaker>1<SpeakerPreset>2</SpeakerPreset></FrontSpeaker>');
 });
 
 test('sleep timer clears when the main zone turns off', () => {

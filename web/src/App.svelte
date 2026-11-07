@@ -6,6 +6,7 @@
   import Setup from './pages/Setup.svelte';
   import { ui } from './lib/layout.svelte.js';
   import IdleDimmer from './lib/IdleDimmer.svelte';
+  import PresetConfirm from './lib/PresetConfirm.svelte';
 
   const PAGES = [
     { id: 'home', label: 'Home', icon: 'home', comp: Home },
@@ -93,6 +94,7 @@
 {/if}
 
 <IdleDimmer />
+<PresetConfirm />
 
 <style>
   .shell { display: flex; min-height: 100dvh; }

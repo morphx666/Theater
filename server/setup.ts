@@ -24,7 +24,7 @@ export const READABLE: Record<string, number[]> = {
 export const WRITABLE: Record<string, number[]> = {
   globals: [3], // friendly name
   audio: [7, 10], // volume limit / power-on level / mute level, graphic EQ
-  speakers: [2, 3, 4, 5, 6, 7, 11], // amp assign (mode only), config, distances, levels, crossovers, bass, preset
+  speakers: [2, 3, 4, 5, 6, 7, 8, 11], // amp assign (mode only), config, distances, levels, crossovers, bass, front A/B, preset
   inputs: [2, 3, 4, 5, 6], // assignment, rename, hide, source level, input mode
   general: [2, 3, 4, 6, 7, 10, 14], // language, ECO, zone 2 setup, zone rename, quick select names, display, usage data
   video: [3, 7, 8, 9, 11, 12, 13], // HDMI setup, OSD, 4K/8K format, TV format, HDCP, screensaver, upscaler
@@ -42,6 +42,7 @@ const ROOTS: Record<string, string[]> = {
   'speakers/5': ['List'],
   'speakers/6': ['Selection', 'All', 'Speaker'],
   'speakers/7': ['SubwooferMode', 'LPFforLFE'],
+  'speakers/8': ['FrontSpeaker'],
   'speakers/11': ['SpeakerPreset'],
   'inputs/2': ['HDMI', 'Digital', 'Analog', 'Video', 'InputMode'],
   'inputs/3': ['Source'],
@@ -88,6 +89,7 @@ export function validateWrite(section: string, type: number, xml: string, capDb:
   // Amp Assign re-routes the power amps: allow only the X1700H's Assign Mode values, nothing else on that page.
   if (section === 'speakers' && type === 2 && !/^<AmpAssign><AssignMode>(1|2|5|6|7|8|9|10|11)<\/AssignMode><\/AmpAssign>$/.test(xml.trim()))
     return 'only Assign Mode can be changed';
+  if (section === 'speakers' && type === 8 && !/^<FrontSpeaker>[123]<\/FrontSpeaker>$/.test(xml.trim())) return 'front speaker must be A, B or A+B';
   const pon = xml.match(/<(PowerOnLevel|PowerOnVolume)>(\d+)</);
   if (pon) {
     const n = Number(pon[2]);

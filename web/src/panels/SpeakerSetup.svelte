@@ -1,4 +1,5 @@
 <script>
+  import { untrack } from 'svelte';
   import { useSetup } from '../lib/useSetup.svelte.js';
   import { txt, editable } from '../lib/setup.js';
   import Seg from '../lib/Seg.svelte';
@@ -6,8 +7,10 @@
   import Slider from '../lib/Slider.svelte';
   import Panel from '../lib/Panel.svelte';
   import { remember } from '../lib/remember.js';
+  import { avr } from '../lib/avr.svelte.js';
+  import { AMP_MODES, presetName } from '../lib/speakerPresets.svelte.js';
+  import PresetPicker from '../lib/PresetPicker.svelte';
 
-  const preset = useSetup('speakers', 11, { reloadDelay: 5000 });
   const config = useSetup('speakers', 3);
   const dist = useSetup('speakers', 4);
   const levels = useSetup('speakers', 5);
@@ -19,9 +22,14 @@
   // config decides which speakers the other pages list. Re-read the affected pages after these changes, or
   // they keep showing the previous values.
   const reloadAll = (...pages) => Promise.all(pages.map((p) => p.reload()));
-  async function setPreset(v) {
-    if (await preset.write(`<SpeakerPreset>${v}</SpeakerPreset>`)) reloadAll(config, dist, levels, xo, bass);
-  }
+  // A speaker preset was applied (from any device): every page below changed.
+  const sp = $derived(avr.speakerPresets);
+  let seenRev = null;
+  $effect(() => {
+    const rev = sp?.rev;
+    if (seenRev !== null && rev !== seenRev && !sp?.busy) untrack(() => { levelEdits = {}; distEdits = {}; reloadAll(amp, config, dist, levels, xo, bass); });
+    if (!sp?.busy) seenRev = rev;
+  });
   async function setConfig(idx, value) {
     if (await config.write(`<Speaker index="${idx}">${value}</Speaker>`)) reloadAll(dist, levels, xo, bass);
   }
@@ -31,8 +39,6 @@
   const bassEditable = (tag) => editable(bass.doc?.querySelector(`:scope > ${tag}`));
 
   // Amp Assign: what the Surround Back / Height amp channels drive (manual p.187-188, AmpType 3 = 7ch).
-  const AMP_MODES = { 1: 'Surround Back', 5: 'Front Height', 8: 'Top Front', 9: 'Top Middle', 10: 'Front Dolby', 11: 'Surround Dolby',
-    2: 'Zone 2', 7: 'Bi-Amp', 6: 'Front B' };
   const ampMode = $derived(txt(amp.doc, 'AssignMode'));
   const ampSettable = $derived(txt(amp.doc, 'AmpType') === '3' && ampMode in AMP_MODES);
   let confirmAmp = $state(null);
@@ -133,12 +139,11 @@
 <Panel id="speaker-setup" title="Speaker setup">
   <p class="muted small" style="margin:-6px 0 6px">Levels and distances apply when you press Save; everything else applies right away.</p>
 
-  {#if preset.doc && preset.doc.textContent.trim() !== '0'}
-    <div class="setting stack">
-      <div><div class="label">Active speaker preset</div><div class="hint">Edits below save to the active preset</div></div>
-      <Seg value={preset.doc.textContent.trim()} disabled={preset.saving}
-        onchange={setPreset}
-        options={[{ value: '1', label: 'Preset 1' }, { value: '2', label: 'Preset 2' }]} />
+  {#if sp?.list.length}
+    <div class="setting">
+      <div><div class="label">Speaker preset</div><div class="hint">{sp.busy ? sp.busy.step + '…'
+        : sp.active ? `Edits below save to ${presetName(sp.active)}` : 'Edits below aren’t saved in a preset'}</div></div>
+      <PresetPicker />
     </div>
   {/if}
 

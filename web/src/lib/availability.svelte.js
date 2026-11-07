@@ -4,7 +4,7 @@
 //   audio/4  Surround parameters — display attributes per setting for the current mode / signal
 //   audio/1  Audio menu list — the display code is the element's text, e.g. <Restorer gray="3">2</Restorer>
 // display: 1 = not available, 2 = greyed (read-only), 3 = adjustable.
-// Re-read automatically when the sound mode, signal, input, power, Audyssey or Loudness Management change
+// Re-read automatically when the sound mode, signal, input, power, Audyssey, Loudness Management or speaker preset change
 // (Dynamic Compression is only adjustable while Loudness Management is on).
 
 import { avr } from './avr.svelte.js';
@@ -59,7 +59,9 @@ export function useAvailability() {
   $effect(() => {
     const st = avr.state;
     if (!st) return;
-    const key = [st.zoneMain, st.source, st.surround, st.decoder, st.signal, st.ps?.MULTEQ, st.ps?.DYNEQ, st.ps?.LOM].join('|');
+    // speaker preset: each slot has its own Audyssey calibration
+    const key = [st.zoneMain, st.source, st.surround, st.decoder, st.signal, st.ps?.MULTEQ, st.ps?.DYNEQ, st.ps?.LOM,
+      st.speakerPreset, avr.speakerPresets?.rev].join('|');
     if (key !== lastKey) {
       if (lastKey) schedule();
       lastKey = key;
