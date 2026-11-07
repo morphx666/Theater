@@ -76,9 +76,10 @@
 
 <style>
   .sig { display: grid; gap: 14px; container-type: inline-size; }
-  .block { display: grid; gap: 10px; min-width: 0; border-top: 1px solid var(--line); padding-top: 12px; }
+  .block { display: grid; gap: 10px; min-width: 0; }
   .head { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; font-weight: 650;
     letter-spacing: 0.08em; text-transform: uppercase; }
+  .head::after { content: ''; flex: 1; height: 1px; margin-left: 4px; background: var(--line); }
   .none { margin: 0; color: var(--faint); font-size: 12.5px; }
   .k { color: var(--faint); font-size: 10.5px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; }
 
