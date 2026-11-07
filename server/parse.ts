@@ -135,20 +135,6 @@ function pick(st: AvrState, l: string): unknown {
   }
 }
 
-// SYSMI spaces out every "+" ("Dolby Audio - DD + + Neural:X"). Attach each lone "+" to its word the
-// way the MS code does ("DD+ +NEURAL:X"): to the next word, unless another "+" or the end follows.
-export function tightenPlus(s: string): string {
-  const t = s.split(/\s+/);
-  const out: string[] = [];
-  for (let i = 0; i < t.length; i++) {
-    if (t[i] !== '+') out.push(t[i]);
-    else if (i + 1 < t.length && t[i + 1] !== '+') t[i + 1] = '+' + t[i + 1];
-    else if (out.length) out[out.length - 1] += '+';
-    else out.push('+');
-  }
-  return out.join(' ');
-}
-
 // Per-state bookkeeping for the CV? reply currently being received (not part of the broadcast state).
 const cvBatch = new WeakMap<AvrState, { open: boolean; list: string[] }>();
 
@@ -162,7 +148,7 @@ function applyInner(st: AvrState, l: string): void {
   if (l.startsWith('MSQUICK')) { const n = Number(l.slice(7).trim()); if (!Number.isNaN(n)) st.quick = n; return; }
   if (l.startsWith('MS')) { st.surround = l.slice(2).trim(); return; }
   if (l.startsWith('SI')) { st.source = l.slice(2).trim(); return; }
-  if (l.startsWith('SYSMI')) { st.soundModeText = tightenPlus(l.slice(5).trim()); return; }
+  if (l.startsWith('SYSMI')) { st.soundModeText = l.slice(5).trim(); return; }
   if (l.startsWith('SYSDA')) { st.decoder = l.slice(5).trim(); return; }
   if (l.startsWith('SYSDV')) { // SYSDVIN 4K24 / SYSDVOUT 4K24 / SYSDV END
     const m = l.match(/^SYSDV(IN|OUT) (.*)$/);

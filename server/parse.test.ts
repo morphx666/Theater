@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyLine, emptyState, volToDb, dbToVol, levelToDb, dbToLevel, REFRESH_QUERIES, tightenPlus } from './parse.ts';
+import { applyLine, emptyState, volToDb, dbToVol, levelToDb, dbToLevel, REFRESH_QUERIES } from './parse.ts';
 import { guard, effectiveCap, quickRecallCorrection } from './guard.ts';
 
 // Real lines captured from the X1700H.
@@ -87,17 +87,6 @@ test('NON audio info means unknown', () => {
   applyLine(st, 'SSINFAISFSV 48K');
   applyLine(st, 'SSINFAISFSV NON');
   assert.equal(st.sampleRate, null);
-});
-
-test('sound mode text keeps "+" next to its word', () => {
-  assert.equal(tightenPlus('Dolby Audio - DD + + Neural:X'), 'Dolby Audio - DD+ +Neural:X');
-  assert.equal(tightenPlus('Dolby Audio - DD+'), 'Dolby Audio - DD+');
-  assert.equal(tightenPlus('Dolby Audio - DD +'), 'Dolby Audio - DD+');
-  assert.equal(tightenPlus('DTS + Neural:X'), 'DTS +Neural:X');
-  assert.equal(tightenPlus('Dolby Audio - Dolby Surround'), 'Dolby Audio - Dolby Surround');
-  const st = emptyState();
-  applyLine(st, 'SYSMI Dolby Audio - DD + + Neural:X');
-  assert.equal(st.soundModeText, 'Dolby Audio - DD+ +Neural:X');
 });
 
 test('change detection', () => {
