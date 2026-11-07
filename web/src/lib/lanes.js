@@ -17,6 +17,22 @@ const EASING = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
 
 const reducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+// Lifts a child above the others for the duration of an animation. Only the animation that set the
+// z-index may clear it: a cancelled animation reports "cancel" a moment later, by which time a newer
+// animation may own the element, and clearing then would drop a moving panel behind its neighbours.
+const zOwner = new WeakMap();
+export function raise(el, anim, z) {
+  el.style.zIndex = String(z);
+  zOwner.set(el, anim);
+  const done = () => {
+    if (zOwner.get(el) !== anim) return;
+    zOwner.delete(el);
+    el.style.zIndex = '';
+  };
+  anim.addEventListener('finish', done);
+  anim.addEventListener('cancel', done);
+}
+
 export function lanes(node, opts = {}) {
   let { min = 340, gap = 16, animate = false, hints = null, spans = null } = opts;
   let raf = 0;
@@ -56,16 +72,15 @@ export function lanes(node, opts = {}) {
       const dx = a.left - b.left;
       const dy = a.top - b.top;
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
-      moving.push({ c, dx, dy, dist: Math.hypot(dx, dy) });
+      moving.push({ c, dx, dy });
     }
-    // Draw the panel the user is moving (class "active") on top, then the ones that travel furthest.
-    const rank = (m) => (m.c.classList.contains('active') ? 1e9 : 0) + m.dist;
-    moving.sort((x, y) => rank(x) - rank(y)).forEach(({ c, dx, dy }, i) => {
+    // Moving panels go above the idle ones, and the panel the user moved (class "active") above those.
+    // The levels are fixed (not ranked by distance), so overlapping panels never swap places mid-flight.
+    for (const { c, dx, dy } of moving) {
       c.style.position = 'relative';
-      c.style.zIndex = String(i + 1);
       const anim = c.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: DURATION, easing: EASING });
-      anim.onfinish = anim.oncancel = () => { c.style.zIndex = ''; };
-    });
+      raise(c, anim, c.classList.contains('active') ? 2 : 1);
+    }
   }
 
   // ---- native grid-lanes ----

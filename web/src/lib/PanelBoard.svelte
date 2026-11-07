@@ -1,12 +1,12 @@
 <script>
   // A customizable board of panels (used by every page).
   // "Customize" mode: drag the grip (mouse or touch) to move a panel anywhere; arrows move it within/between
-  // columns; the width button makes it 1-3 columns wide; ✕ removes it (Home only).
+  // columns; the width menu makes it 1-3 columns wide; ✕ removes it (Home only).
   // The layout (order, start column, width) is saved per page on the server.
   import { PANELS, SECTION_LABELS } from '../panels/index.js';
   import { getLayout, saveLayout, resetLayout, ui, panelOption, panelChoice, setPanelOption } from './layout.svelte.js';
   import Icon from './Icon.svelte';
-  import { lanes } from './lanes.js';
+  import { lanes, raise } from './lanes.js';
 
   /**
    * page: layout key. ids: the panels to show, in default order.
@@ -74,11 +74,10 @@
     follow();
   }
 
-  // ---- width: 1× → 2× → 3× (up to the number of columns on screen) ----
-  function cycleSpan(id) {
+  // ---- width: 1× to 3× (up to the number of columns on screen) ----
+  function setSpan(id, next) {
     lastMoved = id;
-    const cur = spanMap[id] ?? 1;
-    const next = cur >= cols ? 1 : cur + 1;
+    if (!(next >= 1 && next <= cols) || next === (spanMap[id] ?? 1)) return;
     const l = currentLanes();
     l[id] = Math.min(l[id] ?? 0, cols - next); // keep it on screen
     setHome([...saved], l, { ...savedSpans, [id]: next });
@@ -118,7 +117,9 @@
   let scrollSpeed = 0, scrollRaf = 0, lastPt = null;
   function autoScroll() {
     if (!dragId || !scrollSpeed) { scrollRaf = 0; return; }
-    window.scrollBy(0, scrollSpeed);
+    // Down only while the panels' real bottom is still below the window: the lifted panel's transform
+    // also stretches the page, so without this it would keep scrolling, then jump back on drop.
+    if (scrollSpeed < 0 || grid.getBoundingClientRect().bottom > innerHeight - 24) window.scrollBy(0, scrollSpeed);
     if (lastPt) dragMove(lastPt);
     scrollRaf = requestAnimationFrame(autoScroll);
   }
@@ -210,10 +211,8 @@
       const from = dragEl.style.transform;
       dragEl.style.transform = '';
       if (from && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        dragEl.style.zIndex = '50';
-        const el = dragEl;
-        const a = el.animate([{ transform: from }, { transform: 'none' }], { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
-        a.onfinish = a.oncancel = () => { el.style.zIndex = ''; };
+        const a = dragEl.animate([{ transform: from }, { transform: 'none' }], { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+        raise(dragEl, a, 2); // stays on top while it settles, even if the layout takes over the glide
       }
       dragEl = null;
     }
@@ -261,10 +260,15 @@
               <button class="btn icon sm ghost" aria-label="Move {p.title} to the right column" disabled={!canNudge(id, 'right')} onclick={() => nudge(id, 'right')}><Icon name="right" size={16} /></button>
             {/if}
           {#if cols > 1}
-            <button class="btn sm ghost width" aria-label="Width of {p.title}: {spanMap[id] ?? 1} column(s). Click to change"
-              title="Width: {spanMap[id] ?? 1}× (click to change)" onclick={() => cycleSpan(id)}>
-              <Icon name="width" size={15} />{spanMap[id] ?? 1}×
-            </button>
+            <label class="width" title="Width in columns">
+              <Icon name="width" size={15} />
+              <select aria-label="Width of {p.title}, in columns" value={String(spanMap[id] ?? 1)}
+                onchange={(e) => setSpan(id, Number(e.currentTarget.value))}>
+                {#each Array.from({ length: cols }, (_, k) => k + 1) as n (n)}
+                  <option value={String(n)}>{n}×</option>
+                {/each}
+              </select>
+            </label>
           {/if}
           {#if pinned}
             <button class="btn icon sm ghost danger" aria-label="Unpin {p.title}" onclick={() => onremove?.(id)}><Icon name="x" size={16} /></button>
@@ -306,10 +310,12 @@
   .bar .muted { display: inline-flex; align-items: center; gap: 4px; }
   .panels { position: relative; } /* offsetParent for slotAt() */
   .panels.editing { margin-top: 26px; }
-  .slot { min-width: 0; position: relative; }
+  /* z-index 0: every slot is its own layer, so a panel's floating toolbar moves with it and never
+     shows through a panel animating past (moving panels are raised to 1-2, the dragged one to 50) */
+  .slot { min-width: 0; position: relative; z-index: 0; }
   .slot.wide { grid-column: 1 / -1; }
   .editing .slot { outline: 2px dashed color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 4px; border-radius: var(--radius); background: var(--bg); }
-  .slot.dragging { z-index: 50; box-shadow: 0 28px 60px -18px rgb(0 0 0 / 0.75); outline-style: solid !important; }
+  .slot.dragging { z-index: 50 !important; box-shadow: 0 28px 60px -18px rgb(0 0 0 / 0.75); outline-style: solid !important; }
   :global(body.grabbing), :global(body.grabbing *) { cursor: grabbing !important; user-select: none; }
   .editing .content { pointer-events: none; user-select: none; }
   /* Floating toolbar over the panel's header: adds no height, so the layout while editing is exactly
@@ -337,5 +343,10 @@
   }
   .grip:active { cursor: grabbing; color: var(--accent); }
   .sm { width: 30px; min-height: 30px; height: 30px; border-radius: 8px; }
-  .width { width: auto; padding: 0 7px; gap: 4px; font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .width { display: inline-flex; align-items: center; gap: 2px; height: 30px; padding-left: 7px; border-radius: 8px;
+    color: var(--muted); cursor: pointer; }
+  .width:hover { color: var(--text); background: var(--card-2); }
+  .width select { width: auto; min-height: 0; height: 30px; padding: 0 4px; border: 0; background: transparent; cursor: pointer;
+    font-size: 12.5px; font-weight: 650; font-variant-numeric: tabular-nums; color: inherit; }
+  .width option { background: var(--card-2); color: var(--text); }
 </style>
