@@ -75,7 +75,7 @@
 </div>
 
 <style>
-  .sig { display: grid; gap: 14px; container-type: inline-size; }
+  .sig { --arrow: #6f5223; display: grid; gap: 14px; container-type: inline-size; }
   .block { display: grid; gap: 10px; min-width: 0; }
   .head { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; font-weight: 650;
     letter-spacing: 0.08em; text-transform: uppercase; }
@@ -91,7 +91,7 @@
   .b1, .b2, .b3 { justify-self: start; }
   .a1 { grid-area: 1 / 1; } .a2 { grid-area: 2 / 1; } .a3 { grid-area: 3 / 1; }
   .b1 { grid-area: 1 / 3; } .b2 { grid-area: 2 / 3; } .b3 { grid-area: 3 / 3; }
-  .arrow { grid-area: 2 / 2; align-self: center; justify-self: center; display: grid; place-items: center; color: var(--blue); }
+  .arrow { grid-area: 2 / 2; align-self: center; justify-self: center; display: grid; place-items: center; color: var(--arrow); }
   .d { font-size: 12.5px; line-height: 1.35; overflow-wrap: anywhere; }
   .d:empty { display: none; }
   .nw { white-space: nowrap; }
@@ -114,6 +114,6 @@
   .in { display: flex; justify-content: space-between; gap: 10px; min-width: 0; }
   .lbl { color: var(--muted); white-space: nowrap; }
   .v { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  .to { display: grid; place-items: center; color: var(--blue); }
+  .to { display: grid; place-items: center; color: var(--arrow); }
   .v.conv { color: var(--accent); }
 </style>
