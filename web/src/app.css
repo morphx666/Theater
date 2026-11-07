@@ -65,7 +65,7 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: 
   padding: 18px;
   box-shadow: var(--shadow);
 }
-.card > h2 { margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.card > h2, .card > .sz > h2 { margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 
 .grid { display: grid; gap: 16px; }
 .row { display: flex; align-items: center; gap: 10px; }
