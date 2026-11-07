@@ -1,8 +1,10 @@
 # Theater setup for Windows.
-#   powershell -ExecutionPolicy Bypass -File .\setup.ps1
-# Checks Node.js, installs and builds the app, finds your receiver, writes .env, and can make Theater start
-# automatically when you sign in. Run it again after `git pull` to update: it keeps your settings and restarts Theater.
+#   powershell -ExecutionPolicy Bypass -File .\setup.ps1 [-NoUpdate]
+# Updates the app with git (unless -NoUpdate), checks Node.js, installs and builds the app, finds your receiver,
+# writes .env, and can make Theater start automatically when you sign in. Run it again to update: it keeps your
+# settings and restarts Theater.
 # (Plain ASCII and Windows PowerShell 5.1 syntax on purpose, so it runs on any Windows 10/11.)
+param([switch]$NoUpdate)
 
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -44,6 +46,45 @@ function StopTheater {
   Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" |
     Where-Object { $_.CommandLine -and $_.CommandLine.Contains($Server) } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+}
+
+# ---------- update ----------
+# Fast-forward only, so local edits and commits are never merged or overwritten. After an update, the new
+# setup.ps1 runs in place of this one (THEATER_UPDATED stops it from updating again).
+if (-not $NoUpdate -and -not $env:THEATER_UPDATED) {
+  Title 'Update'
+  if (-not (Test-Path (Join-Path $AppDir '.git'))) {
+    Write-Host "  This copy wasn't downloaded with git, so setup can't update it. Installing it as it is."
+  } elseif (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    Write-Host "  Git isn't installed, so setup can't check for updates. Installing this version."
+  } else {
+    $branchRef = & git symbolic-ref -q HEAD
+    $upstream = if ($branchRef) { & git for-each-ref --format='%(upstream:short)' $branchRef } else { '' }
+    $old = & git rev-parse --short HEAD
+    if (-not $upstream) {
+      Write-Host "  This copy isn't on a branch that follows GitHub, so setup didn't update it."
+    } else {
+      $env:GIT_TERMINAL_PROMPT = '0'
+      & git fetch --quiet
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "  Couldn't check for updates (no connection?). Installing the version you have."
+      } else {
+        & git merge --ff-only --quiet $upstream
+        $merged = $LASTEXITCODE -eq 0
+        $new = & git rev-parse --short HEAD
+        if (-not $merged) {
+          Write-Host "  Couldn't update without touching your local changes. Installing the version you have."
+        } elseif ($new -eq $old) {
+          Write-Host "  Already up to date ($old)."
+        } else {
+          Write-Host "  Updated $old -> $new."
+          $env:THEATER_UPDATED = '1'
+          & (Get-Process -Id $PID).Path -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath
+          exit $LASTEXITCODE
+        }
+      }
+    }
+  }
 }
 
 # ---------- Node.js ----------

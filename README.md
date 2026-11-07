@@ -79,12 +79,13 @@ To use it like an app on a phone, choose **Share → Add to Home Screen** (iOS) 
 
 ## Updating
 
+Run the setup script again:
+
 ```bash
-git pull
 ./setup.sh      # on Windows: powershell -ExecutionPolicy Bypass -File .\setup.ps1
 ```
 
-The setup script keeps your settings, rebuilds the app and restarts Theater. Your layouts and options in `data/` are kept too. If you set Theater up by hand, see [Updating a manual setup](docs/MANUAL-SETUP.md#updating-a-manual-setup).
+The setup script downloads the latest version with git, keeps your settings, rebuilds the app and restarts Theater. If the update would overwrite changes you made to the app's files, it skips the update and installs the version you have. To reinstall without updating, add `--no-update` (on Windows, `-NoUpdate`). Your layouts and options in `data/` are kept too. If you set Theater up by hand, see [Updating a manual setup](docs/MANUAL-SETUP.md#updating-a-manual-setup).
 
 ## Safety
 

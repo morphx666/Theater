@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Theater setup for Linux (including Raspberry Pi) and macOS.
-#   ./setup.sh
-# Checks Node.js, installs and builds the app, finds your receiver, writes .env, and can make Theater start
-# automatically. Run it again after `git pull` to update: it keeps your settings and restarts Theater.
+#   ./setup.sh [--no-update]
+# Updates the app with git (unless --no-update), checks Node.js, installs and builds the app, finds your receiver,
+# writes .env, and can make Theater start automatically. Run it again to update: it keeps your settings and
+# restarts Theater.
 set -euo pipefail
 cd "$(dirname "$0")"
 APP_DIR="$(pwd -P)"
@@ -58,6 +59,43 @@ install_node_linux() { # Node 22 in /opt/node22, next to (not instead of) any ex
 if [ "$(id -u)" = 0 ]; then
   echo "Please run ./setup.sh as your normal user, without sudo. It asks for your password when it needs it."
   exit 1
+fi
+
+NO_UPDATE=""
+for arg in "$@"; do
+  case "$arg" in
+    --no-update) NO_UPDATE=1 ;;
+    *) echo "Unknown option: $arg (the only option is --no-update)"; exit 1 ;;
+  esac
+done
+
+# ---------- update ----------
+# Fast-forward only, so local edits and commits are never merged or overwritten. After an update, the new
+# setup.sh runs in place of this one (THEATER_UPDATED stops it from updating again).
+if [ -z "$NO_UPDATE" ] && [ -z "${THEATER_UPDATED:-}" ]; then
+  title "Update"
+  if [ ! -e .git ]; then
+    echo "  This copy wasn't downloaded with git, so setup can't update it. Installing it as it is."
+  elif ! command -v git >/dev/null 2>&1; then
+    echo "  Git isn't installed, so setup can't check for updates. Installing this version."
+  else
+    BRANCH_REF="$(git symbolic-ref -q HEAD || true)"
+    UPSTREAM=""
+    [ -n "$BRANCH_REF" ] && UPSTREAM="$(git for-each-ref --format='%(upstream:short)' "$BRANCH_REF")"
+    OLD="$(git rev-parse --short HEAD)"
+    if [ -z "$UPSTREAM" ]; then
+      echo "  This copy isn't on a branch that follows GitHub, so setup didn't update it."
+    elif ! GIT_TERMINAL_PROMPT=0 git fetch --quiet; then
+      echo "  Couldn't check for updates (no connection?). Installing the version you have."
+    elif ! git merge --ff-only --quiet "$UPSTREAM"; then
+      echo "  Couldn't update without touching your local changes. Installing the version you have."
+    elif [ "$(git rev-parse --short HEAD)" = "$OLD" ]; then
+      echo "  Already up to date ($OLD)."
+    else
+      echo "  Updated $OLD -> $(git rev-parse --short HEAD)."
+      THEATER_UPDATED=1 exec bash "$APP_DIR/setup.sh" "$@"
+    fi
+  fi
 fi
 
 # ---------- Node.js ----------
