@@ -25,7 +25,6 @@
     .map(([n, p]) => ({ n, ...p, empty: skipped.has(n) })));
   const used = $derived(presets.filter((p) => !p.empty));
   // Preset(s) already holding the current station
-  const here = $derived(used.filter((p) => p.freq === st.tuner?.freq).map((p) => p.n));
 
   let open = $state(false); // presets list expanded
   let mode = $state('listen'); // listen | save | manage
@@ -88,8 +87,6 @@
   <div class="tuner" class:dim={!active}>
     <TunerDial freq={st.tuner?.freq} band={st.tuner?.band} disabled={!active} color={panelChoice('tuner', 'dialColor', 'green')}
       ontune={(raw, b) => send(b !== st.tuner?.band ? ['TMAN' + b, 'TFAN' + raw] : 'TFAN' + raw)} />
-    <div class="faint small sub">{freq} · {st.tuner?.band ?? ''}{here.length ? ` · preset ${here.map(Number).join(', ')}` : ''}
-      {#if active}<span class="tip">· tap the dial to type, drag to tune</span>{/if}</div>
   </div>
   <div class="row keys">
     <button class="btn grow" disabled={!active} onclick={() => send('TFANDOWN')}><Icon name="left" />Tune</button>
@@ -182,8 +179,6 @@
 <style>
   .keys { margin-top: 8px; }
   .tuner { text-align: center; padding: 4px 0 10px; }
-  .sub { margin-top: 6px; }
-  .tip { opacity: 0.8; }
   .notice { margin: 0 0 6px; text-align: center; }
   details { margin-top: 12px; }
   summary { cursor: pointer; font-weight: 600; padding: 4px 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
