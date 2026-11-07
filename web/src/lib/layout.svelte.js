@@ -5,7 +5,7 @@ import { avr, api, toast } from './avr.svelte.js';
 
 export const DEFAULT_HOME = ['status', 'volume', 'inputs', 'sound-mode', 'quick-select', 'favorites'];
 
-export const ui = $state({ editing: false });
+export const ui = $state({ editing: false, setupTab: 'inputs' }); // setupTab: also set by #setup/<tab> links
 
 // While a change is being saved, show the local version: a routine state broadcast from the server can
 // still carry the previous layout and would otherwise make panels jump back and forth.

@@ -10,6 +10,7 @@
   let { id, title = '', actions = null, children, needsPower = false, hero = false, class: cls = '' } = $props();
 
   const onHome = getContext('home') ?? false;
+  const link = getContext('panelLink')?.(id) ?? null; // on Home: where this panel lives
   const off = $derived(needsPower && avr.state?.zoneMain !== true);
   const pinned = $derived(isPinned(id));
 </script>
@@ -18,7 +19,8 @@
   <div class="sz">
     {#if title}
       <h2>
-        <span class="t">{title}</span>
+        <span class="t">{title}{#if link}<a class="go" href={link.href} title="Open {link.label}"
+          aria-label="Open {title} in {link.label}"><Icon name="link" size={13} /></a>{/if}</span>
         <span class="acts">
           {#if actions && !off}{@render actions()}{/if}
           {#if !onHome}
@@ -44,6 +46,12 @@
   .panel { position: relative; min-width: 0; }
   .sz { display: flow-root; } /* contains child margins, so its height is the content's full height */
   h2 .t { flex: 1; min-width: 0; }
+  /* link to the panel's page: shown while hovering the title (always, faintly, on touch screens) */
+  .go { display: inline-grid; place-items: center; width: 22px; height: 22px; margin: -4px 0 -4px 4px; vertical-align: middle;
+    border-radius: 6px; color: var(--faint); opacity: 0; transition: opacity 0.15s, color 0.15s, background 0.15s; }
+  h2:hover .go, .go:focus-visible { opacity: 1; }
+  .go:hover { color: var(--accent); background: var(--card-2); }
+  @media (hover: none) { .go { opacity: 0.6; } }
   .acts { display: inline-flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-weight: 500; }
   .pin {
     width: 30px; height: 30px; border-radius: 50%; border: 1px solid transparent; background: none; color: var(--faint);

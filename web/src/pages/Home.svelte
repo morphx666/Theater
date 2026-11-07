@@ -7,6 +7,12 @@
   import PanelBoard from '../lib/PanelBoard.svelte';
 
   setContext('home', true); // panels hide their own pin buttons here
+  // Panels show a link next to their title to the page they live on (with the Setup tab, if any).
+  setContext('panelLink', (id) => {
+    const p = PANELS[id];
+    if (!p || p.section === 'home') return null;
+    return { href: `#${p.section}${p.section === 'setup' && p.tab ? '/' + p.tab : ''}`, label: SECTION_LABELS[p.section] };
+  });
 
   const pinned = $derived(homeIds().filter((id) => PANELS[id]));
   let adding = $state(false);

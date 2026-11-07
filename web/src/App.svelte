@@ -18,10 +18,16 @@
     { id: 'setup', label: 'Setup', icon: 'gear', comp: Setup },
   ];
 
-  let page = $state(location.hash.slice(1) || 'home');
+  // #<page>, or #setup/<tab> to open a Setup tab (used by the links on Home panels).
+  function fromHash() {
+    const [p, sub] = (location.hash.slice(1) || 'home').split('/');
+    if (p === 'setup' && sub) ui.setupTab = sub;
+    return p;
+  }
+  let page = $state(fromHash());
   const Current = $derived(PAGES.find((p) => p.id === page)?.comp ?? Home);
   $effect(() => { history.replaceState(null, '', '#' + page); if (page !== 'home') ui.editing = false; });
-  window.addEventListener('hashchange', () => (page = location.hash.slice(1) || 'home'));
+  window.addEventListener('hashchange', () => (page = fromHash()));
 
   connect();
 

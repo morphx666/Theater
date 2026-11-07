@@ -1,13 +1,14 @@
 <script>
   import Section from './Section.svelte';
+  import { ui } from '../lib/layout.svelte.js';
 
   const TABS = [['inputs', 'Inputs'], ['audio', 'Audio & Volume'], ['network', 'Network'], ['general', 'General'], ['app', 'App & Info']];
-  let tab = $state('inputs');
+  const tab = $derived(TABS.some(([id]) => id === ui.setupTab) ? ui.setupTab : 'inputs');
 </script>
 
 <div class="seg tabs" role="tablist">
   {#each TABS as [id, label]}
-    <button role="tab" class:on={tab === id} aria-selected={tab === id} onclick={() => (tab = id)}>{label}</button>
+    <button role="tab" class:on={tab === id} aria-selected={tab === id} onclick={() => (ui.setupTab = id)}>{label}</button>
   {/each}
 </div>
 
