@@ -57,7 +57,7 @@
 </script>
 
 <Panel id="speaker-preset-manager" title="Speaker preset manager">
-  <p class="muted small intro">Each preset uses the Audyssey calibration from receiver slot 1 or 2. Edits save to the active preset.</p>
+  <p class="muted small intro">Tap a preset to rename or delete it. Each one uses the Audyssey calibration from receiver slot 1 or 2.</p>
 
   {#if sp?.supported === false}
     <p class="muted small">This receiver doesn't have speaker presets.</p>
@@ -72,6 +72,7 @@
             {#if sp.busy?.id === p.id}<span class="badge">{sp.busy.step}…</span>
             {:else if sp.incomplete === p.id}<span class="badge bad">Incomplete</span>
             {:else if active}<span class="badge">Active</span>{/if}
+            <span class="ed" aria-hidden="true"><Icon name={editing === p.id ? 'x' : 'edit'} size={15} /></span>
           </button>
           {#if editing === p.id && editP}
             <div class="edit">
@@ -129,13 +130,15 @@
   .item { border: 1px solid var(--line); border-radius: 12px; background: var(--card-2); }
   .item.sel { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
   .head {
-    display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 10px; width: 100%; padding: 10px 12px;
+    display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 2px 10px; width: 100%; padding: 10px 12px;
     background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
   }
   .nm { font-weight: 600; overflow-wrap: anywhere; }
   .meta { grid-row: 2; font-size: 12.5px; color: var(--muted); }
   .badge { grid-row: 1 / span 2; grid-column: 2; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
   .badge.bad { color: var(--bad); }
+  .ed { grid-row: 1 / span 2; grid-column: 3; display: grid; place-items: center; color: var(--faint); }
+  .head:hover .ed, .item.sel .ed { color: var(--text); }
   .edit, .new { display: grid; gap: 10px; padding: 0 12px 12px; }
   .new { padding: 12px; margin-top: 10px; border: 1px solid var(--line); border-radius: 12px; }
   .edit .row input, .new > input { flex: 1; min-width: 0; }
