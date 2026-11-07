@@ -85,6 +85,11 @@ else meanwhile, so the app queries these over telnet instead. `SSINFSIG ?` alone
 The COS/PIX codes are undocumented: the app ships with the confirmed ones and learns new ones by reading the
 Information page once (at most every 10 min) and saving them to `data/signal-codes.json`.
 `GetVideoInfo` on `AppCommand0300.xml` also works (params `videooutput`, `hdmisigin`, `hdmisigout`; resolution only).
+`GetInputSignal` (param `inputsigall`) and `GetActiveSpeaker` (param `activespall`) on `AppCommand0300.xml` return
+the receiver's on-screen info bar: a 5x4 grid each, `<param name="inputsigb2" control="2">FL</param>` = column b,
+row 2. `control` 0 = empty cell, 1 = shown but not in the signal, 2 = active. Both fit in one request.
+`GetAudioInfo` takes `inputmode`, `output`, `signal`, `sound`, `fs` (padded text). The app reads the grids in
+[audio-map.ts](../server/audio-map.ts).
 Unprompted info lines are also pushed: `SYSMI <sound mode text>`, `SYSDA <decoded format>`, `SSINFAISSIG <signal>`,
 `OPINFASP <active speaker map>`, `OPINFINS ...`.
 

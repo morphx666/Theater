@@ -35,7 +35,7 @@ The receiver has four interfaces, and the server uses all of them ([docs/PROTOCO
 | Port | Module | Role |
 |---|---|---|
 | telnet 23 | [telnet.ts](server/telnet.ts) | One persistent connection. The receiver pushes every state change. Commands go through a paced queue with an 80 ms gap; duplicate queries and stale absolute-volume sets are collapsed. While telnet is down, commands are sent over HTTP 8080. |
-| HTTP 8080 | [http-status.ts](server/http-status.ts), [tuner-presets.ts](server/tuner-presets.ts) | Status polling when telnet is unavailable (`AppCommand.xml`; the body must be newline-separated XML). Also handles tuner preset names and skips. |
+| HTTP 8080 | [http-status.ts](server/http-status.ts), [tuner-presets.ts](server/tuner-presets.ts), [audio-map.ts](server/audio-map.ts) | Status polling when telnet is unavailable (`AppCommand.xml`; the body must be newline-separated XML). Also handles tuner preset names and skips, and the input-channel / active-speaker grids for the Status panel's signal view (`AppCommand0300.xml`). |
 | HTTPS 10443 | [setup.ts](server/setup.ts) | Guarded proxy to the receiver's setup API (`/ajax/<section>/get_config\|set_config?type=N`). Requests run one at a time. |
 | HEOS 1255 | [heos.ts](server/heos.ts) | Now playing, album art, transport, and favorites. |
 

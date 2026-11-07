@@ -13,6 +13,7 @@ import { applyLine, emptyState, REFRESH_QUERIES, POWER_ON_QUERIES, SIGNAL_QUERIE
 import { decodeVideo, learnFromInformation, loadCodes, saveCodes } from './signal.ts';
 import { guard, effectiveCap, quickRecallCorrection } from './guard.ts';
 import { pollAsTelnetLines } from './http-status.ts';
+import { fetchAudioMap, type AudioMap } from './audio-map.ts';
 import { TunerPresets, PRESET_COUNT, pad, validPreset, validName } from './tuner-presets.ts';
 import { SpeakerPresets, PresetError } from './speaker-presets.ts';
 
@@ -183,7 +184,29 @@ function maybeLearnCodes() {
     }
   }, 4000); // let the signal settle first
 }
+// ---------- audio channel map (input signal channels / active speakers) ----------
+let audioMap: AudioMap = null;
+let mapTimer: NodeJS.Timeout | undefined;
+let mapBusy = false;
+function queryAudioMap(delay = 800) {
+  clearTimeout(mapTimer);
+  mapTimer = setTimeout(async () => {
+    if (state.zoneMain !== true) {
+      if (audioMap) { audioMap = null; scheduleBroadcast(); }
+      return;
+    }
+    if (mapBusy) return queryAudioMap(500);
+    mapBusy = true;
+    try {
+      const m = await fetchAudioMap(HOST);
+      if (JSON.stringify(m) !== JSON.stringify(audioMap)) { audioMap = m; scheduleBroadcast(); }
+    } catch { /* keep the last map; the next trigger or poll retries */ } finally {
+      mapBusy = false;
+    }
+  }, delay);
+}
 // Light polling while someone is looking (the receiver doesn't announce every video change).
+setInterval(() => { if (state.zoneMain && wss.clients.size) queryAudioMap(0); }, 10_000);
 setInterval(() => { if (conn.telnet && state.zoneMain && wss.clients.size) telnet.sendMany(SIGNAL_QUERIES); }, 10_000);
 
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -238,6 +261,8 @@ telnet.on('line', (line: string) => {
     clearTimeout(cvTimer);
     cvTimer = setTimeout(() => telnet.send('CV?'), 700);
   }
+  // Input channels and active speakers follow the power, input, format, sound mode and speaker setup.
+  if (/^(ZM(ON|OFF)|SI|MS(?!QUICK)|SYSDA|SSINFAIS(FOR|SIG)|SPPR|OPINF|PSSWR|PSNEURAL)/.test(line)) queryAudioMap();
   broadcastRaw(line);
 });
 
@@ -267,7 +292,7 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 function snapshot() {
   return {
     type: 'state',
-    state: { ...state, videoInfo: decodeVideo(state.video, signalCodes) },
+    state: { ...state, videoInfo: decodeVideo(state.video, signalCodes), audioMap },
     nowPlaying: heos.now ?? emptyNowPlaying(),
     progress,
     conn,
@@ -322,6 +347,7 @@ const clientName = (ws: WebSocket) => clientNames.get(ws) ?? 'ws';
 wss.on('connection', (ws, req) => {
   clientNames.set(ws, String(req.socket.remoteAddress ?? 'ws').replace(/^::ffff:/, ''));
   ws.send(JSON.stringify(snapshot()));
+  if (!audioMap && state.zoneMain) queryAudioMap(0); // nobody was watching, so it may never have been read
   ws.on('close', () => rawSubscribers.delete(ws));
   ws.on('message', async (data) => {
     let msg: any;

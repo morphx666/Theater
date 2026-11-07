@@ -3,10 +3,16 @@
   import Icon from '../lib/Icon.svelte';
   import Panel from '../lib/Panel.svelte';
   import NowPlaying from '../lib/NowPlaying.svelte';
+  import SignalView from '../lib/SignalView.svelte';
+  import { loadOpen, saveOpen } from '../lib/remember.js';
 
   const st = $derived(avr.state);
   const on = $derived(st?.zoneMain === true);
   const current = $derived(st.inputs[st.source]?.name ?? st.source);
+
+  // Summary chips or the signal flow view; remembered per device.
+  let signal = $state(loadOpen('status.signal', false));
+  function toggleView() { signal = !signal; saveOpen('status.signal', signal); }
 
   // Speaker layout like "5.1.2" from active channel levels
   const layout = $derived.by(() => {
@@ -37,8 +43,19 @@
 <Panel id="status" hero>
   <div class="np-wrap">
     <div>
-      <div class="src" title={on ? current : ''}>{on ? current : 'Standby'}</div>
-      {#if on}
+      <div class="top">
+        <div class="src" title={on ? current : ''}>{on ? current : 'Standby'}</div>
+        {#if on}
+          <button class="view" class:on={signal} onclick={toggleView} aria-pressed={signal}
+            title={signal ? 'Show summary' : 'Show signal flow'} aria-label="Signal flow view"><Icon name="flow" size={16} /></button>
+        {/if}
+      </div>
+      {#if on && signal}
+        <div class="chips">
+          <div class="line"><span class="pill accent mode" title={st.soundModeText ?? ''}><Icon name="wave" size={14} /><span class="txt">{st.soundModeText ?? '—'}</span></span></div>
+        </div>
+        <div class="flowview"><SignalView /></div>
+      {:else if on}
         <!-- Fixed two-line layout so the panel never changes height with the text length -->
         <div class="chips">
           <div class="line"><span class="pill accent mode" title={st.soundModeText ?? ''}><Icon name="wave" size={14} /><span class="txt">{st.soundModeText ?? '—'}</span></span></div>
@@ -71,8 +88,14 @@
 
 <style>
   .np-wrap { display: flex; flex-direction: column; gap: 16px; }
-  .src { font-size: 30px; font-weight: 750; letter-spacing: -0.02em; padding-right: 36px;
+  .top { display: flex; align-items: center; gap: 8px; padding-right: 36px; }
+  .src { font-size: 30px; font-weight: 750; letter-spacing: -0.02em; flex: 1; min-width: 0;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .view { width: 30px; height: 30px; border-radius: 50%; border: 1px solid transparent; background: none; color: var(--faint);
+    display: grid; place-items: center; cursor: pointer; flex: none; transition: color 0.15s, background 0.15s; }
+  .view:hover { color: var(--text); background: var(--card-2); }
+  .view.on { color: var(--accent); }
+  .flowview { margin-top: 14px; }
   .chips { margin-top: 10px; display: grid; gap: 6px; }
   .line { display: flex; gap: 6px; min-width: 0; overflow: hidden; }
   .line .pill { flex: none; }

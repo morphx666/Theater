@@ -304,3 +304,26 @@ test('Bluetooth transmitter: on/off and output mode are separate replies', () =>
   assert.equal(st.btOutput, 'SP');
   assert.equal(st.btTx, 'ON');
 });
+
+test('audio map grids', async () => {
+  const { parseAudioMap } = await import('./audio-map.ts');
+  // Real reply (trimmed): PCM 2.0 in, Dolby Surround on a 5.1.2 Front Dolby layout.
+  const xml = `<rx><cmd><name>GetInputSignal</name><list>
+<param name="inputsiga1" control="1">FHL</param><param name="inputsigb1" control="1">LFE</param>
+<param name="inputsigc1" control="0"></param><param name="inputsigb2" control="2">FL</param>
+<param name="inputsigd2" control="2">FR</param><param name="inputsigc4" control="1">SB</param>
+</list></cmd><cmd><name>GetActiveSpeaker</name><list>
+<param name="activespa1" control="2">FDL</param><param name="activespb1" control="2">SW</param>
+<param name="activespc2" control="2">C</param><param name="activespd3" control="2">SR</param>
+<param name="activespa4" control="0"></param><param name="activespe4" control="0"></param>
+</list></cmd></rx>`;
+  const m = parseAudioMap(xml)!;
+  assert.equal(m.input.length, 4);
+  assert.deepEqual(m.input[0], [{ ch: 'FHL', on: false }, { ch: 'LFE', on: false }, null, null, null]);
+  assert.deepEqual(m.input[1][1], { ch: 'FL', on: true });
+  assert.deepEqual(m.input[3][2], { ch: 'SB', on: false });
+  assert.equal(m.output.length, 3); // the empty fourth row is dropped
+  assert.deepEqual(m.output[0][0], { ch: 'FDL', on: true });
+  assert.deepEqual(m.output[2][3], { ch: 'SR', on: true });
+  assert.equal(parseAudioMap('<rx><cmd><list></list></cmd></rx>'), null);
+});
