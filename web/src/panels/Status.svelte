@@ -1,4 +1,5 @@
 <script>
+  import { getContext } from 'svelte';
   import { avr } from '../lib/avr.svelte.js';
   import Icon from '../lib/Icon.svelte';
   import Panel from '../lib/Panel.svelte';
@@ -12,6 +13,7 @@
 
   // Summary chips or the signal flow view; remembered per device.
   let signal = $state(loadOpen('status.signal', false));
+  const onHome = getContext('home') ?? false; // Panel hides its pin button on Home
   function toggleView() { signal = !signal; saveOpen('status.signal', signal); }
 
   // Speaker layout like "5.1.2" from active channel levels
@@ -43,13 +45,12 @@
 <Panel id="status" hero>
   <div class="np-wrap">
     <div>
-      <div class="top">
-        <div class="src" title={on ? current : ''}>{on ? current : 'Standby'}</div>
-        {#if on}
-          <button class="view" class:on={signal} onclick={toggleView} aria-pressed={signal}
-            title={signal ? 'Show summary' : 'Show signal flow'} aria-label="Signal flow view"><Icon name="flow" size={16} /></button>
-        {/if}
-      </div>
+      <div class="src" class:two={on && !onHome} title={on ? current : ''}>{on ? current : 'Standby'}</div>
+      {#if on}
+        <!-- Sits in the corner like Panel's floating pin button, left of it when the pin is shown -->
+        <button class="view" class:on={signal} class:beside={!onHome} onclick={toggleView} aria-pressed={signal}
+          title={signal ? 'Show summary' : 'Show signal flow'} aria-label="Signal flow view"><Icon name="flow" size={15} /></button>
+      {/if}
       {#if on && signal}
         <div class="chips">
           <div class="line"><span class="pill accent mode" title={st.soundModeText ?? ''}><Icon name="wave" size={14} /><span class="txt">{st.soundModeText ?? '—'}</span></span></div>
@@ -88,11 +89,13 @@
 
 <style>
   .np-wrap { display: flex; flex-direction: column; gap: 16px; }
-  .top { display: flex; align-items: center; gap: 8px; padding-right: 36px; }
-  .src { font-size: 30px; font-weight: 750; letter-spacing: -0.02em; flex: 1; min-width: 0;
+  .src { font-size: 30px; font-weight: 750; letter-spacing: -0.02em; padding-right: 36px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .view { width: 30px; height: 30px; border-radius: 50%; border: 1px solid transparent; background: none; color: var(--faint);
-    display: grid; place-items: center; cursor: pointer; flex: none; transition: color 0.15s, background 0.15s; }
+  .src.two { padding-right: 72px; }
+  .view { position: absolute; top: 12px; right: 12px; z-index: 1; width: 30px; height: 30px; border-radius: 50%;
+    border: 1px solid transparent; background: none; color: var(--faint);
+    display: grid; place-items: center; cursor: pointer; transition: color 0.15s, background 0.15s; }
+  .view.beside { right: 46px; }
   .view:hover { color: var(--text); background: var(--card-2); }
   .view.on { color: var(--accent); }
   .flowview { margin-top: 14px; }

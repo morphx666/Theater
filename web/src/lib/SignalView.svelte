@@ -27,8 +27,8 @@
   ].filter(([, a, b]) => a || b) : []);
 </script>
 
-{#snippet grid(rows, label)}
-  <div class="grid" role="img" aria-label="{label}: {rows.flat().filter((c) => c?.on).map((c) => c.ch).join(', ') || 'none'}">
+{#snippet grid(rows, label, cls)}
+  <div class="chgrid {cls}" role="img" aria-label="{label}: {rows.flat().filter((c) => c?.on).map((c) => c.ch).join(', ') || 'none'}">
     {#each rows as row, r (r)}
       {#each row as c, i (i)}
         {#if c}<span class="cell" class:on={c.on}>{c.ch}</span>{:else}<span></span>{/if}
@@ -41,18 +41,15 @@
   <div class="block">
     <div class="head"><Icon name="vol" size={14} />Audio</div>
     {#if map}
+      <!-- One grid for both sides so the captions, the channel grids and the details each share a row -->
       <div class="flow">
-        <div class="side">
-          <span class="k">Input</span>
-          {@render grid(map.input, 'Input channels')}
-          {#if inDetail.length}<span class="d">{#each inDetail as t, i (i)}{#if i}{' · '}{/if}<span class="nw">{t}</span>{/each}</span>{/if}
-        </div>
+        <span class="k a1">Input</span>
+        {@render grid(map.input, 'Input channels', 'a2')}
+        <span class="d a3">{#each inDetail as t, i (i)}{#if i}{' · '}{/if}<span class="nw">{t}</span>{/each}</span>
         <span class="arrow" aria-hidden="true"><Icon name="right" size={16} /></span>
-        <div class="side">
-          <span class="k">Speakers</span>
-          {@render grid(map.output, 'Active speakers')}
-          {#if layout}<span class="d">{layout}</span>{/if}
-        </div>
+        <span class="k b1">Speakers</span>
+        {@render grid(map.output, 'Active speakers', 'b2')}
+        <span class="d b3">{layout ?? ''}</span>
       </div>
     {:else}
       <p class="none">Reading channels…</p>
@@ -79,23 +76,29 @@
 
 <style>
   .sig { display: grid; gap: 14px; container-type: inline-size; }
-  .block { display: grid; gap: 8px; min-width: 0; }
+  .block { display: grid; gap: 10px; min-width: 0; border-top: 1px solid var(--line); padding-top: 12px; }
   .head { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; font-weight: 650;
     letter-spacing: 0.08em; text-transform: uppercase; }
   .none { margin: 0; color: var(--faint); font-size: 12.5px; }
   .k { color: var(--faint); font-size: 10.5px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; }
 
-  .flow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start; gap: 8px; }
-  .side { display: grid; gap: 6px; min-width: 0; }
+  .flow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start;
+    column-gap: 10px; row-gap: 6px; }
+  .flow > * { min-width: 0; }
+  .a1 { grid-area: 1 / 1; } .a2 { grid-area: 2 / 1; } .a3 { grid-area: 3 / 1; }
+  .b1 { grid-area: 1 / 3; } .b2 { grid-area: 2 / 3; } .b3 { grid-area: 3 / 3; }
+  .arrow { grid-area: 2 / 2; align-self: center; display: grid; place-items: center; color: var(--accent); }
+  .d { font-size: 12.5px; line-height: 1.35; overflow-wrap: anywhere; }
+  .d:empty { display: none; }
   .nw { white-space: nowrap; }
-  .side .d { color: var(--muted); font-size: 12px; line-height: 1.3; overflow-wrap: anywhere; }
-  .arrow { display: grid; place-items: center; color: var(--accent); align-self: center; }
   @container (max-width: 270px) {
     .flow { grid-template-columns: minmax(0, 1fr); }
-    .arrow { padding: 0; transform: rotate(90deg); }
+    .a1 { grid-area: 1 / 1; } .a2 { grid-area: 2 / 1; } .a3 { grid-area: 3 / 1; }
+    .arrow { grid-area: 4 / 1; justify-self: start; transform: rotate(90deg); }
+    .b1 { grid-area: 5 / 1; } .b2 { grid-area: 6 / 1; } .b3 { grid-area: 7 / 1; }
   }
 
-  .grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; max-width: 240px; }
+  .chgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; max-width: 240px; }
   .cell { display: block; text-align: center; font-size: 9.5px; font-weight: 650; line-height: 1; letter-spacing: -0.01em;
     padding: 5px 0; border: 1px solid var(--line); border-radius: 4px; color: var(--faint);
     overflow: hidden; white-space: nowrap; text-overflow: clip; }
