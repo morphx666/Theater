@@ -41,7 +41,8 @@
   <div class="block">
     <div class="head"><Icon name="vol" size={14} />Audio</div>
     {#if map}
-      <!-- One grid for both sides so the captions, the channel grids and the details each share a row -->
+      <!-- One grid for both sides so the captions, the channel grids and the details each share a row.
+           Audio and video use the same columns, so the arrows line up in the middle at any width. -->
       <div class="flow">
         <span class="k a1">Input</span>
         {@render grid(map.input, 'Input channels', 'a2')}
@@ -60,11 +61,10 @@
     <div class="head"><Icon name="tv" size={14} />Video</div>
     {#if video.length}
       <div class="vid">
-        <span></span><span class="k">Input</span><span></span><span class="k">Output</span>
+        <span class="k end">Input</span><span></span><span class="k">Output</span>
         {#each video as [label, a, b] (label)}
-          <span class="lbl">{label}</span>
-          <span class="v">{a ?? '—'}</span>
-          <span class="to" class:conv={a !== b} aria-hidden="true"><Icon name="right" size={13} /></span>
+          <span class="in"><span class="lbl">{label}</span><span class="v">{a ?? '—'}</span></span>
+          <span class="to" aria-hidden="true"><Icon name="right" size={14} /></span>
           <span class="v" class:conv={a !== b} title={a !== b ? 'Converted by the receiver' : ''}>{b ?? '—'}</span>
         {/each}
       </div>
@@ -83,32 +83,37 @@
   .none { margin: 0; color: var(--faint); font-size: 12.5px; }
   .k { color: var(--faint); font-size: 10.5px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; }
 
-  .flow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start;
-    column-gap: 10px; row-gap: 6px; }
-  .flow > * { min-width: 0; }
+  /* Shared by audio and video: input half | arrow | output half. The input side hugs the arrow. */
+  .flow, .vid { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); column-gap: 10px; }
+  .flow { align-items: start; row-gap: 6px; }
+  .flow > * { min-width: 0; width: 100%; max-width: 240px; }
+  .a1, .a2, .a3 { justify-self: end; text-align: end; }
+  .b1, .b2, .b3 { justify-self: start; }
   .a1 { grid-area: 1 / 1; } .a2 { grid-area: 2 / 1; } .a3 { grid-area: 3 / 1; }
   .b1 { grid-area: 1 / 3; } .b2 { grid-area: 2 / 3; } .b3 { grid-area: 3 / 3; }
-  .arrow { grid-area: 2 / 2; align-self: center; display: grid; place-items: center; color: var(--accent); }
+  .arrow { grid-area: 2 / 2; align-self: center; justify-self: center; display: grid; place-items: center; color: var(--blue); }
   .d { font-size: 12.5px; line-height: 1.35; overflow-wrap: anywhere; }
   .d:empty { display: none; }
   .nw { white-space: nowrap; }
   @container (max-width: 270px) {
     .flow { grid-template-columns: minmax(0, 1fr); }
+    .a1, .a2, .a3 { justify-self: start; text-align: start; }
     .a1 { grid-area: 1 / 1; } .a2 { grid-area: 2 / 1; } .a3 { grid-area: 3 / 1; }
     .arrow { grid-area: 4 / 1; justify-self: start; transform: rotate(90deg); }
     .b1 { grid-area: 5 / 1; } .b2 { grid-area: 6 / 1; } .b3 { grid-area: 7 / 1; }
   }
 
-  .chgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; max-width: 240px; }
+  .chgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
   .cell { display: block; text-align: center; font-size: 9.5px; font-weight: 650; line-height: 1; letter-spacing: -0.01em;
     padding: 5px 0; border: 1px solid var(--line); border-radius: 4px; color: var(--faint);
     overflow: hidden; white-space: nowrap; text-overflow: clip; }
   .cell.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 
-  .vid { display: grid; grid-template-columns: auto auto auto minmax(0, 1fr); align-items: center;
-    column-gap: 12px; row-gap: 5px; font-size: 12.5px; }
-  .lbl { color: var(--muted); }
+  .vid { align-items: center; row-gap: 5px; font-size: 12.5px; }
+  .end { text-align: end; }
+  .in { display: flex; justify-content: space-between; gap: 10px; min-width: 0; }
+  .lbl { color: var(--muted); white-space: nowrap; }
   .v { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-  .to { display: grid; place-items: center; color: var(--faint); }
-  .to.conv, .v.conv { color: var(--accent); }
+  .to { display: grid; place-items: center; color: var(--blue); }
+  .v.conv { color: var(--accent); }
 </style>
