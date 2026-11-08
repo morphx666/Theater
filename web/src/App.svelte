@@ -4,7 +4,8 @@
   import Home from './pages/Home.svelte';
   import Section from './pages/Section.svelte';
   import Setup from './pages/Setup.svelte';
-  import { ui } from './lib/layout.svelte.js';
+  import { ui, homeIds, panelOption } from './lib/layout.svelte.js';
+  import VolumeMini from './lib/VolumeMini.svelte';
   import IdleDimmer from './lib/IdleDimmer.svelte';
   import PresetConfirm from './lib/PresetConfirm.svelte';
 
@@ -33,6 +34,8 @@
 
   const st = $derived(avr.state);
   const on = $derived(st?.zoneMain === true);
+  // Compact volume in the top bar (Setup › App & Info), except on Home while the Volume panel is there.
+  const topVolume = $derived(avr.settings?.topVolume !== false && !(page === 'home' && homeIds().includes('volume')));
   const name = $derived(st?.model?.replace(/USA$|EUR$/, '') ?? 'AVR');
   $effect(() => { document.title = on ? `${st?.inputs?.[st.source]?.name ?? 'Home Theater'} · ${st?.volume ?? ''} dB` : 'Home Theater'; });
 
@@ -71,6 +74,9 @@
         <h1>Home Theater</h1>
         <div class="row small muted"><span class="dot {link.cls}"></span>{link.text} · {name}</div>
       </div>
+      {#if st && topVolume}
+        <div class="topvol"><VolumeMini locked={panelOption('volume', 'locked')} /></div>
+      {/if}
       <button class="power" class:on aria-label="Power" disabled={!st}
         onclick={() => { send(on ? 'ZMOFF' : 'ZMON'); if (on && st?.zone2?.power) toast('Main zone off. Zone 2 is still on.'); }}>
         <Icon name="power" size={22} stroke={2.4} />
@@ -118,7 +124,13 @@
 
   .main { flex: 1; min-width: 0; padding: env(safe-area-inset-top) 0 calc(78px + env(safe-area-inset-bottom)); }
   .top {
-    display: flex; align-items: center; gap: 14px; padding: 18px 18px 10px; max-width: 1180px; margin: 0 auto;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 18px 18px 10px; max-width: 1180px; margin: 0 auto;
+  }
+  /* Narrow screens: the volume control gets its own full-width row under the title and power button */
+  @media (max-width: 640px) {
+    .topvol { order: 3; flex-basis: 100%; }
+    .topvol :global(.mini) { flex: 1; }
+    .topvol :global(.track) { flex: 1; width: auto; }
   }
   .top h1 { font-size: 24px; }
   main { padding: 8px 16px 24px; max-width: 1180px; margin: 0 auto; }

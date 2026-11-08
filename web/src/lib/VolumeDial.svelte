@@ -1,7 +1,7 @@
 <script>
   // Big circular volume knob: drag around the arc, scroll, or use the +/- buttons.
-  import { avr, send, vol2 } from './avr.svelte.js';
-  import { throttle } from './controls.svelte.js';
+  import { avr, send } from './avr.svelte.js';
+  import { volume, MIN } from './volume.svelte.js';
   import Icon from './Icon.svelte';
 
   // locked: the dial still shows the live volume, but ignores dragging, the scroll wheel and arrow keys
@@ -13,19 +13,16 @@
   $effect(() => { if (locked && lockText) lockW = lockText.getComputedTextLength() || lockW; });
   const lockX = $derived(100 - (16 + 4 + lockW) / 2);
 
-  const MIN = -80;
   const SWEEP = 270; // degrees
   const START = 135; // degrees, measured clockwise from +x axis
 
   const st = $derived(avr.state);
-  const cap = $derived(avr.cap);
-  const max = $derived(Math.min(18, st?.volumeMax ?? 18));
+  const cap = $derived(volume.cap);
   // The receiver's maximum depends on the input signal and channel levels (manual p.69); never ask for more.
-  const top = $derived(Math.min(cap, max));
-  let local = $state(null);
-  let dragging = $state(false);
-  let holdUntil = 0;
-  const value = $derived(local ?? st?.volume ?? MIN);
+  const max = $derived(volume.max);
+  const top = $derived(volume.top);
+  const dragging = $derived(volume.dragging);
+  const value = $derived(volume.value);
   const muted = $derived(!!st?.mute);
   // Mute Level: "MUT" mutes fully; a number (e.g. 40) only lowers the sound by that many dB (manual p.157).
   const muteDb = $derived(/^\d+$/.test(st?.muteLevel ?? '') ? Number(st.muteLevel) : null);
@@ -45,22 +42,6 @@
   const [cx1, cy1] = $derived(pt(angle(capFrac), 70));
   const [cx2, cy2] = $derived(pt(angle(capFrac), 94));
 
-  const sendVol = throttle((db) => send('MV' + vol2(db)), 130);
-
-  function setDb(db) {
-    db = Math.round(db * 2) / 2;
-    db = Math.max(MIN, Math.min(top, db));
-    local = db;
-    holdUntil = Date.now() + 900;
-    sendVol(db);
-  }
-
-  // Clear the optimistic value once the receiver catches up.
-  $effect(() => {
-    const v = st?.volume;
-    if (local !== null && !dragging && (v === local || Date.now() > holdUntil)) local = null;
-  });
-
   let svg = $state();
   function fromPointer(e) {
     const r = svg.getBoundingClientRect();
@@ -72,8 +53,8 @@
     const f = rel / SWEEP;
     const target = MIN + f * (max - MIN);
     // Avoid big jumps: limit to 6 dB per move event (prevents wrap-around accidents).
-    const cur = local ?? st?.volume ?? MIN;
-    setDb(Math.max(cur - 6, Math.min(cur + 6, target)));
+    const cur = volume.value;
+    volume.set(Math.max(cur - 6, Math.min(cur + 6, target)));
   }
   // Volume only changes by dragging the knob itself. Clicking/tapping elsewhere on the ring does nothing,
   // so a stray tap near the end of the arc can never jump the volume up.
@@ -81,28 +62,24 @@
     if (off || locked) return;
     e.preventDefault();
     e.stopPropagation();
-    dragging = true;
+    volume.dragging = true;
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up, { once: true });
     window.addEventListener('pointercancel', up, { once: true });
   }
-  function move(e) { if (dragging) fromPointer(e); }
+  function move(e) { if (volume.dragging) fromPointer(e); }
   function up() {
     window.removeEventListener('pointermove', move);
     window.removeEventListener('pointerup', up);
     window.removeEventListener('pointercancel', up);
-    dragging = false;
-    holdUntil = Date.now() + 900;
+    volume.dragging = false;
   }
   function wheel(e) {
     if (off || locked) return;
     e.preventDefault();
     step(e.deltaY < 0 ? 1 : -1);
   }
-  function step(dir) {
-    const s = avr.settings?.volumeStep ?? 0.5;
-    setDb((local ?? st?.volume ?? MIN) + dir * s);
-  }
+  const step = (dir) => volume.step(dir);
   function key(e) {
     if (locked) return;
     if (e.key === 'ArrowUp' || e.key === 'ArrowRight') { e.preventDefault(); step(1); }
@@ -110,14 +87,8 @@
   }
 
   // Hold-to-repeat for the +/- buttons
-  let repeat;
-  function hold(dir) {
-    step(dir);
-    let delay = 350;
-    const tick = () => { step(dir); delay = Math.max(90, delay * 0.75); repeat = setTimeout(tick, delay); };
-    repeat = setTimeout(tick, delay);
-  }
-  const release = () => clearTimeout(repeat);
+  const hold = (dir) => volume.hold(dir);
+  const release = () => volume.release();
 </script>
 
 <div class="dial" class:muted class:off class:locked>

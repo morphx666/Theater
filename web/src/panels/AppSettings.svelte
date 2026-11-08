@@ -23,6 +23,14 @@
         <Seg value={avr.settings.volumeStep} onchange={(v) => saveSettings({ volumeStep: v })}
           options={[{ value: 0.5, label: '0.5 dB' }, { value: 1, label: '1 dB' }, { value: 2, label: '2 dB' }]} />
       </div>
+      <div class="setting">
+        <div>
+          <div class="label">Volume in the top bar</div>
+          <div class="hint">Hidden on Home while the Volume panel is there.</div>
+        </div>
+        <button class="switch" class:on={avr.settings.topVolume !== false} aria-label="Volume in the top bar"
+          onclick={() => saveSettings({ topVolume: avr.settings.topVolume === false })}></button>
+      </div>
       <div class="setting stack">
         <div class="label">Dim the screen when idle</div>
         <Seg value={idle.minutes} onchange={(v) => setIdle({ minutes: v })}

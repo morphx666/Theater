@@ -28,12 +28,13 @@ const USE_TELNET = process.env.AVR_TELNET !== 'off';
 type Layout = { order?: string[]; lanes?: Record<string, number>; spans?: Record<string, number> };
 type Settings = {
   volumeCapDb: number; volumeStep: number;
+  topVolume: boolean; // compact volume control in the top bar
   layouts?: Record<string, Layout>; // per page: panel order, start column, width in columns
   panelOptions?: Record<string, Record<string, boolean | string>>; // per panel, e.g. { volume: { locked: true }, tuner: { dialColor: 'amber' } }
   home?: string[]; homeLanes?: Record<string, number>; homeSpans?: Record<string, number>; // legacy (migrated)
 };
 const SETTINGS_FILE = path.join(DATA, 'settings.json');
-let settings: Settings = { volumeCapDb: -10, volumeStep: 0.5 };
+let settings: Settings = { volumeCapDb: -10, volumeStep: 0.5, topVolume: true };
 try { settings = { ...settings, ...JSON.parse(await fs.readFile(SETTINGS_FILE, 'utf8')) }; } catch {}
 // Migrate the older Home-only layout format into layouts.home.
 if (settings.home || settings.homeLanes || settings.homeSpans) {
@@ -397,6 +398,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
         const b = await readBody(req);
         if (typeof b.volumeCapDb === 'number') settings.volumeCapDb = Math.min(18, Math.max(-60, Math.round(b.volumeCapDb * 2) / 2));
         if (typeof b.volumeStep === 'number') settings.volumeStep = [0.5, 1, 2].includes(b.volumeStep) ? b.volumeStep : 0.5;
+        if (typeof b.topVolume === 'boolean') settings.topVolume = b.topVolume;
         if (b.panelOption && ID.test(String(b.panelOption.panel)) && /^[a-zA-Z]{1,30}$/.test(String(b.panelOption.key))) {
           const { panel, key, value } = b.panelOption;
           settings.panelOptions ??= {};
