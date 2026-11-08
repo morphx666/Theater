@@ -105,7 +105,7 @@
 
   .chgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
   .cell { display: block; text-align: center; font-size: 9.5px; font-weight: 650; line-height: 1; letter-spacing: -0.01em;
-    padding: 5px 0; border: 1px solid var(--line); border-radius: 4px; color: var(--faint);
+    padding: 5px 0; border: 1px solid color-mix(in srgb, var(--faint) 35%, var(--line)); border-radius: 4px; color: var(--faint);
     overflow: hidden; white-space: nowrap; text-overflow: clip; }
   .cell.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 
