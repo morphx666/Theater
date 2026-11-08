@@ -218,7 +218,7 @@
     {#if bass.doc}
       <div class="setting stack">
         <div><div class="label">Subwoofer mode</div><div class="hint">{bassEditable('SubwooferMode')
-          ? 'LFE + Main sends all bass to the sub'
+          ? 'LFE + Main also sends Large speakers\' bass to the sub'
           : 'Needs a subwoofer in the speaker config'}</div></div>
         <Seg value={txt(bass.doc, 'SubwooferMode')} disabled={bass.saving || !bassEditable('SubwooferMode')} onchange={setSubwooferMode}
           options={[{ value: '1', label: 'LFE' }, { value: '2', label: 'LFE + Main' }]} />
