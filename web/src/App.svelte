@@ -6,6 +6,7 @@
   import Setup from './pages/Setup.svelte';
   import { ui, homeIds, panelOption } from './lib/layout.svelte.js';
   import VolumeMini from './lib/VolumeMini.svelte';
+  import { cubicOut } from 'svelte/easing';
   import IdleDimmer from './lib/IdleDimmer.svelte';
   import PresetConfirm from './lib/PresetConfirm.svelte';
 
@@ -35,6 +36,19 @@
   const st = $derived(avr.state);
   const on = $derived(st?.zoneMain === true);
   // Compact volume in the top bar (Setup › App & Info), except on Home while the Volume panel is there.
+  // Shows/hides it smoothly: sideways in the header row, or as its own row on narrow screens.
+  // The 14px space before it is animated too, so nothing jumps at the start or end: in the row it's the
+  // flex gap (cancelled by a negative margin); on its own row it's a top margin (narrow screens).
+  function reveal(node) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return { duration: 0 };
+    const row = getComputedStyle(node).flexBasis === '100%';
+    const size = row ? node.offsetHeight : node.offsetWidth;
+    return {
+      duration: 240, easing: cubicOut,
+      css: (t) => `overflow: clip; opacity: ${t}; ` +
+        (row ? `height: ${t * size}px; margin-top: ${t * 14}px;` : `width: ${t * size}px; margin-left: ${-(1 - t) * 14}px;`),
+    };
+  }
   const topVolume = $derived(avr.settings?.topVolume !== false && !(page === 'home' && homeIds().includes('volume')));
   const name = $derived(st?.model?.replace(/USA$|EUR$/, '') ?? 'AVR');
   $effect(() => { document.title = on ? `${st?.inputs?.[st.source]?.name ?? 'Home Theater'} · ${st?.volume ?? ''} dB` : 'Home Theater'; });
@@ -75,7 +89,7 @@
         <div class="row small muted"><span class="dot {link.cls}"></span>{link.text} · {name}</div>
       </div>
       {#if st && topVolume}
-        <div class="topvol"><VolumeMini locked={panelOption('volume', 'locked')} /></div>
+        <div class="topvol" transition:reveal><VolumeMini locked={panelOption('volume', 'locked')} /></div>
       {/if}
       <button class="power" class:on aria-label="Power" disabled={!st}
         onclick={() => { send(on ? 'ZMOFF' : 'ZMON'); if (on && st?.zone2?.power) toast('Main zone off. Zone 2 is still on.'); }}>
@@ -128,7 +142,8 @@
   }
   /* Narrow screens: the volume control gets its own full-width row under the title and power button */
   @media (max-width: 640px) {
-    .topvol { order: 3; flex-basis: 100%; }
+    .top { row-gap: 0; } /* the volume row brings its own space (margin), so it can animate in */
+    .topvol { order: 3; flex-basis: 100%; margin-top: 14px; }
     .topvol :global(.mini) { flex: 1; }
     .topvol :global(.track) { flex: 1; width: auto; }
   }
