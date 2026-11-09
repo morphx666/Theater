@@ -75,7 +75,7 @@
 </div>
 
 <style>
-  .sig { --arrow: #6f5223; display: grid; gap: 14px; container-type: inline-size; }
+  .sig { --arrow: color-mix(in srgb, var(--accent) 40%, var(--card)); display: grid; gap: 14px; container-type: inline-size; }
   .block { display: grid; gap: 10px; min-width: 0; }
   .head { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; font-weight: 650;
     letter-spacing: 0.08em; text-transform: uppercase; }
