@@ -201,8 +201,17 @@ function queryAudioMap(delay = 800) {
     if (mapBusy) return queryAudioMap(500);
     mapBusy = true;
     try {
-      const m = await fetchAudioMap(HOST);
-      if (JSON.stringify(m) !== JSON.stringify(audioMap)) { audioMap = m; scheduleBroadcast(); }
+      const { map: m, info } = await fetchAudioMap(HOST);
+      let changed = JSON.stringify(m) !== JSON.stringify(audioMap);
+      audioMap = m;
+      // Correct a stale format / sample rate. Skip a decoder that differs only in case or spacing from the
+      // telnet push, so the two sources don't take turns changing the text.
+      const norm = (s: string | null) => (s ?? '').replace(/\s+/g, '').toUpperCase();
+      for (const l of info) {
+        if (l.startsWith('SYSDA') && norm(l.slice(5)) === norm(state.decoder)) continue;
+        if (applyLine(state, l)) changed = true;
+      }
+      if (changed) scheduleBroadcast();
     } catch { /* keep the last map; the next trigger or poll retries */ } finally {
       mapBusy = false;
     }

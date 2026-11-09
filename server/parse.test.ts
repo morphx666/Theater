@@ -327,3 +327,21 @@ test('audio map grids', async () => {
   assert.deepEqual(m.output[2][3], { ch: 'SR', on: true });
   assert.equal(parseAudioMap('<rx><cmd><list></list></cmd></rx>'), null);
 });
+
+test('audio info lines', async () => {
+  const { audioInfoLines } = await import('./audio-map.ts');
+  // Real reply: the signal text is space-padded.
+  const xml = `<rx><cmd><name>GetAudioInfo</name><list>
+<param name="signal" control="1">PCM                  </param>
+<param name="fs" control="1">48 kHz</param>
+</list></cmd></rx>`;
+  assert.deepEqual(audioInfoLines(xml), ['SYSDA PCM', 'SSINFAISFSV 48K']);
+  assert.deepEqual(audioInfoLines(xml.replace('48 kHz', '44.1 kHz')), ['SYSDA PCM', 'SSINFAISFSV 44.1K']);
+  assert.deepEqual(audioInfoLines(xml.replace('48 kHz', '')), ['SYSDA PCM', 'SSINFAISFSV NON']);
+  assert.deepEqual(audioInfoLines('<rx></rx>'), []);
+  const st = emptyState();
+  applyLine(st, 'SYSDA Unknown');
+  for (const l of audioInfoLines(xml)) applyLine(st, l);
+  assert.equal(st.decoder, 'PCM');
+  assert.equal(st.sampleRate, '48K');
+});
