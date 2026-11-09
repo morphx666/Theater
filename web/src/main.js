@@ -1,7 +1,7 @@
 import { mount } from 'svelte';
 import './app.css';
 import App from './App.svelte';
-import { restoreAccent } from './lib/accent.js';
+import { restoreAccent } from './lib/accent.svelte.js';
 
 restoreAccent();
 

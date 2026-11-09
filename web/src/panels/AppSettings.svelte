@@ -5,7 +5,7 @@
   import Seg from '../lib/Seg.svelte';
   import Slider from '../lib/Slider.svelte';
   import { idle, setIdle, preview } from '../lib/idle.svelte.js';
-  import { ACCENTS, applyAccent } from '../lib/accent.js';
+  import { ACCENTS, accent, applyAccent } from '../lib/accent.svelte.js';
 
   async function saveSettings(patch) {
     try { await api('/api/settings', { method: 'POST', body: patch }); toast('Saved'); }
@@ -28,7 +28,7 @@
         <div class="label">Accent color</div>
         <div class="swatches" role="radiogroup" aria-label="Accent color">
           {#each ACCENTS as a (a.value)}
-            {@const on = (avr.settings.accent ?? 'amber') === a.value}
+            {@const on = accent.value === a.value}
             <button class="swatch" class:on role="radio" aria-checked={on} aria-label={a.label} title={a.label}
               style="--sw: {a.swatch}" onclick={() => { applyAccent(a.value); saveSettings({ accent: a.value }); }}></button>
           {/each}

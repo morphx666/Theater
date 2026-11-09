@@ -9,7 +9,7 @@
   import { cubicOut } from 'svelte/easing';
   import IdleDimmer from './lib/IdleDimmer.svelte';
   import PresetConfirm from './lib/PresetConfirm.svelte';
-  import { applyAccent } from './lib/accent.js';
+  import { accent, applyAccent } from './lib/accent.svelte.js';
 
   const PAGES = [
     { id: 'home', label: 'Home', icon: 'home', comp: Home },
@@ -76,7 +76,7 @@
 
 <div class="shell">
   <nav class="side">
-    <div class="brand"><img src="/icon.svg" alt="" width="30" height="30" /><span>Theater</span></div>
+    <div class="brand"><img src={accent.icon} alt="" width="30" height="30" /><span>Theater</span></div>
     {#each PAGES as p (p.id)}
       <button class="nav" class:active={page === p.id} onclick={() => (page = p.id)}>
         <Icon name={p.icon} /><span>{p.label}</span>

@@ -36,7 +36,7 @@ type Settings = {
 };
 const SETTINGS_FILE = path.join(DATA, 'settings.json');
 const ACCENTS = ['amber', 'rose', 'violet', 'blue', 'teal', 'green']; // palettes in web/src/app.css
-let settings: Settings = { volumeCapDb: -10, volumeStep: 0.5, topVolume: true, accent: 'amber' };
+let settings: Settings = { volumeCapDb: -10, volumeStep: 0.5, topVolume: true, accent: 'blue' };
 try { settings = { ...settings, ...JSON.parse(await fs.readFile(SETTINGS_FILE, 'utf8')) }; } catch {}
 // Migrate the older Home-only layout format into layouts.home.
 if (settings.home || settings.homeLanes || settings.homeSpans) {
