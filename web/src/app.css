@@ -43,6 +43,21 @@
   }
 }
 
+/* Accent color (Setup › App & Info; lib/accent.js sets data-accent). Amber is the :root default above.
+   Light-mode values come after the dark ones so they win at the same specificity. */
+:root[data-accent='rose'] { --accent: #ff5c8a; --accent-2: #ff9db8; --accent-ink: #2a0612; }
+:root[data-accent='violet'] { --accent: #a57bff; --accent-2: #cbb3ff; --accent-ink: #140a2a; }
+:root[data-accent='blue'] { --accent: #4f9dff; --accent-2: #9cc8ff; --accent-ink: #04122a; }
+:root[data-accent='teal'] { --accent: #22c7b8; --accent-2: #7ce8de; --accent-ink: #03201d; }
+:root[data-accent='green'] { --accent: #46d16b; --accent-2: #9af0ae; --accent-ink: #062010; }
+@media (prefers-color-scheme: light) {
+  :root[data-accent='rose'] { --accent: #e0336a; --accent-2: #b8204f; --accent-ink: #fff; }
+  :root[data-accent='violet'] { --accent: #7c4dff; --accent-2: #5f2fe0; --accent-ink: #fff; }
+  :root[data-accent='blue'] { --accent: #1f6fe0; --accent-2: #1557b8; --accent-ink: #fff; }
+  :root[data-accent='teal'] { --accent: #0f9488; --accent-2: #0b766c; --accent-ink: #fff; }
+  :root[data-accent='green'] { --accent: #1f9d45; --accent-2: #157a34; --accent-ink: #fff; }
+}
+
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body {

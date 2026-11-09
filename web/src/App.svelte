@@ -9,6 +9,7 @@
   import { cubicOut } from 'svelte/easing';
   import IdleDimmer from './lib/IdleDimmer.svelte';
   import PresetConfirm from './lib/PresetConfirm.svelte';
+  import { applyAccent } from './lib/accent.js';
 
   const PAGES = [
     { id: 'home', label: 'Home', icon: 'home', comp: Home },
@@ -32,6 +33,7 @@
   window.addEventListener('hashchange', () => (page = fromHash()));
 
   connect();
+  $effect(() => { if (avr.settings?.accent) applyAccent(avr.settings.accent); });
 
   const st = $derived(avr.state);
   const on = $derived(st?.zoneMain === true);

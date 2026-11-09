@@ -5,6 +5,7 @@
   import Seg from '../lib/Seg.svelte';
   import Slider from '../lib/Slider.svelte';
   import { idle, setIdle, preview } from '../lib/idle.svelte.js';
+  import { ACCENTS, applyAccent } from '../lib/accent.js';
 
   async function saveSettings(patch) {
     try { await api('/api/settings', { method: 'POST', body: patch }); toast('Saved'); }
@@ -22,6 +23,16 @@
         <div class="label">Volume button step</div>
         <Seg value={avr.settings.volumeStep} onchange={(v) => saveSettings({ volumeStep: v })}
           options={[{ value: 0.5, label: '0.5 dB' }, { value: 1, label: '1 dB' }, { value: 2, label: '2 dB' }]} />
+      </div>
+      <div class="setting">
+        <div class="label">Accent color</div>
+        <div class="swatches" role="radiogroup" aria-label="Accent color">
+          {#each ACCENTS as a (a.value)}
+            {@const on = (avr.settings.accent ?? 'amber') === a.value}
+            <button class="swatch" class:on role="radio" aria-checked={on} aria-label={a.label} title={a.label}
+              style="--sw: {a.swatch}" onclick={() => { applyAccent(a.value); saveSettings({ accent: a.value }); }}></button>
+          {/each}
+        </div>
       </div>
       <div class="setting">
         <div>
@@ -51,4 +62,8 @@
 
 <style>
   .hint { font-size: 12.5px; color: var(--muted); }
+  .swatches { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+  .swatch { width: 24px; height: 24px; padding: 0; border-radius: 50%; cursor: pointer; background: var(--sw);
+    border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--line); }
+  .swatch.on { box-shadow: 0 0 0 2px var(--text), 0 0 8px var(--sw); }
 </style>
