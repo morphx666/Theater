@@ -111,8 +111,8 @@ $env:Path = (Split-Path $node) + ';' + $env:Path # npm below runs with this Node
 # ---------- install and build ----------
 Title 'Installing and building'
 StopTheater # a running copy would keep files in use
-Run 'npm.cmd' @('ci', '--no-audit', '--no-fund')
-Run 'npm.cmd' @('run', 'build')
+Run 'npm.cmd' @('ci', '--no-audit', '--no-fund', '--loglevel=error') # errors only
+Run 'npm.cmd' @('run', 'build', '--silent', '--', '--logLevel', 'error')
 
 # ---------- settings ----------
 Title 'Settings'

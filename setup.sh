@@ -126,8 +126,8 @@ export PATH="$NODE_DIR:$PATH" # npm below runs with this Node; your shell is not
 
 # ---------- install and build ----------
 title "Installing and building (this can take a few minutes on a Raspberry Pi)"
-npm ci --no-audit --no-fund
-npm run build
+npm ci --no-audit --no-fund --loglevel=error # errors only
+npm run build --silent -- --logLevel error
 
 # ---------- settings ----------
 title "Settings"

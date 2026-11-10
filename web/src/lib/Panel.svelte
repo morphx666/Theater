@@ -10,7 +10,8 @@
   let { id, title = '', actions = null, children, needsPower = false, hero = false, class: cls = '' } = $props();
 
   const onHome = getContext('home') ?? false;
-  const link = getContext('panelLink')?.(id) ?? null; // on Home: where this panel lives
+  const panelLink = getContext('panelLink');
+  const link = $derived(panelLink?.(id) ?? null); // on Home: where this panel lives
   const off = $derived(needsPower && avr.state?.zoneMain !== true);
   const pinned = $derived(isPinned(id));
 </script>
