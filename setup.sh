@@ -170,7 +170,13 @@ EOF
       # systemd waits RestartSec (5 s) before starting it again: count it down with dots so it doesn't look stuck.
       DOT=o; case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in *UTF-8*|*utf8*) DOT=●;; esac
       DOTS="$DOT $DOT $DOT $DOT $DOT"
-      if [ -t 1 ]; then TTY=1; else TTY=""; echo "  Restarting Theater..."; fi
+      if [ -t 1 ]; then
+        TTY=1
+        trap 'printf "\033[?25h"' EXIT # show the cursor again even if the script stops here
+        printf '\033[?25l'
+      else
+        TTY=""; echo "  Restarting Theater..."
+      fi
       for i in $(seq 0 29); do
         if [ -n "$TTY" ]; then
           LEFT=$((5 - i / 2)); [ "$LEFT" -gt 0 ] || LEFT=0
@@ -180,7 +186,7 @@ EOF
         NEW_PID=$(systemctl show -p MainPID --value "$SERVICE")
         [ "${NEW_PID:-0}" != 0 ] && [ "$NEW_PID" != "$OLD_PID" ] && systemctl is-active --quiet "$SERVICE" && break
       done
-      if [ -n "$TTY" ]; then printf '\r\033[K'; fi
+      if [ -n "$TTY" ]; then printf '\r\033[K\033[?25h'; trap - EXIT; fi
       if ! systemctl is-active --quiet "$SERVICE"; then OLD_PID=""; fi # didn't come back: restart it the usual way
     fi
     if [ -z "$OLD_PID" ]; then
