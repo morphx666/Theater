@@ -18,8 +18,8 @@ if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ]; then
 else
   BOLD=""; DIM=""; RESET=""
 fi
-title() { # title COLOR "Text"   COLOR: a 256-color number, one per section
-  if [ -n "$RESET" ]; then printf '\n\033[1;38;5;%sm%s\033[0m\n' "$1" "$2"; else printf '\n%s\n' "$2"; fi
+title() { # section header: bold violet
+  if [ -n "$RESET" ]; then printf '\n\033[1;38;5;135m%s\033[0m\n' "$*"; else printf '\n%s\n' "$*"; fi
 }
 ask_yes() { # ask_yes "Question" [y|n]
   local def="${2:-y}" ans hint="[Y/n]"
@@ -81,7 +81,7 @@ done
 # Fast-forward only, so local edits and commits are never merged or overwritten. After an update, the new
 # setup.sh runs in place of this one (THEATER_UPDATED stops it from updating again).
 if [ -z "$NO_UPDATE" ] && [ -z "${THEATER_UPDATED:-}" ]; then
-  title 33 "Update"
+  title "Update"
   if [ ! -e .git ]; then
     echo "  This copy wasn't downloaded with git, so setup can't update it. Installing it as it is."
   elif ! command -v git >/dev/null 2>&1; then
@@ -107,7 +107,7 @@ if [ -z "$NO_UPDATE" ] && [ -z "${THEATER_UPDATED:-}" ]; then
 fi
 
 # ---------- Node.js ----------
-title 37 "Node.js"
+title "Node.js"
 ORIG_NODE="$(command -v node 2>/dev/null || true)"
 if find_node; then
   echo "  Using Node $("$NODE" -v) ($NODE)"
@@ -134,18 +134,18 @@ NODE="$NODE_DIR/$(basename "$NODE")"
 export PATH="$NODE_DIR:$PATH" # npm below runs with this Node; your shell is not changed
 
 # ---------- install and build ----------
-title 172 "Installing and building (this can take a few minutes on a Raspberry Pi)"
+title "Installing and building (this can take a few minutes on a Raspberry Pi)"
 npm ci --no-audit --no-fund --loglevel=error # errors only
 npm run build --silent -- --logLevel error
 
 # ---------- settings ----------
-title 135 "Settings"
+title "Settings"
 "$NODE" scripts/setup.ts configure
 
 # ---------- start automatically ----------
 AUTOSTART=""
 if [ "$OS" = Linux ] && command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
-  title 170 "Start automatically"
+  title "Start automatically"
   UNIT="/etc/systemd/system/$SERVICE.service"
   if [ -f "$UNIT" ] || ask_yes "Start Theater automatically when this computer boots?" y; then
     UNIT_TEXT=$(cat <<EOF
@@ -208,7 +208,7 @@ EOF
     echo "  Theater is running as the '$SERVICE' service."
   fi
 elif [ "$OS" = Darwin ]; then
-  title 170 "Start automatically"
+  title "Start automatically"
   PLIST="$HOME/Library/LaunchAgents/com.theater.denon-remote.plist"
   if [ -f "$PLIST" ] || ask_yes "Start Theater automatically when you log in to this Mac?" y; then
     mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
@@ -241,7 +241,7 @@ EOF
 fi
 
 # ---------- done ----------
-title 34 "Theater is ready"
+title "Theater is ready"
 if [ -z "$AUTOSTART" ]; then
   if [ -n "$ORIG_NODE" ] && [ "$ORIG_NODE" -ef "$NODE" ]; then
     echo "  Start it with:  npm start"
