@@ -13,14 +13,22 @@ $TaskName = 'Theater'
 $RuleName = 'Theater'
 $Server = Join-Path $AppDir 'server\index.ts'
 
-function Title($text) { Write-Host ''; Write-Host $text -ForegroundColor Cyan }
+# Colors (same styles as setup.sh and scripts/setup.ts): off when not a terminal or with NO_COLOR.
+$Esc = [char]27
+$Ansi = (-not [Console]::IsOutputRedirected) -and (-not $env:NO_COLOR) -and $Host.UI.SupportsVirtualTerminal
+function Style($code, $text) { if ($Ansi) { "$Esc[$($code)m$text$Esc[0m" } else { $text } }
+function Title($color, $text) { # $color: a 256-color number, one per section
+  Write-Host ''
+  if ($Ansi) { Write-Host (Style "1;38;5;$color" $text) } else { Write-Host $text -ForegroundColor Cyan }
+}
 function AskYes($question, $default = $true) {
   if ([Console]::IsInputRedirected) {
     Write-Host "  $question $(if ($default) { 'yes' } else { 'no' })"
     return $default
   }
   $hint = if ($default) { '[Y/n]' } else { '[y/N]' }
-  $a = Read-Host "  $question $hint"
+  Write-Host -NoNewline "  $(Style 1 $question) $(Style 2 $hint) "
+  $a = Read-Host
   if ([string]::IsNullOrWhiteSpace($a)) { return $default }
   return $a -match '^[Yy]'
 }
@@ -52,7 +60,7 @@ function StopTheater {
 # Fast-forward only, so local edits and commits are never merged or overwritten. After an update, the new
 # setup.ps1 runs in place of this one (THEATER_UPDATED stops it from updating again).
 if (-not $NoUpdate -and -not $env:THEATER_UPDATED) {
-  Title 'Update'
+  Title 33 'Update'
   if (-not (Test-Path (Join-Path $AppDir '.git'))) {
     Write-Host "  This copy wasn't downloaded with git, so setup can't update it. Installing it as it is."
   } elseif (-not (Get-Command git -ErrorAction SilentlyContinue)) {
@@ -88,13 +96,14 @@ if (-not $NoUpdate -and -not $env:THEATER_UPDATED) {
 }
 
 # ---------- Node.js ----------
-Title 'Node.js'
+Title 37 'Node.js'
 $node = FindNode
 if (-not $node) {
   $current = Get-Command node -ErrorAction SilentlyContinue
   $found = if ($current) { (& $current.Source -v) } else { 'none' }
   Write-Host "  Theater needs Node.js 22.18 or newer (found: $found)."
-  if ((Get-Command winget -ErrorAction SilentlyContinue) -and (AskYes 'Install the current Node.js LTS with winget?')) {
+  if ((Get-Command winget -ErrorAction SilentlyContinue) -and
+      (& { Write-Host '  Setup can install the current Node.js LTS with winget.'; AskYes 'Install it?' })) {
     & winget install --exact --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
     if ($LASTEXITCODE -ne 0) { & winget upgrade --exact --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements }
     $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
@@ -109,25 +118,28 @@ Write-Host "  Using Node $(& $node -v) ($node)"
 $env:Path = (Split-Path $node) + ';' + $env:Path # npm below runs with this Node
 
 # ---------- install and build ----------
-Title 'Installing and building'
+Title 172 'Installing and building'
 StopTheater # a running copy would keep files in use
 Run 'npm.cmd' @('ci', '--no-audit', '--no-fund', '--loglevel=error') # errors only
 Run 'npm.cmd' @('run', 'build', '--silent', '--', '--logLevel', 'error')
 
 # ---------- settings ----------
-Title 'Settings'
+Title 135 'Settings'
 Run $node @('scripts/setup.ts', 'configure')
 $port = 8787
 $m = Select-String -Path (Join-Path $AppDir '.env') -Pattern '^\s*PORT\s*=\s*(\d+)' | Select-Object -First 1
 if ($m) { $port = [int]$m.Matches[0].Groups[1].Value }
 
 # ---------- firewall ----------
-Title 'Network access'
+Title 167 'Network access'
 $rule = Get-NetFirewallRule -DisplayName $RuleName -ErrorAction SilentlyContinue | Select-Object -First 1
 $rulePort = if ($rule) { ($rule | Get-NetFirewallPortFilter).LocalPort } else { $null }
 if ($rule -and "$rulePort" -eq "$port") {
   Write-Host "  Windows Firewall already lets your local network reach port $port."
-} elseif (AskYes "Let phones and tablets on your network reach Theater? (adds a Windows Firewall rule for port $port; Windows asks for permission)") {
+} elseif (& {
+    Write-Host "  Setup can add a Windows Firewall rule for port $port. Windows asks for permission."
+    AskYes 'Let phones and tablets on your network reach Theater?'
+  }) {
   $cmd = "Remove-NetFirewallRule -DisplayName '$RuleName' -ErrorAction SilentlyContinue; " +
          "New-NetFirewallRule -DisplayName '$RuleName' -Description 'Theater web remote (local network only)' " +
          "-Direction Inbound -Protocol TCP -LocalPort $port -RemoteAddress LocalSubnet -Action Allow | Out-Null"
@@ -141,7 +153,7 @@ if ($rule -and "$rulePort" -eq "$port") {
 }
 
 # ---------- start automatically ----------
-Title 'Start automatically'
+Title 170 'Start automatically'
 $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 $autostart = $false
 if ($task -or (AskYes 'Start Theater automatically when you sign in to Windows?')) {
@@ -168,7 +180,7 @@ if ($task -or (AskYes 'Start Theater automatically when you sign in to Windows?'
 }
 
 # ---------- done ----------
-Title 'Theater is ready'
+Title 34 'Theater is ready'
 if ($autostart) {
   Write-Host '  Open:'
 } else {

@@ -12,12 +12,20 @@ NEED_MINOR=18
 SERVICE=denon-remote
 OS="$(uname -s)"
 
-title() { printf '\n\033[1m%s\033[0m\n' "$*"; }
+# Colors (same styles as setup.ps1 and scripts/setup.ts): off when not a terminal or with NO_COLOR.
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-}" != dumb ]; then
+  BOLD=$'\033[1m'; DIM=$'\033[2m'; RESET=$'\033[0m'
+else
+  BOLD=""; DIM=""; RESET=""
+fi
+title() { # title COLOR "Text"   COLOR: a 256-color number, one per section
+  if [ -n "$RESET" ]; then printf '\n\033[1;38;5;%sm%s\033[0m\n' "$1" "$2"; else printf '\n%s\n' "$2"; fi
+}
 ask_yes() { # ask_yes "Question" [y|n]
   local def="${2:-y}" ans hint="[Y/n]"
   [ "$def" = n ] && hint="[y/N]"
   if [ ! -t 0 ]; then echo "  $1 $([ "$def" = y ] && echo yes || echo no)"; [ "$def" = y ]; return; fi
-  read -r -p "  $1 $hint " ans
+  read -r -p "  $BOLD$1$RESET $DIM$hint$RESET " ans
   [[ "${ans:-$def}" =~ ^[Yy] ]]
 }
 node_ok() { # node_ok /path/to/node -> true if it is 22.18 or newer
@@ -73,7 +81,7 @@ done
 # Fast-forward only, so local edits and commits are never merged or overwritten. After an update, the new
 # setup.sh runs in place of this one (THEATER_UPDATED stops it from updating again).
 if [ -z "$NO_UPDATE" ] && [ -z "${THEATER_UPDATED:-}" ]; then
-  title "Update"
+  title 33 "Update"
   if [ ! -e .git ]; then
     echo "  This copy wasn't downloaded with git, so setup can't update it. Installing it as it is."
   elif ! command -v git >/dev/null 2>&1; then
@@ -99,7 +107,7 @@ if [ -z "$NO_UPDATE" ] && [ -z "${THEATER_UPDATED:-}" ]; then
 fi
 
 # ---------- Node.js ----------
-title "Node.js"
+title 37 "Node.js"
 ORIG_NODE="$(command -v node 2>/dev/null || true)"
 if find_node; then
   echo "  Using Node $("$NODE" -v) ($NODE)"
@@ -110,7 +118,8 @@ else
     echo "  Setup can install Node 22 in /opt/node22. Any Node you already have stays as it is."
     if ask_yes "Install it?" y && install_node_linux; then NODE=/opt/node22/bin/node; fi
   elif [ "$OS" = Darwin ] && command -v brew >/dev/null 2>&1; then
-    if ask_yes "Install Node 22 with Homebrew (brew install node@22)?" y && brew install node@22; then
+    echo "  Setup can install Node 22 with Homebrew (brew install node@22)."
+    if ask_yes "Install it?" y && brew install node@22; then
       NODE="$(brew --prefix)/opt/node@22/bin/node"
     fi
   fi
@@ -125,18 +134,18 @@ NODE="$NODE_DIR/$(basename "$NODE")"
 export PATH="$NODE_DIR:$PATH" # npm below runs with this Node; your shell is not changed
 
 # ---------- install and build ----------
-title "Installing and building (this can take a few minutes on a Raspberry Pi)"
+title 172 "Installing and building (this can take a few minutes on a Raspberry Pi)"
 npm ci --no-audit --no-fund --loglevel=error # errors only
 npm run build --silent -- --logLevel error
 
 # ---------- settings ----------
-title "Settings"
+title 135 "Settings"
 "$NODE" scripts/setup.ts configure
 
 # ---------- start automatically ----------
 AUTOSTART=""
 if [ "$OS" = Linux ] && command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
-  title "Start automatically"
+  title 170 "Start automatically"
   UNIT="/etc/systemd/system/$SERVICE.service"
   if [ -f "$UNIT" ] || ask_yes "Start Theater automatically when this computer boots?" y; then
     UNIT_TEXT=$(cat <<EOF
@@ -199,7 +208,7 @@ EOF
     echo "  Theater is running as the '$SERVICE' service."
   fi
 elif [ "$OS" = Darwin ]; then
-  title "Start automatically"
+  title 170 "Start automatically"
   PLIST="$HOME/Library/LaunchAgents/com.theater.denon-remote.plist"
   if [ -f "$PLIST" ] || ask_yes "Start Theater automatically when you log in to this Mac?" y; then
     mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs"
@@ -232,7 +241,7 @@ EOF
 fi
 
 # ---------- done ----------
-title "Theater is ready"
+title 34 "Theater is ready"
 if [ -z "$AUTOSTART" ]; then
   if [ -n "$ORIG_NODE" ] && [ "$ORIG_NODE" -ef "$NODE" ]; then
     echo "  Start it with:  npm start"

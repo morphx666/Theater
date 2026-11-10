@@ -54,18 +54,25 @@ function writeEnv(values: Record<string, string | null>) {
   fs.writeFileSync(ENV_FILE, lines.join('\n') + '\n');
 }
 
+// ---------- colors (same styles as setup.sh and setup.ps1; off when not a terminal or with NO_COLOR) ----------
+const color = !!process.stdout.isTTY && !process.env.NO_COLOR && process.env.TERM !== 'dumb';
+const sgr = (code: string) => (s: string) => (color ? `\x1b[${code}m${s}\x1b[0m` : s);
+const question = sgr('1'); // questions: bold
+const dim = sgr('2'); // [Y/n] hints and defaults
+const strong = sgr('1;38;5;39'); // receiver names: bold blue
+
 // ---------- questions ----------
 let rl: readline.Interface | null = null;
-async function ask(question: string, def = ''): Promise<string> {
-  if (!interactive) { if (def) console.log(`  ${question}: ${def}`); return def; }
+async function ask(q: string, def = ''): Promise<string> {
+  if (!interactive) { if (def) console.log(`  ${q}: ${def}`); return def; }
   rl ??= readline.createInterface({ input: process.stdin, output: process.stdout });
-  const a = (await rl.question(`  ${question}${def ? ` [${def}]` : ''}: `)).trim();
+  const a = (await rl.question(`  ${question(q)}${def ? ` ${dim(`[${def}]`)}` : ''}: `)).trim();
   return a || def;
 }
-async function confirm(question: string, def = true): Promise<boolean> {
-  if (!interactive) { console.log(`  ${question} ${def ? 'yes' : 'no'}`); return def; }
+async function confirm(q: string, def = true): Promise<boolean> {
+  if (!interactive) { console.log(`  ${q} ${def ? 'yes' : 'no'}`); return def; }
   rl ??= readline.createInterface({ input: process.stdin, output: process.stdout });
-  const a = (await rl.question(`  ${question} ${def ? '[Y/n]' : '[y/N]'} `)).trim();
+  const a = (await rl.question(`  ${question(q)} ${dim(def ? '[Y/n]' : '[y/N]')} `)).trim();
   return a ? /^y/i.test(a) : def;
 }
 
@@ -117,7 +124,7 @@ async function discover(): Promise<Receiver[]> {
   return [...byHost.values()].sort((a, b) => a.host.localeCompare(b.host, undefined, { numeric: true }));
 }
 
-const label = (r: Receiver) => `${r.model}${r.name && r.name !== r.model ? ` "${r.name}"` : ''} at ${r.host}`;
+const label = (r: Receiver) => `${strong(r.model)}${r.name && r.name !== r.model ? ` "${r.name}"` : ''} at ${r.host}`;
 
 async function askHost(): Promise<string> {
   if (!interactive) {
@@ -139,7 +146,8 @@ async function chooseReceiver(env: Record<string, string>): Promise<string> {
   if (env.AVR_HOST) {
     const info = await deviceInfo(env.AVR_HOST);
     if (info) {
-      if (await confirm(`Found ${info.model} at ${env.AVR_HOST} (from .env). Keep using it?`)) return env.AVR_HOST;
+      console.log(`  Found ${strong(info.model)} at ${env.AVR_HOST} (from .env).`);
+      if (await confirm('Keep using it?')) return env.AVR_HOST;
     } else {
       console.log(`  The receiver in .env (${env.AVR_HOST}) isn't answering.`);
     }
@@ -147,7 +155,8 @@ async function chooseReceiver(env: Record<string, string>): Promise<string> {
   console.log('  Searching your network for Denon and Marantz receivers...');
   const found = await discover();
   if (found.length === 1) {
-    if (await confirm(`Found ${label(found[0])}. Use it?`)) return found[0].host;
+    console.log(`  Found ${label(found[0])}.`);
+    if (await confirm('Use it?')) return found[0].host;
   } else if (found.length > 1) {
     console.log('  Found these receivers:');
     found.forEach((r, i) => console.log(`    ${i + 1}. ${label(r)}`));
@@ -238,7 +247,8 @@ async function chooseDataDir(env: Record<string, string>): Promise<string | null
     if (!interactive) process.exit(1);
   }
   if (path.relative(dir, current) !== '' && hasFiles(current) && !hasFiles(dir)) {
-    if (await confirm(`Copy your current settings and backups from ${current}?`)) {
+    console.log(`  Your current settings and backups are in ${current}.`);
+    if (await confirm('Copy them to the new folder?')) {
       fs.cpSync(current, dir, { recursive: true });
       console.log('  Copied.');
     }
@@ -269,7 +279,7 @@ async function configure() {
   const host = await chooseReceiver(env);
   const info = await deviceInfo(host);
   if (info && info.model !== TESTED_MODEL) {
-    console.log(`  Note: Theater has only been tested on the ${TESTED_MODEL}. On the ${info.model}, some panels may not work.`);
+    console.log(`  Note: Theater has only been tested on the ${TESTED_MODEL}. On the ${strong(info.model)}, some panels may not work.`);
   }
   const port = await choosePort(env);
   console.log('');
