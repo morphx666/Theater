@@ -50,9 +50,8 @@
   {#if has('LFE')}
     <div class="setting stack">
       <Slider label="LFE level" min={-10} max={0} step={1} value={-Number(ps.LFE)} format={(v) => fmtDb(v) + ' dB'}
-        disabled={locked('LFE')} onchange={setLfe} />
-      {#if locked('LFE')}<div class="hint">{hint('LFE', '')}</div>
-      {:else if lfeIgnored}<div class="hint">Not applied by the receiver for this signal</div>{/if}
+        disabled={locked('LFE')} onchange={setLfe}
+        hint={locked('LFE') ? hint('LFE', '') : lfeIgnored ? 'Not applied by the receiver for this signal' : ''} />
     </div>
   {/if}
   {#if has('CINEMA EQ')}
