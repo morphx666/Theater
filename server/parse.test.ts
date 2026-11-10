@@ -216,6 +216,9 @@ test('HDMI video signal info', async () => {
     'SSINFSIGCOS 99', 'SSINFSIGPIX 22', 'SSINFSIGFRL I---', 'SSINFSIGFRL O---', 'SSINFAISFOR 3/2/.1']) applyLine(st, l);
   assert.deepEqual(st.video, { resIn: '4K24', resOut: '4K24', hdrIn: 'HDR10', hdrOut: 'HDR10', cos: '99', pix: '22', frlIn: '---', frlOut: '---' });
   assert.equal(st.audioFormat, '3/2/.1');
+  // The Information page also emits the tuner region, which must not replace the model.
+  applyLine(st, 'SYMOAVR-X1700HUSA'); applyLine(st, 'SYMODTUN USA');
+  assert.equal(st.model, 'AVR-X1700HUSA');
   const codes = { cos: { '9': 'BT.2020' }, pix: { '2': '10bits' } };
   const v = decodeVideo(st.video, codes)!;
   assert.deepEqual(v.out, { res: '4K24', hdr: 'HDR10', color: 'BT.2020', depth: '10bits', frl: null });

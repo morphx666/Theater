@@ -155,6 +155,7 @@ function applyInner(st: AvrState, l: string): void {
     if (m) st.video[m[1] === 'IN' ? 'resIn' : 'resOut'] = m[2].trim();
     return;
   }
+  if (l.startsWith('SYMODTUN')) return; // tuner module region ("SYMODTUN USA"), not the model
   if (l.startsWith('SYMO')) { st.model = l.slice(4).trim(); return; }
   if (l.startsWith('PS')) {
     const body = l.slice(2);
