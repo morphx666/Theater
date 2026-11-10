@@ -167,11 +167,20 @@ EOF
       [ "${OLD_PID:-0}" != 0 ] && kill "$OLD_PID" 2>/dev/null || OLD_PID=""
     fi
     if [ -n "$OLD_PID" ]; then
-      for _ in $(seq 1 30); do # systemd waits RestartSec (5 s) before starting it again
+      # systemd waits RestartSec (5 s) before starting it again: count it down with dots so it doesn't look stuck.
+      DOT=o; case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in *UTF-8*|*utf8*) DOT=●;; esac
+      DOTS="$DOT $DOT $DOT $DOT $DOT"
+      if [ -t 1 ]; then TTY=1; else TTY=""; echo "  Restarting Theater..."; fi
+      for i in $(seq 0 29); do
+        if [ -n "$TTY" ]; then
+          LEFT=$((5 - i / 2)); [ "$LEFT" -gt 0 ] || LEFT=0
+          printf '\r\033[K  Restarting Theater  %s' "${DOTS:0:$((LEFT * 2))}"
+        fi
         sleep 0.5
         NEW_PID=$(systemctl show -p MainPID --value "$SERVICE")
         [ "${NEW_PID:-0}" != 0 ] && [ "$NEW_PID" != "$OLD_PID" ] && systemctl is-active --quiet "$SERVICE" && break
       done
+      if [ -n "$TTY" ]; then printf '\r\033[K'; fi
       if ! systemctl is-active --quiet "$SERVICE"; then OLD_PID=""; fi # didn't come back: restart it the usual way
     fi
     if [ -z "$OLD_PID" ]; then
