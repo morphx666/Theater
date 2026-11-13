@@ -18,6 +18,12 @@ function holdLocal() {
 
 let repeat;
 
+/** With "Snap to step" on, every value lands on the step grid (counted from 0 dB); otherwise on 0.5 dB. */
+function grid() {
+  const st = avr.settings ?? {};
+  return st.volumeSnap && st.volumeStep > 0.5 ? st.volumeStep : 0.5;
+}
+
 export const volume = {
   /** Top of the scale: the receiver's maximum for the current signal (manual p.69), at most +18 dB. */
   get max() { return Math.min(18, avr.state?.volumeMax ?? 18); },
@@ -29,14 +35,18 @@ export const volume = {
   set dragging(d) { s.dragging = d; if (!d) holdLocal(); },
 
   set(db) {
-    db = Math.round(db * 2) / 2;
-    db = Math.max(MIN, Math.min(this.top, db));
+    const g = grid();
+    db = Math.round(db / g) * g;
+    db = Math.max(MIN, Math.min(Math.floor(this.top / g) * g, db));
     s.local = db;
     holdLocal();
     sendVol(db);
   },
   step(dir) {
-    this.set(this.value + dir * (avr.settings?.volumeStep ?? 0.5));
+    const g = grid();
+    // Off the grid (e.g. just after turning snapping on): the first step goes to the nearest grid line that way.
+    if (g > 0.5) this.set((dir > 0 ? Math.floor(this.value / g) + 1 : Math.ceil(this.value / g) - 1) * g);
+    else this.set(this.value + dir * (avr.settings?.volumeStep ?? 0.5));
   },
   /** Hold-to-repeat for −/+ buttons: one step now, then faster and faster until release(). */
   hold(dir) {

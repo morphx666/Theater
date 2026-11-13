@@ -24,6 +24,16 @@
         <Seg value={avr.settings.volumeStep} onchange={(v) => saveSettings({ volumeStep: v })}
           options={[{ value: 0.5, label: '0.5 dB' }, { value: 1, label: '1 dB' }, { value: 2, label: '2 dB' }]} />
       </div>
+      {#if avr.settings.volumeStep > 0.5}
+        <div class="setting">
+          <div>
+            <div class="label">Snap every change to {avr.settings.volumeStep} dB</div>
+            <div class="hint">Also changes from the remote or the receiver.</div>
+          </div>
+          <button class="switch" class:on={avr.settings.volumeSnap === true} aria-label="Snap every volume change to the step"
+            onclick={() => saveSettings({ volumeSnap: avr.settings.volumeSnap !== true })}></button>
+        </div>
+      {/if}
       <div class="setting">
         <div class="label">Accent color</div>
         <div class="swatches" role="radiogroup" aria-label="Accent color">

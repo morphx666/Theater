@@ -11,7 +11,7 @@ import { Heos, emptyNowPlaying } from './heos.ts';
 import { SetupApi, HttpError, READABLE, WRITABLE } from './setup.ts';
 import { applyLine, emptyState, REFRESH_QUERIES, POWER_ON_QUERIES, SIGNAL_QUERIES, installedFromLevelsXml, LEVEL_INDEX_TO_CODE } from './parse.ts';
 import { decodeVideo, learnFromInformation, loadCodes, saveCodes } from './signal.ts';
-import { guard, effectiveCap, quickRecallCorrection } from './guard.ts';
+import { guard, effectiveCap, quickRecallCorrection, stepCorrection } from './guard.ts';
 import { pollAsTelnetLines } from './http-status.ts';
 import { fetchAudioMap, type AudioMap } from './audio-map.ts';
 import { TunerPresets, PRESET_COUNT, pad, validPreset, validName } from './tuner-presets.ts';
@@ -28,6 +28,7 @@ const USE_TELNET = process.env.AVR_TELNET !== 'off';
 type Layout = { order?: string[]; lanes?: Record<string, number>; spans?: Record<string, number> };
 type Settings = {
   volumeCapDb: number; volumeStep: number;
+  volumeSnap: boolean; // keep the master volume on the step grid, whoever changes it
   topVolume: boolean; // compact volume control in the top bar
   accent: string; // app accent color (one of ACCENTS)
   layouts?: Record<string, Layout>; // per page: panel order, start column, width in columns
@@ -36,7 +37,7 @@ type Settings = {
 };
 const SETTINGS_FILE = path.join(DATA, 'settings.json');
 const ACCENTS = ['amber', 'rose', 'violet', 'blue', 'teal', 'green']; // palettes in web/src/app.css
-let settings: Settings = { volumeCapDb: -10, volumeStep: 0.5, topVolume: true, accent: 'blue' };
+let settings: Settings = { volumeCapDb: -10, volumeStep: 0.5, volumeSnap: false, topVolume: true, accent: 'blue' };
 try { settings = { ...settings, ...JSON.parse(await fs.readFile(SETTINGS_FILE, 'utf8')) }; } catch {}
 // Migrate the older Home-only layout format into layouts.home.
 if (settings.home || settings.homeLanes || settings.homeSpans) {
@@ -235,6 +236,7 @@ telnet.on('line', (line: string) => {
   if (lastLog.length > 200) lastLog = lastLog.slice(-200);
   const prevPower = state.zoneMain;
   const prevSource = state.source;
+  const prevVolume = state.volume;
   if (/^(PW|ZM|Z2)(ON|OFF|STANDBY)$/.test(line) && line !== (line.startsWith('PW') ? (prevPowerLine ?? '') : '')) {
     if (line.startsWith('PW')) prevPowerLine = line;
     log(`receiver reported: ${line}`);
@@ -242,6 +244,7 @@ telnet.on('line', (line: string) => {
   const changed = applyLine(state, line);
   if (changed) scheduleBroadcast();
   capAfterQuickRecall(line);
+  snapToStep(line, prevVolume);
   // Audyssey settings are part of the active speaker preset (auto-saved like the setup pages).
   if (changed && /^PS(MULTEQ|DYNEQ|REFLEV|DYNVOL)/.test(line)) speakerPresets.noteWrite('audio', 9);
   // Parameters depend on power state and input; re-read them after transitions.
@@ -290,7 +293,12 @@ setInterval(async () => {
     const lines = await pollAsTelnetLines(HOST);
     conn.http = true;
     let changed = false;
-    for (const l of lines) { changed = applyLine(state, l) || changed; capAfterQuickRecall(l); }
+    for (const l of lines) {
+      const prevVolume = state.volume;
+      changed = applyLine(state, l) || changed;
+      capAfterQuickRecall(l);
+      snapToStep(l, prevVolume);
+    }
     if (changed) scheduleBroadcast();
   } catch {
     if (conn.http) { conn.http = false; scheduleBroadcast(); }
@@ -338,6 +346,15 @@ function capAfterQuickRecall(line: string) {
   const cap = effectiveCap(settings.volumeCapDb, state);
   const fix = quickRecallCorrection(line, cap);
   if (fix) { log(`Quick Select set ${line}, above the ${cap} dB cap; sending ${fix}`); telnet.send(fix); }
+}
+
+// "Snap to step": a volume change from anywhere (remote, front panel, another app) that lands between the app's
+// 1 or 2 dB steps is carried on to the next step in the same direction.
+function snapToStep(line: string, prevDb: number | null) {
+  if (!settings.volumeSnap || state.zoneMain !== true) return;
+  const top = Math.min(effectiveCap(settings.volumeCapDb, state), state.volumeMax ?? 18);
+  const fix = stepCorrection(line, prevDb, settings.volumeStep, top);
+  if (fix) { log(`volume ${line} is between ${settings.volumeStep} dB steps; sending ${fix}`); telnet.send(fix); }
 }
 
 function sendCommand(raw: string, source = ''): { ok: boolean; cmd?: string; reason?: string } {
@@ -409,6 +426,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
         const b = await readBody(req);
         if (typeof b.volumeCapDb === 'number') settings.volumeCapDb = Math.min(18, Math.max(-60, Math.round(b.volumeCapDb * 2) / 2));
         if (typeof b.volumeStep === 'number') settings.volumeStep = [0.5, 1, 2].includes(b.volumeStep) ? b.volumeStep : 0.5;
+        if (typeof b.volumeSnap === 'boolean') settings.volumeSnap = b.volumeSnap;
         if (typeof b.topVolume === 'boolean') settings.topVolume = b.topVolume;
         if (ACCENTS.includes(b.accent)) settings.accent = b.accent;
         if (b.panelOption && ID.test(String(b.panelOption.panel)) && /^[a-zA-Z]{1,30}$/.test(String(b.panelOption.key))) {

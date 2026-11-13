@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyLine, emptyState, volToDb, dbToVol, levelToDb, dbToLevel, REFRESH_QUERIES } from './parse.ts';
-import { guard, effectiveCap, quickRecallCorrection } from './guard.ts';
+import { guard, effectiveCap, quickRecallCorrection, stepCorrection } from './guard.ts';
 
 // Real lines captured from the X1700H.
 const CAPTURE = `PWON
@@ -295,6 +295,28 @@ test('Quick Select recall above the cap is brought back down', () => {
   assert.equal(quickRecallCorrection('MVMAX 98', -20), null); // not a volume report
   assert.equal(quickRecallCorrection('Z270', -20), 'Z260');
   assert.equal(quickRecallCorrection('MUON', -20), null);
+});
+
+test('snap to step carries an in-between volume on to the next step', () => {
+  // -30 -> -29.5 (remote up): 1 dB -> -29, 2 dB -> -28
+  assert.equal(stepCorrection('MV505', -30, 1, -10), 'MV51');
+  assert.equal(stepCorrection('MV505', -30, 2, -10), 'MV52');
+  // going down: -30 -> -30.5 -> -31 / -32
+  assert.equal(stepCorrection('MV495', -30, 1, -10), 'MV49');
+  assert.equal(stepCorrection('MV495', -30, 2, -10), 'MV48');
+  // 2 dB, from an odd value: -29 -> -28.5 goes to -28, -29 -> -29.5 goes to -30
+  assert.equal(stepCorrection('MV515', -29, 2, -10), 'MV52');
+  assert.equal(stepCorrection('MV505', -29, 2, -10), 'MV50');
+  // already on a step, 0.5 dB step, unknown previous value, or not a volume report: nothing
+  assert.equal(stepCorrection('MV51', -30, 1, -10), null);
+  assert.equal(stepCorrection('MV505', -30, 0.5, -10), null);
+  assert.equal(stepCorrection('MV505', null, 1, -10), null);
+  assert.equal(stepCorrection('MVMAX 985', -30, 1, -10), null);
+  assert.equal(stepCorrection('Z2505', -30, 1, -10), null);
+  // never raised past the cap; lowering is always fine
+  assert.equal(stepCorrection('MV695', -11, 2, -10.5), null); // -10.5 -> -10 would pass the cap
+  assert.equal(stepCorrection('MV715', -8, 2, -10), 'MV70'); // above the cap, going down
+  assert.equal(stepCorrection('MV005', -79, 2, -10), 'MV00'); // -79.5 -> -80
 });
 
 test('Bluetooth transmitter: on/off and output mode are separate replies', () => {

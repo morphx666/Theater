@@ -88,6 +88,23 @@ export function quickRecallCorrection(line: string, capDb: number): string | nul
   return db !== null && db > capDb ? `${m[1]}${dbToVol(capDb)}` : null;
 }
 
+/**
+ * "Snap to step": the receiver (and its remote) change the volume in 0.5 dB steps. When the app's step is 1 or
+ * 2 dB and the reported master volume lands between steps, return the command that moves it on to the next
+ * step in the same direction (-30 -> -29.5 becomes -29 with 1 dB, -28 with 2 dB). Steps count from 0 dB.
+ * Never snaps upward past `topDb` (the cap or the receiver's maximum), and does nothing without a known
+ * previous value, so starting the app never changes the volume.
+ */
+export function stepCorrection(line: string, prevDb: number | null, step: number, topDb: number): string | null {
+  const m = line.match(/^MV(\d{2,3})$/);
+  if (!m || prevDb === null || !(step > 0.5)) return null;
+  const db = volToDb(m[1]);
+  if (db === null || db === prevDb || Number.isInteger(db / step)) return null;
+  const target = (db > prevDb ? Math.ceil(db / step) : Math.floor(db / step)) * step;
+  if (target > db && target > topDb) return null;
+  return `MV${dbToVol(target)}`;
+}
+
 /** Effective cap = the stricter of the app setting and the receiver's own Volume Limit. */
 export function effectiveCap(appCapDb: number, st: AvrState): number {
   let cap = appCapDb;
