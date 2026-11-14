@@ -150,9 +150,13 @@
         { label: 'stop the rule', make: () => newBlock('stop', c) },
       ] },
       { cat: 'sound', title: 'Sound mode', items: [{ label: 'find sound mode containing …', make: () => newBlock('findMode', c) }] },
-      ...[...groups].map(([g, props]) => ({ cat: 'action', title: `Set · ${g}`, items: props.map((p) => ({ label: `set ${p.label}`, make: () => newBlock('set', c, p.id) })) })),
+      ...[...groups].map(([g, props]) => ({ cat: 'action', title: `Set · ${g}`, items: props.map((p) => ({ label: VERB[p.id] ?? `set ${p.label}`, make: () => newBlock('set', c, p.id) })) })),
     ];
   });
+  const VERB = {
+    speakerPreset: 'apply speaker preset', 'heos.favorite': 'play HEOS favorite', 'heos.state': 'play / pause HEOS',
+    'heos.skip': 'HEOS next / previous', quick: 'recall Quick Select', 'tuner.preset': 'tune to tuner preset',
+  };
   let search = $state('');
   const shown = $derived(palette.map((g) => ({ ...g, items: g.items.filter((i) => i.label.toLowerCase().includes(search.trim().toLowerCase())) })).filter((g) => g.items.length));
 

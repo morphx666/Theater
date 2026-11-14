@@ -5,7 +5,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { PROPS, type Ctx, type PropDef } from './automation-catalog.ts';
+import { PROPS, type Ctx, type PropDef, type AppAction } from './automation-catalog.ts';
 import { OPS, argKind, compare, sameValue, type Value } from './automation-ops.ts';
 
 // ---------- model ----------
@@ -21,7 +21,7 @@ export type Trigger =
   | { type: 'becomes'; cond: Cond; settleMs?: number };
 
 export type Block =
-  | { type: 'set'; prop: string; param?: string; value: Value; onlyLower?: boolean }
+  | { type: 'set'; prop: string; param?: string; value: Value; onlyLower?: boolean; confirmAmp?: boolean }
   | { type: 'if'; cond: Cond; then: Block[]; else: Block[] }
   | { type: 'wait'; ms: number }
   | { type: 'waitUntil'; cond: Cond; timeoutMs: number; onTimeout: 'continue' | 'stop' }
@@ -90,7 +90,8 @@ function checkValue(def: PropDef, v: unknown, forWrite: boolean): Value {
       return v;
     }
     case 'enum':
-      if (typeof v !== 'string' || !def.options!().some((o) => o.value === v)) bad(what + 'not one of its choices');
+      // Presets and favorites change: they're checked by form here, and at run time against the live list.
+      if (def.validValue ? !def.validValue(v) : typeof v !== 'string' || !def.options!().some((o) => o.value === v)) bad(what + 'not one of its choices');
       return v as string;
     case 'bool':
       if (typeof v !== 'boolean') bad(what + 'needs on or off');
@@ -111,6 +112,7 @@ function checkCond(c: unknown, depth = 0): Cond {
   switch (c.type) {
     case 'cmp': {
       const def = propOf(c.prop);
+      if (def.writeOnly) bad(`${def.label} can only be set, not tested`);
       const param = checkParam(def, c.param);
       if (typeof c.op !== 'string' || !OPS[def.type].includes(c.op)) bad(`${def.label}: bad comparison`);
       const kind = argKind(c.op);
@@ -156,6 +158,7 @@ function checkTrigger(t: unknown): Trigger {
   const settle = t.settleMs === undefined ? {} : { settleMs: ms(t.settleMs, LIMITS.settleMs, 'settle time') };
   if (t.type === 'change') {
     const def = propOf(t.prop);
+    if (def.writeOnly) bad(`${def.label} can only be set, not watched`);
     const param = checkParam(def, t.param);
     const out: Trigger = { type: 'change', prop: def.id, ...(param ? { param } : {}), ...settle };
     for (const k of ['from', 'to'] as const) {
@@ -178,11 +181,13 @@ function checkBlocks(list: unknown, depth: number, count: { n: number }): Block[
     switch (b.type) {
       case 'set': {
         const def = propOf(b.prop);
-        if (!def.write) bad(`${def.label} can't be set`);
+        if (!def.write && !def.app) bad(`${def.label} can't be set`);
         const param = checkParam(def, b.param);
         const value = checkValue(def, b.value, true);
         if (b.onlyLower && !def.onlyLower) bad(`${def.label}: "only lower" is for volume`);
-        return { type: 'set', prop: def.id, ...(param ? { param } : {}), value, ...(b.onlyLower ? { onlyLower: true } : {}) };
+        if (b.confirmAmp && !def.confirmAmp) bad(`${def.label}: the Amp Assign confirmation is for speaker presets`);
+        return { type: 'set', prop: def.id, ...(param ? { param } : {}), value, ...(b.onlyLower ? { onlyLower: true } : {}),
+          ...(b.confirmAmp ? { confirmAmp: true } : {}) };
       }
       case 'if':
         return { type: 'if', cond: checkCond(b.cond), then: checkBlocks(b.then ?? [], depth + 1, count), else: checkBlocks(b.else ?? [], depth + 1, count) };
@@ -250,8 +255,15 @@ function describeTrigger(t: Trigger): string {
   const name = t.param ? `${label} ${t.param}` : label;
   return `${name} changed${t.from !== undefined ? ` from ${show(t.from)}` : ''}${t.to !== undefined ? ` to ${show(t.to)}` : ''}`;
 }
-const describeSet = (b: Extract<Block, { type: 'set' }>) =>
-  `set ${PROPS[b.prop]?.label ?? b.prop}${b.param ? ` ${b.param}` : ''} to ${show(b.value)}${b.onlyLower ? ' (only lower)' : ''}`;
+const describeSet = (b: Extract<Block, { type: 'set' }>, ctx?: Ctx) => {
+  const def = PROPS[b.prop];
+  const v = (ctx && def?.options?.(ctx).find((o) => o.value === b.value)?.label) ?? show(b.value); // preset names, not ids
+  return `set ${def?.label ?? b.prop}${b.param ? ` ${b.param}` : ''} to ${v}${b.onlyLower ? ' (only lower)' : ''}`;
+};
+const describeAction = (x: AppAction, ctx?: Ctx) =>
+  x.kind === 'speakerPreset' ? `apply speaker preset "${ctx?.presets?.list.find((p) => p.id === x.id)?.name ?? x.id}"`
+  : x.kind === 'heos' ? `HEOS ${x.action}`
+  : `play HEOS favorite ${x.index}${ctx?.favorites?.[x.index - 1] ? ` (${ctx.favorites[x.index - 1].name})` : ''}`;
 
 // ---------- engine ----------
 
@@ -267,6 +279,8 @@ export type AutomationIo = {
   log?: (m: string) => void;
   changed?: () => void; // the summary changed (broadcast a snapshot)
   run?: (r: Run) => void; // a run started, progressed or ended
+  /** Perform an app action (speaker preset, HEOS); resolves when it's done. */
+  app?: (a: AppAction) => Promise<{ ok: boolean; note?: string }>;
   /** Select the first sound mode containing `text` (server/sound-modes.ts); with `back`, return if not found. */
   findMode?: (text: string, back: boolean) => Promise<{ ok: boolean; mode: string | null; note?: string }>;
 };
@@ -397,8 +411,10 @@ export class Automations {
         const b = blocks[i], p = at ? `${at}.${i}` : String(i);
         if (b.type === 'set') {
           const why = this.skipReason(b, ctx);
-          run.steps.push(why ? { path: p, what: describeSet(b), result: 'skipped', note: why }
-            : { path: p, what: describeSet(b), result: 'would-send', cmds: PROPS[b.prop].write!(b.value, b.param) });
+          const def = PROPS[b.prop];
+          const cmds = def.app ? [describeAction(def.app(b.value, b.param, b), ctx)] : def.write!(b.value, b.param);
+          run.steps.push(why ? { path: p, what: describeSet(b, ctx), result: 'skipped', note: why }
+            : { path: p, what: describeSet(b, ctx), result: 'would-send', cmds });
         } else if (b.type === 'if') {
           const ok = evalCond(b.cond, ctx);
           run.steps.push({ path: p, what: 'if', result: ok ? 'true' : 'false' });
@@ -576,7 +592,7 @@ export class Automations {
       const b = blocks[i], p = at ? `${at}.${i}` : String(i);
       switch (b.type) {
         case 'set':
-          this.doSet(run, a, b, p);
+          await this.doSet(run, a, b, p);
           break;
         case 'if': {
           const ok = evalCond(b.cond, this.io.ctx());
@@ -609,17 +625,32 @@ export class Automations {
   private skipReason(b: Extract<Block, { type: 'set' }>, ctx: Ctx): string | null {
     const def = PROPS[b.prop];
     if (def.needsZone && ctx.state.zoneMain !== true) return 'main zone is off';
+    if (def.needsZone2 && ctx.state.zone2.power !== true) return 'zone 2 is off';
+    if (def.needsInput && ctx.state.source !== def.needsInput) return `the input isn't ${def.needsInput === 'TUNER' ? 'Tuner' : def.needsInput}`;
     const cur = def.read(ctx, b.param);
     if (b.onlyLower && typeof cur === 'number' && cur <= (b.value as number)) return 'already at or below';
     if (!def.alwaysSend && cur !== null && (def.same ?? sameValue)(cur, b.value)) return 'already set';
     return null;
   }
 
-  private doSet(run: Live, a: Automation, b: Extract<Block, { type: 'set' }>, p: string) {
+  private async doSet(run: Live, a: Automation, b: Extract<Block, { type: 'set' }>, p: string) {
     const def = PROPS[b.prop];
-    const what = describeSet(b);
+    const what = describeSet(b, this.io.ctx());
     const why = this.skipReason(b, this.io.ctx());
     if (why) { this.step(run, { path: p, what, result: 'skipped', note: why }); return; }
+    if (def.app) { // the app does it (speaker preset, HEOS): wait until it's done
+      const action = def.app(b.value, b.param, b);
+      if (!this.io.app) throw new Error(`${what}: not available`);
+      const r = await this.io.app(action);
+      if (run.cancelled) throw CANCEL;
+      this.lastAction = { at: this.clock.now(), depth: run.depth };
+      if (!r.ok) {
+        this.step(run, { path: p, what, result: 'error', note: r.note });
+        throw new Error(`${what}: ${r.note ?? 'failed'}`);
+      }
+      this.step(run, { path: p, what, result: 'ok', cmds: [describeAction(action, this.io.ctx())], ...(r.note ? { note: r.note } : {}) });
+      return;
+    }
     const sent: string[] = [];
     for (const c of def.write!(b.value, b.param)) {
       const r = this.io.cmd(c, `automation: ${a.name}`);

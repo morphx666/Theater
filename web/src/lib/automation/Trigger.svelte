@@ -24,7 +24,7 @@
 
 <div class="trig">
   {#if trigger.type === 'change'}
-    <PropSelect catalog={ed.catalog} value={trigger.prop}
+    <PropSelect catalog={ed.catalog} filter={(p) => !p.writeOnly} value={trigger.prop}
       onchange={(id) => { trigger.prop = id; fitToProp(trigger, ed.catalog.find((p) => p.id === id), 'change'); ed.commit(); }} />
     {#if def?.param}
       <Pick label={def.param.label} value={trigger.param} options={def.param.options.map((o) => ({ value: o.value, label: o.value }))}

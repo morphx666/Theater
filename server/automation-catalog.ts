@@ -6,15 +6,30 @@ import { dbToVol, dbToLevel, levelToDb, SOURCE_ORDER, SOURCE_DEFAULT_NAMES, type
 import type { AudioMap } from './audio-map.ts';
 import type { PropType, Value } from './automation-ops.ts';
 
-export type Ctx = { state: AvrState; audioMap: AudioMap };
+/** What rules can see. Only `state` and `audioMap` are required (tests build just those). */
+export type Ctx = {
+  state: AvrState;
+  audioMap: AudioMap;
+  nowPlaying?: { state: string | null; song: string; artist: string; album: string; station: string; source: string | null } | null;
+  presets?: { list: { id: string; name: string }[]; active: string | null } | null; // speaker presets (summary)
+  favorites?: { name: string }[]; // HEOS favorites, in order (1-based when played)
+  conn?: { telnet: boolean; http: boolean; heos: boolean };
+  videoInfo?: { in: Record<string, string | null>; out: Record<string, string | null> } | null;
+};
 export type Option = { value: string; label: string };
+
+/** An action the app performs itself (not a telnet command). */
+export type AppAction =
+  | { kind: 'speakerPreset'; id: string; confirmAmp: boolean }
+  | { kind: 'heos'; action: 'play' | 'pause' | 'stop' | 'next' | 'previous' }
+  | { kind: 'heosFavorite'; index: number };
 
 export type PropDef = {
   id: string;
   label: string;
   group: string;
   type: PropType;
-  unit?: 'dB' | 'ms';
+  unit?: 'dB' | 'ms' | 'min';
   min?: number; max?: number; step?: number;
   /** Enum options. Called without a context for validation (static list), with one for the editor (live names). */
   options?: (ctx?: Ctx) => Option[];
@@ -24,6 +39,14 @@ export type PropDef = {
   param?: { label: string; options: (ctx?: Ctx) => Option[] };
   read: (ctx: Ctx, param?: string) => Value;
   write?: (value: Value, param?: string) => string[];
+  /** An app action instead of telnet commands (speaker presets, HEOS). */
+  app?: (value: Value, param?: string, opts?: { confirmAmp?: boolean }) => AppAction;
+  /** Validate a value without the live option list (presets and favorites change; rules refer to them by id). */
+  validValue?: (v: unknown) => boolean;
+  writeOnly?: boolean; // can't be read: only for actions, never in triggers or conditions
+  needsInput?: string; // actions are skipped unless this input is selected (e.g. TUNER)
+  needsZone2?: boolean; // actions are skipped while Zone 2 is off
+  confirmAmp?: boolean; // the action may need the Amp Assign confirmation (speaker presets)
   /** Does the current value already count as `value`? Default: equal. */
   same?: (current: Value, value: Value) => boolean;
   /** Always send (no "already set" skip, no verify), e.g. recalling a Quick Select. */
@@ -182,9 +205,94 @@ export const CATALOG: PropDef[] = [
   psBool('CES', 'Center spread', 'Audio'),
 
   // Speakers
+  { id: 'speakerPreset', label: 'Speaker preset', group: 'Speakers', type: 'enum', needsZone: true, confirmAmp: true,
+    options: (c) => (c?.presets?.list ?? []).map((p) => ({ value: p.id, label: p.name })),
+    validValue: (v) => typeof v === 'string' && /^[A-Za-z0-9-]{1,64}$/.test(v),
+    read: (c) => c.presets?.active ?? null,
+    app: (v, _p, o) => ({ kind: 'speakerPreset', id: String(v), confirmAmp: !!o?.confirmAmp }) },
   { id: 'channel.level', label: 'Channel level', group: 'Speakers', type: 'number', unit: 'dB', min: -12, max: 12, step: 0.5, needsZone: true,
     param: { label: 'Channel', options: (c) => (c?.state.installed.length ? LEVEL_CHANNELS.filter((o) => c.state.installed.includes(o.value)) : LEVEL_CHANNELS) },
     read: (c, p) => c.state.channels[p!] ?? null, write: (v, p) => [`CV${p} ${dbToLevel(v as number)}`] },
+
+  // Zone 2
+  { id: 'zone2.power', label: 'Zone 2 power', group: 'Zone 2', type: 'bool', settleMs: 2000,
+    read: (c) => c.state.zone2.power, write: (v) => [v ? 'Z2ON' : 'Z2OFF'] },
+  { id: 'zone2.source', label: 'Zone 2 source', group: 'Zone 2', type: 'enum', settleMs: 1500, needsZone2: true,
+    options: (c) => [{ value: 'SOURCE', label: 'Same as main zone' },
+      ...SOURCE_ORDER.map((s) => ({ value: s, label: c?.state.inputs[s]?.name || SOURCE_DEFAULT_NAMES[s] || s }))],
+    read: (c) => c.state.zone2.source, write: (v) => [`Z2${v}`] },
+  { id: 'zone2.volume', label: 'Zone 2 volume', group: 'Zone 2', type: 'number', unit: 'dB', min: -80, max: 18, step: 1,
+    needsZone2: true, onlyLower: true,
+    read: (c) => c.state.zone2.volume, write: (v) => [`Z2${dbToVol(v as number)}`] },
+  { id: 'zone2.mute', label: 'Zone 2 mute', group: 'Zone 2', type: 'bool', needsZone2: true,
+    read: (c) => c.state.zone2.mute, write: (v) => [v ? 'Z2MUON' : 'Z2MUOFF'] },
+
+  // General
+  { id: 'sleep', label: 'Sleep timer', group: 'General', type: 'number', unit: 'min', min: 0, max: 120, step: 10, needsZone: true,
+    read: (c) => c.state.sleep, write: (v) => [v ? `SLP${String(v).padStart(3, '0')}` : 'SLPOFF'] },
+  { id: 'eco', label: 'ECO mode', group: 'General', type: 'enum', options: () => opts([['ON', 'On'], ['AUTO', 'Auto'], ['OFF', 'Off']]),
+    read: (c) => c.state.eco, write: (v) => [`ECO${v}`] },
+  { id: 'dimmer', label: 'Display dimmer', group: 'General', type: 'enum',
+    options: () => opts([['BRI', 'Bright'], ['DIM', 'Dim'], ['DAR', 'Dark'], ['OFF', 'Off']]),
+    read: (c) => c.state.dimmer, write: (v) => [`DIM ${v}`] },
+  { id: 'autoStandby', label: 'Auto standby', group: 'General', type: 'enum',
+    options: () => opts([['15M', '15 min'], ['30M', '30 min'], ['60M', '60 min'], ['OFF', 'Off']]),
+    read: (c) => c.state.autoStandby, write: (v) => [`STBY${v}`] },
+  { id: 'allZoneStereo', label: 'All Zone Stereo', group: 'General', type: 'bool', needsZone: true,
+    read: (c) => c.state.allZoneStereo, write: (v) => [v ? 'MNZST ON' : 'MNZST OFF'] },
+  { id: 'btTx', label: 'Bluetooth transmitter', group: 'General', type: 'bool',
+    read: (c) => onOff(c.state.btTx ?? undefined), write: (v) => [v ? 'BTTX ON' : 'BTTX OFF'] },
+  { id: 'btOutput', label: 'Bluetooth output', group: 'General', type: 'enum',
+    options: () => opts([['SP', 'Bluetooth + speakers'], ['BT', 'Bluetooth only']]),
+    read: (c) => c.state.btOutput, write: (v) => [`BTTX ${v}`] },
+
+  // Tuner (the receiver ignores tuner commands unless the input is Tuner; the guard refuses them too)
+  { id: 'tuner.band', label: 'Tuner band', group: 'Tuner', type: 'enum', needsZone: true, needsInput: 'TUNER',
+    options: () => opts([['FM', 'FM'], ['AM', 'AM']]),
+    read: (c) => c.state.tuner.band, write: (v) => [`TMAN${v}`] },
+  { id: 'tuner.preset', label: 'Tuner preset', group: 'Tuner', type: 'enum', needsZone: true, needsInput: 'TUNER', settleMs: 1000,
+    options: (c) => Array.from({ length: 56 }, (_, i) => {
+      const n = String(i + 1).padStart(2, '0');
+      const name = c?.state.tuner.presets[n]?.name;
+      return { value: n, label: name ? `${n} · ${name}` : n };
+    }).filter((o) => !c || !c.state.tuner.skipped.includes(o.value)),
+    read: (c) => c.state.tuner.preset, write: (v) => [`TPAN${v}`] },
+  { id: 'tuner.freq', label: 'Tuner frequency', group: 'Tuner', type: 'text',
+    read: (c) => { const f = c.state.tuner.freq; if (!f) return null; return c.state.tuner.band === 'AM' ? `${Number(f)} kHz` : `${(Number(f) / 100).toFixed(2)} MHz`; } },
+
+  // HEOS (streaming: now playing, transport, favorites)
+  { id: 'heos.state', label: 'HEOS play state', group: 'HEOS', type: 'enum',
+    options: () => opts([['play', 'Playing'], ['pause', 'Paused'], ['stop', 'Stopped']]),
+    read: (c) => c.nowPlaying?.state ?? null,
+    app: (v) => ({ kind: 'heos', action: v as 'play' | 'pause' | 'stop' }) },
+  { id: 'heos.skip', label: 'HEOS track', group: 'HEOS', type: 'enum', writeOnly: true, alwaysSend: true,
+    options: () => opts([['next', 'Next'], ['previous', 'Previous']]),
+    read: () => null, app: (v) => ({ kind: 'heos', action: v as 'next' | 'previous' }) },
+  { id: 'heos.favorite', label: 'HEOS favorite', group: 'HEOS', type: 'enum', writeOnly: true, alwaysSend: true, needsZone: true,
+    options: (c) => (c?.favorites ?? []).map((f, i) => ({ value: String(i + 1), label: f.name })),
+    validValue: (v) => typeof v === 'string' && /^[1-9]\d?$/.test(v),
+    read: () => null, app: (v) => ({ kind: 'heosFavorite', index: Number(v) }) },
+  { id: 'heos.song', label: 'HEOS title', group: 'HEOS', type: 'text', read: (c) => c.nowPlaying?.song || null },
+  { id: 'heos.artist', label: 'HEOS artist', group: 'HEOS', type: 'text', read: (c) => c.nowPlaying?.artist || null },
+  { id: 'heos.album', label: 'HEOS album', group: 'HEOS', type: 'text', read: (c) => c.nowPlaying?.album || null },
+  { id: 'heos.station', label: 'HEOS station', group: 'HEOS', type: 'text', read: (c) => c.nowPlaying?.station || null },
+
+  // Video (what the Status panel shows; read-only)
+  ...(['in', 'out'] as const).flatMap((side) => {
+    const S = side === 'in' ? 'input' : 'output';
+    const v = (c: Ctx, k: string) => c.videoInfo?.[side]?.[k] ?? null;
+    return [
+      { id: `video.${side}.res`, label: `Video ${S} resolution`, group: 'Video', type: 'text', settleMs: 3000, read: (c) => v(c, 'res') },
+      { id: `video.${side}.hdr`, label: `Video ${S} HDR`, group: 'Video', type: 'text', settleMs: 3000, read: (c) => v(c, 'hdr') },
+      { id: `video.${side}.color`, label: `Video ${S} color`, group: 'Video', type: 'text', settleMs: 3000, read: (c) => v(c, 'color') },
+      { id: `video.${side}.depth`, label: `Video ${S} depth`, group: 'Video', type: 'text', settleMs: 3000, read: (c) => v(c, 'depth') },
+    ] as PropDef[];
+  }),
+
+  // App
+  { id: 'connection', label: 'Receiver connection', group: 'App', type: 'enum',
+    options: () => opts([['telnet', 'Live (telnet)'], ['http', 'HTTP fallback'], ['offline', 'Unreachable']]),
+    read: (c) => (c.conn ? (c.conn.telnet ? 'telnet' : c.conn.http ? 'http' : 'offline') : null) },
 ];
 
 export const PROPS: Record<string, PropDef> = Object.fromEntries(CATALOG.map((p) => [p.id, p]));
@@ -195,6 +303,7 @@ export function describeCatalog(ctx: Ctx) {
     id: p.id, label: p.label, group: p.group, type: p.type, unit: p.unit, min: p.min, max: p.max, step: p.step,
     options: p.options?.(ctx), writeOptions: p.writeOptions,
     param: p.param && { label: p.param.label, options: p.param.options(ctx) },
-    writable: !!p.write, needsZone: !!p.needsZone, onlyLower: !!p.onlyLower, settleMs: p.settleMs ?? null,
+    writable: !!(p.write || p.app), writeOnly: !!p.writeOnly, needsZone: !!p.needsZone, needsInput: p.needsInput ?? null,
+    onlyLower: !!p.onlyLower, confirmAmp: !!p.confirmAmp, settleMs: p.settleMs ?? null,
   }));
 }

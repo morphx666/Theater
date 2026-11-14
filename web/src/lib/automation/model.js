@@ -48,7 +48,7 @@ export function newBlock(type, catalog, prop) {
 export function newCond(type, catalog) {
   switch (type) {
     case 'cmp': {
-      const def = catalog.find((p) => p.id === 'volume') ?? catalog[0];
+      const def = catalog.find((p) => p.id === 'volume') ?? catalog.find((p) => !p.writeOnly);
       return { type: 'cmp', prop: def.id, op: OPS[def.type][0], value: defaultValue(def) };
     }
     case 'channels': return { type: 'channels', of: 'input', present: [], absent: [] };

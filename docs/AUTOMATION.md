@@ -125,12 +125,13 @@ Values are always in **human units**: dB numbers, enum ids with labels, booleans
 | Input & signal | Input; Sound mode (text); Quick Select; Decoder; Sample rate; Audio format (`3/2/.1`); Input channels (count, layout, each channel, list); Active speakers (count, each speaker, list) | input; sound mode (Pure Direct, Direct, Stereo, Multi Ch Stereo, Auto); Quick Select recall | 1 |
 | Audio | MultEQ, Dynamic EQ, Ref. level, Dynamic Volume; Dialog Enhancer; Subwoofer on/off and level; LFE; Cinema EQ; Tone control, bass, treble; Loudness management; Dynamic compression; Restorer; Audio delay; Neural:X; Center spread | all | 1 |
 | Speakers | Channel level (per channel) | channel level | 1 |
-| Speakers | Speaker preset (app preset) | apply speaker preset | 4 |
-| Video | Resolution, HDR, color space, pixel depth (in / out) | — | 4 |
-| Zone 2 | Power, source, volume, mute | all (Zone 2 volume capped) | 4 |
-| General | Sleep timer, ECO, Dimmer, Auto standby, All Zone Stereo, Bluetooth transmitter | all | 4 |
-| Tuner | Band, frequency, preset | all (only with input TUNER; the guard enforces this) | 4 |
-| HEOS | Play state, source, station, artist, title, album | transport, play favorite N | 4 |
+| Speakers | Speaker preset (app preset) | apply speaker preset (app action; optional *allow Amp Assign change*) | done |
+| Video | Resolution, HDR, color, depth (in / out) | — | done |
+| Zone 2 | Power, source, volume, mute | all (volume capped, *only lower*; skipped while Zone 2 is off) | done |
+| General | Sleep timer, ECO, Dimmer, Auto standby, All Zone Stereo, Bluetooth transmitter and output | all | done |
+| Tuner | Band, frequency, preset | band, preset (skipped unless the input is Tuner; the guard enforces it too) | done |
+| HEOS | Play state, title, artist, album, station | play / pause / stop, next / previous, play favorite N (app actions) | done |
+| App | Receiver connection | — | done |
 | Time | Time of day, day of week | — | 4 |
 
 Sound mode `set` actions are limited to modes with a direct command (Pure Direct, Direct, Stereo, Multi Ch Stereo, Auto). Any other mode is reached with the `findMode` block, which searches what the receiver actually offers for the signal playing. This unit offers fewer modes than the manual says (probed 2026-11-14: with stereo PCM and with Atmos only the native mode, Multi Ch Stereo and Stereo; Dolby Digital 5.1 also offers "DD + Neural:X"), so the server learns them instead of trusting the manual.
@@ -312,7 +313,7 @@ Each phase ends with a commit that works on its own.
 1. **Engine without UI.** Operators, catalog (Power, Volume, Input & signal with the channel properties, Audio, channel levels), change detection, engine (triggers, if/else, wait, wait until, stop, set), storage, REST, safety limits, tests. Usable by posting JSON.
 2. **Panel and editor.** *(done)* Automation panel (list, on/off, run, edit, duplicate, delete, new); full-screen block editor with palette, drag-and-drop, field editors, the channel picker, undo / redo, save and validation, and Test (dry run) as a list of steps. New volume actions start at -40 dB with *only lower* on.
 3. **Live feedback.** ✔ / ✘ and current values in the blocks, run highlighting, Test (dry run), run history.
-4. **Rest of the catalog, and time.** Zone 2, Tuner, HEOS, speaker presets (with the Amp Assign confirmation), General, video properties. **Schedule trigger** ("at 23:00 on weekdays") and **time conditions** ("time is between 22:00 and 07:00", "day is Sat or Sun"), in the Pi's local time zone (shown in the editor); a missed time (server down) is not run later. Block comments.
+4. **Rest of the catalog** *(done, ahead of phase 3)*, **and time.** Zone 2, Tuner, HEOS, speaker presets (with the Amp Assign confirmation), General, video properties. **Schedule trigger** ("at 23:00 on weekdays") and **time conditions** ("time is between 22:00 and 07:00", "day is Sat or Sun"), in the Pi's local time zone (shown in the editor); a missed time (server down) is not run later. Block comments.
 5. **Later, if wanted.** `restore` block, a small allowlist of setup-API actions, templates ("Night mode", "Movie with Atmos"), import / export as JSON.
 
 ---

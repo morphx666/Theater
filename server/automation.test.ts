@@ -161,6 +161,7 @@ test('input channels: count, layout and each channel, from the grid or the forma
 test('every writable property produces commands the guard accepts', () => {
   const st = emptyState();
   applyLine(st, 'ZMON');
+  applyLine(st, 'SITUNER'); // tuner commands need the Tuner input (the guard checks)
   const samples = (p: (typeof CATALOG)[number]): unknown[] => {
     switch (p.type) {
       case 'number': return [p.min, p.max, p.min! + p.step!];
@@ -527,4 +528,59 @@ test('find sound mode: found, not found (stop / continue / back), dry run, valid
 
   assert.throws(() => validate(rule([{ type: 'change', prop: 'mute' }], [{ type: 'findMode', text: '', onNotFound: 'stay' }])), /find sound mode/);
   assert.throws(() => validate(rule([{ type: 'change', prop: 'mute' }], [{ type: 'findMode', text: 'x', onNotFound: 'maybe' }])), /find sound mode/);
+});
+
+test('app actions: speaker preset (by id, name in the run), HEOS; tuner and Zone 2 actions wait for their input / zone', async () => {
+  const r = await rig();
+  on(r);
+  const presets = { list: [{ id: 'aaaa-1111', name: 'Movie' }, { id: 'bbbb-2222', name: 'Music' }], active: 'bbbb-2222' };
+  r.ctx.presets = presets;
+  const done: unknown[] = [];
+  (r.io as Record<string, unknown>).app = async (a: { kind: string; id?: string }) => {
+    done.push(a);
+    if (a.kind === 'speakerPreset') presets.active = a.id!;
+    return { ok: true };
+  };
+  await r.eng.save(rule([{ type: 'change', prop: 'input', to: 'GAME', settleMs: 0 }], [
+    { type: 'set', prop: 'speakerPreset', value: 'aaaa-1111', confirmAmp: true },
+    { type: 'set', prop: 'heos.state', value: 'pause' },
+    { type: 'set', prop: 'tuner.preset', value: '03' }, // input isn't Tuner: skipped
+    { type: 'set', prop: 'zone2.volume', value: -40 }, // Zone 2 is off: skipped
+  ]));
+  r.eng.observe();
+  r.line('SIGAME');
+  await r.clock.tick(100);
+  assert.deepEqual(done, [{ kind: 'speakerPreset', id: 'aaaa-1111', confirmAmp: true }, { kind: 'heos', action: 'pause' }]);
+  const steps = r.last()!.steps;
+  assert.equal(steps[0].what, 'set Speaker preset to Movie');
+  assert.deepEqual(steps.map((s) => s.note ?? s.result), ['ok', 'ok', "the input isn't Tuner", 'zone 2 is off']);
+  assert.deepEqual(r.sent, []);
+
+  // Already on that preset: skipped, nothing applied.
+  r.line('SITV');
+  await r.clock.tick(100);
+  r.line('SIGAME');
+  await r.clock.tick(100);
+  assert.equal(r.last()!.steps[0].note, 'already set');
+  assert.equal(done.length, 3); // only the HEOS pause again (play state isn't tracked in this test)
+
+  // A failed app action stops the run with its reason.
+  (r.io as Record<string, unknown>).app = async () => ({ ok: false, note: 'this preset changes Amp Assign: allow that on the block' });
+  presets.active = 'bbbb-2222';
+  r.line('SITV');
+  await r.clock.tick(100);
+  r.line('SIGAME');
+  await r.clock.tick(100);
+  assert.equal(r.last()!.status, 'error');
+  assert.match(r.last()!.steps[0].note!, /Amp Assign/);
+});
+
+test('validation: set-only properties can\'t be watched or tested; presets are checked by form', () => {
+  const set = [{ type: 'set', prop: 'ps.DEH', value: 'OFF' }];
+  assert.throws(() => validate(rule([{ type: 'change', prop: 'heos.favorite' }], set)), /only be set/);
+  assert.throws(() => validate(rule([{ type: 'change', prop: 'mute' }], [{ type: 'if', cond: { type: 'cmp', prop: 'heos.skip', op: 'is', value: 'next' }, then: [], else: [] }])), /only be set/);
+  assert.doesNotThrow(() => validate(rule([{ type: 'change', prop: 'mute' }], [{ type: 'set', prop: 'speakerPreset', value: '0c7d2f6e-1b2a-4c3d-9e8f-1234567890ab' }])));
+  assert.throws(() => validate(rule([{ type: 'change', prop: 'mute' }], [{ type: 'set', prop: 'speakerPreset', value: 'no such thing!' }])), /choices/);
+  assert.throws(() => validate(rule([{ type: 'change', prop: 'mute' }], [{ type: 'set', prop: 'ps.DEH', value: 'OFF', confirmAmp: true }])), /Amp Assign/);
+  assert.doesNotThrow(() => validate(rule([{ type: 'change', prop: 'mute' }], [{ type: 'set', prop: 'heos.favorite', value: '3' }])));
 });

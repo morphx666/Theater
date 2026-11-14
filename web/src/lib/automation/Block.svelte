@@ -34,6 +34,11 @@
       {/if}
       <span class="w">to</span>
       <ValueInput {def} write value={block.value} onchange={(v) => { block.value = v; ed.commit(); }} />
+      {#if def?.confirmAmp}
+        <button class="chip" class:on={block.confirmAmp} aria-pressed={!!block.confirmAmp}
+          title="Let this rule apply a preset that changes Amp Assign (check the speaker wiring first)"
+          onclick={() => { if (block.confirmAmp) delete block.confirmAmp; else block.confirmAmp = true; ed.commit(); }}>{block.confirmAmp ? '✓ ' : ''}allow Amp Assign change</button>
+      {/if}
       {#if def?.onlyLower}
         <button class="chip" class:on={block.onlyLower} aria-pressed={!!block.onlyLower} title="Skip when the volume is already at or below this"
           onclick={() => { if (block.onlyLower) delete block.onlyLower; else block.onlyLower = true; ed.commit(); }}>{block.onlyLower ? '✓ ' : ''}only lower</button>

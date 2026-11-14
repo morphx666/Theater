@@ -238,13 +238,34 @@ await soundModes.load();
 
 // ---------- automations (docs/AUTOMATION.md) ----------
 // Rules run here, on the server, whether or not a browser is open. Every action goes through sendCommand (the guard).
+// HEOS favorites, by position (rules play them by number); refreshed when HEOS connects and the editor opens.
+let heosFavorites: { name: string }[] = [];
+async function refreshFavorites() {
+  try { heosFavorites = (await heos.favorites()).map((f) => ({ name: f.name })); } catch { /* keep the last list */ }
+}
+const automationCtx = () => ({
+  state, audioMap, nowPlaying: heos.now, presets: speakerPresets.summary(), favorites: heosFavorites, conn,
+  videoInfo: decodeVideo(state.video, signalCodes),
+});
 const automations = new Automations(DATA, {
-  ctx: () => ({ state, audioMap }),
+  ctx: automationCtx,
   cmd: (c, who) => sendCommand(c, who),
   log: (m) => log(m),
   changed: () => scheduleBroadcast(),
   run: (r) => broadcast({ type: 'automation-run', run: r }),
   findMode: (text, back) => soundModes.select({ text }, { back }),
+  // App actions: the same code paths as the panels (speaker presets serialize and mute; HEOS goes to the player).
+  app: async (a) => {
+    try {
+      if (a.kind === 'speakerPreset') await speakerPresets.apply(a.id, { confirmAmp: a.confirmAmp });
+      else if (a.kind === 'heos') await heos.transport(a.action);
+      else await heos.playFavorite(a.index);
+      return { ok: true };
+    } catch (e) {
+      const amp = e instanceof PresetError && e.confirm;
+      return { ok: false, note: amp ? 'this preset changes Amp Assign: allow that on the block' : (e as Error).message };
+    }
+  },
 });
 await automations.load();
 const WARMUP_MS = 8000; // the full refresh after (re)connecting fills the state; those reports aren't changes
@@ -308,7 +329,12 @@ telnet.on('line', (line: string) => {
   broadcastRaw(line);
 });
 
-heos.on('status', (up: boolean) => { conn.heos = up; log(`heos ${up ? 'connected' : 'disconnected'}`); scheduleBroadcast(); });
+heos.on('status', (up: boolean) => {
+  conn.heos = up;
+  log(`heos ${up ? 'connected' : 'disconnected'}`);
+  if (up) setTimeout(refreshFavorites, 2000);
+  scheduleBroadcast();
+});
 heos.on('nowPlaying', () => scheduleBroadcast());
 heos.on('progress', (p) => { progress = p; broadcast({ type: 'progress', ...p }); });
 heos.on('warn', (m) => log(m));
@@ -533,7 +559,10 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
       log(`sound mode ${mode}: ${r.ok ? 'selected' : r.note} (from ${req.socket.remoteAddress ?? 'http'})`);
       return json(res, r.ok ? 200 : 409, r.ok ? { ok: true, mode: r.mode } : { error: r.note, mode: r.mode });
     }
-    if (p === '/api/automation/catalog' && req.method === 'GET') return json(res, 200, describeCatalog({ state, audioMap }));
+    if (p === '/api/automation/catalog' && req.method === 'GET') {
+      if (conn.heos) await Promise.race([refreshFavorites(), new Promise((r) => setTimeout(r, 3000))]); // fresh names, but don't hang
+      return json(res, 200, describeCatalog(automationCtx()));
+    }
     if (p === '/api/automations') {
       if (req.method === 'GET') return json(res, 200, { automations: automations.all(), runs: automations.runs() });
       if (req.method === 'POST') {

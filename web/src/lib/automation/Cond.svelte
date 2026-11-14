@@ -30,7 +30,7 @@
 {:else}
   <span class="hex" class:missing={condMissing(cond, ed.catalog)}>
     {#if cond.type === 'cmp'}
-      <PropSelect catalog={ed.catalog} value={cond.prop} onchange={(id) => { cond.prop = id; fitToProp(cond, ed.catalog.find((p) => p.id === id), 'cmp'); ed.commit(); }} />
+      <PropSelect catalog={ed.catalog} filter={(p) => !p.writeOnly} value={cond.prop} onchange={(id) => { cond.prop = id; fitToProp(cond, ed.catalog.find((p) => p.id === id), 'cmp'); ed.commit(); }} />
       {#if def?.param}
         <Pick label={def.param.label} value={cond.param} options={def.param.options.map((o) => ({ value: o.value, label: o.value }))}
           onchange={(v) => { cond.param = v; ed.commit(); }} />
