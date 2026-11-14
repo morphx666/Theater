@@ -73,7 +73,7 @@
         <div class="acts">
           <button class="btn small" onclick={() => openRule(r.id)}><Icon name="edit" size={14} />Edit</button>
           <button class="btn small" title="Run now" disabled={!!s?.running} onclick={() => runNow(r)}><Icon name="play" size={14} />Run</button>
-          <button class="btn small" title="Duplicate" onclick={() => duplicate(r)}>Duplicate</button>
+          <button class="btn small" title="Duplicate" onclick={() => duplicate(r)}><Icon name="copy" size={14} />Duplicate</button>
           <button class="btn small danger" onclick={() => remove(r)}><Icon name="x" size={14} />{deleting === r.id ? 'Tap again' : 'Delete'}</button>
         </div>
       </div>
@@ -95,11 +95,13 @@
   .sum { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
   .warn { color: var(--bad); }
   .pill.run { font-size: 11px; padding: 1px 8px; color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
-  .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-  /* A one-column card: the buttons one over the other on the right, all as wide as the widest. */
+  /* Every button as wide as the widest; icons in one column, the text after them. */
+  .acts { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+  .acts .btn { justify-content: flex-start; }
+  /* A one-column card: the buttons one over the other on the right. */
   @container rules (max-width: 560px) {
     .rule { align-items: start; }
     .switch { margin-top: 2px; }
-    .acts { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+    .acts { grid-auto-flow: row; }
   }
 </style>

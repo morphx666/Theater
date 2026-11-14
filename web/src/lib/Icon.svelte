@@ -50,6 +50,7 @@
     lock: 'M6 11h12v9H6z M8 11V8a4 4 0 0 1 8 0v3',
     width: 'M3 12h18 M7 8l-4 4 4 4 M17 8l4 4-4 4',
     edit: 'M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4',
+    copy: 'M9 9h11v11H9z M15 9V4H4v11h5',
   };
 </script>
 
