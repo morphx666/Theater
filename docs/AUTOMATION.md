@@ -21,7 +21,7 @@ Example rules:
 | **Property** | Anything the app knows and can name: input, volume, mute, sound mode, decoder, input channels, Dialog Enhancer, tuner preset, Zone 2 volume, HEOS play state… Each is defined once in a shared **catalog** (§3). | variables / sensing |
 | **Automation** | One named rule that can be turned on and off: a *when* block with a script under it. | one script |
 | **Trigger** | The *when* block: "when P changes", narrowed with *from* / *to*, or "when ⟨condition⟩ becomes true". Several triggers can share one script ("when A … or when B …"). | hat block |
-| **Condition** | A true/false block: a comparison ("Volume ≥ −20 dB", "Dialog Enhancer is not Off"), a channel check ("C and FHL present"), or **all of** / **any of** / **not** around other conditions. | boolean reporter (hexagon) |
+| **Condition** | A true/false block: a comparison ("Volume ≥ −20 dB", "Dialog Enhancer is not Off"), a channel check ("C and FHL present"), or **all of** / **any of** / **not** around other conditions. In an *if*, a comparison can use a property's value **before** the trigger ("Input (before) = Kodi": the input switched away from). | boolean reporter (hexagon) |
 | **Action** | "Set P to value": a fixed value. Volume can also be *changed by* up to ±6 dB from where it is when the rule runs (`RELATIVE_MAX_DB`; it stacks on every re-run, so the limit is small, and loop protection still applies). Phase 4 adds app actions (apply a speaker preset, play a HEOS favorite). | "set … to …" |
 | **Control** | *if / else*, *wait N seconds*, *wait until ⟨condition⟩ (up to N s)*, *stop*. | control blocks |
 | **Run** | One pass through the script after a trigger fires. | |
@@ -75,7 +75,7 @@ A rule is a **tree**, not a graph: a script is a list of blocks, and an *if* hol
 | `findMode` | `text`, `onNotFound`: `back` \| `stay` \| `stop` | "find sound mode containing *Neural:X*": selects the first mode the receiver offers whose name contains the text ([sound-modes.ts](../server/sound-modes.ts)); `back` returns to the starting mode when none does |
 | `stop` | | ends the run |
 | **Conditions** | | |
-| `cmp` | `prop`, `param?`, `op`, `value?` | operators per type (§3) |
+| `cmp` | `prop`, `param?`, `op`, `value?`, `before?` | operators per type (§3). `before` (only in an `if`): the value just before the change that triggered the run. The engine keeps the last value of every property a rule watches or compares "before"; when a trigger fires, the run gets those values from just before the change (with a settle time, before the *first* change). Run now and Test have no trigger: "before" is the current value then. |
 | `channels` | `of`: `input` \| `speakers`, `present[]`, `absent[]` | the channel picker (§3) |
 | `all` / `any` | `items[]` | AND / OR, any number of items |
 | `not` | `item` | |

@@ -9,7 +9,9 @@
   import Pick from './Pick.svelte';
   import { OPS, OP_LABELS, argKind, newCond, fitToProp, fitValue, condMissing } from './model.js';
 
-  let { cond, set, adder = false } = $props(); // set(newCond | null) replaces this condition; adder: the "+" that adds one more to a list
+  // set(newCond | null) replaces this condition; adder: the "+" that adds one more to a list;
+  // before: comparisons may use the value just before the trigger (in an "if" only)
+  let { cond, set, adder = false, before = false } = $props();
   const ed = getContext('editor');
   const def = $derived(cond?.type === 'cmp' ? ed.catalog.find((p) => p.id === cond.prop) : null);
   let picking = $state(false);
@@ -35,6 +37,12 @@
         <Pick label={def.param.label} value={cond.param} options={def.param.options.map((o) => ({ value: o.value, label: o.value }))}
           onchange={(v) => { cond.param = v; ed.commit(); }} />
       {/if}
+      {#if before || cond.before}
+        <!-- Its value now, or just before the change that started the rule ("Input before is Kodi"). -->
+        <Pick label="Now, or just before the trigger" value={!!cond.before}
+          options={[{ value: false, label: 'now' }, { value: true, label: 'before' }]}
+          onchange={(v) => { if (v) cond.before = true; else delete cond.before; ed.commit(); }} />
+      {/if}
       {#if def}
         <Pick label="Comparison" value={cond.op} options={OPS[def.type].map((op) => ({ value: op, label: OP_LABELS[op] }))}
           onchange={(v) => { cond.op = v; fitValue(cond, def); ed.commit(); }} />
@@ -57,13 +65,13 @@
         onchange={(v) => { cond.type = v; ed.commit(); }} />
       <span class="items">
         {#each cond.items as item, i (i)}
-          <span class="item"><Cond cond={item} set={(c) => { if (c) cond.items[i] = c; else cond.items.splice(i, 1); }} /></span>
+          <span class="item"><Cond cond={item} {before} set={(c) => { if (c) cond.items[i] = c; else cond.items.splice(i, 1); }} /></span>
         {/each}
-        <Cond cond={null} adder set={(c) => cond.items.push(c)} />
+        <Cond cond={null} adder {before} set={(c) => cond.items.push(c)} />
       </span>
     {:else if cond.type === 'not'}
       <span class="w">not</span>
-      <Cond cond={cond.item} set={(c) => (cond.item = c)} />
+      <Cond cond={cond.item} {before} set={(c) => (cond.item = c)} />
     {/if}
     <button class="x" aria-label="Remove condition" title="Remove" onclick={() => { set(null); ed.commit(); }}>×</button>
   </span>

@@ -73,7 +73,7 @@
 
     {:else if block.type === 'if'}
       <span class="w">if</span>
-      <Cond cond={block.cond} set={(c) => (block.cond = c)} />
+      <Cond cond={block.cond} before set={(c) => (block.cond = c)} />
       <span class="w">then</span>
       <button class="chip" class:on={hasElse} aria-pressed={hasElse} onclick={toggleElse}
         title={hasElse ? 'Remove the else part (and its steps)' : 'Add an else part: steps for when the condition is false'}>{hasElse ? '✓ ' : '+ '}else</button>

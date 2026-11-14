@@ -153,7 +153,7 @@ export function condText(c, catalog) {
     case 'cmp': {
       const def = catalog.find((p) => p.id === c.prop);
       const v = argKind(c.op) === 'pair' ? `${valueText(def, c.value?.[0])} and ${valueText(def, c.value?.[1])}` : argKind(c.op) === 'none' ? '' : ` ${valueText(def, c.value)}`;
-      return `${propText(def, c.param)} ${OP_LABELS[c.op] ?? c.op}${argKind(c.op) === 'pair' ? ` ${v}` : v}`;
+      return `${propText(def, c.param)}${c.before ? ' (before)' : ''} ${OP_LABELS[c.op] ?? c.op}${argKind(c.op) === 'pair' ? ` ${v}` : v}`;
     }
     case 'channels': {
       const parts = [c.present.length && `${c.present.join(' ')} present`, c.absent.length && `${c.absent.join(' ')} absent`].filter(Boolean);
@@ -188,7 +188,7 @@ function condPieces(c, catalog) {
   switch (c.type) {
     case 'cmp': {
       const def = catalog.find((p) => p.id === c.prop);
-      const head = [...propPieces(def, c.param), op(` ${PSEUDO_OPS[c.op] ?? c.op}`)];
+      const head = [...propPieces(def, c.param), ...(c.before ? [op(' (before)')] : []), op(` ${PSEUDO_OPS[c.op] ?? c.op}`)];
       const kind = argKind(c.op);
       if (kind === 'none') return head;
       if (kind === 'pair') return [...head, plain(' '), ...valPieces(def, c.value?.[0]), op(' and '), ...valPieces(def, c.value?.[1])];

@@ -463,6 +463,44 @@ test('volume: change by up to 6 dB, from the volume when it runs, sent as a fixe
   assert.equal(r.eng.test(rule([{ type: 'change', prop: 'mute' }], by(-3))).steps[0].note, 'volume unknown');
 });
 
+test('"before": a condition on the value just before the trigger', async () => {
+  const wasKodi = { type: 'cmp', prop: 'input', op: 'is', value: 'MPLAY', before: true };
+  const script = [{ type: 'if', cond: wasKodi, then: [{ type: 'set', prop: 'volume', value: -3, relative: true }], else: [] }];
+  const fails = (r: unknown, msg: RegExp) => assert.throws(() => validate(r), msg);
+  assert.deepEqual(validate(rule([{ type: 'change', prop: 'input' }], script)).script[0], { type: 'if', cond: wasKodi, then: script[0].then, else: [] });
+  validate(rule([{ type: 'change', prop: 'input' }], [{ ...script[0], cond: { type: 'not', item: wasKodi } }])); // nested: fine
+  fails(rule([{ type: 'becomes', cond: wasKodi }], script), /only in an "if"/);
+  fails(rule([{ type: 'change', prop: 'input' }], [{ type: 'waitUntil', cond: wasKodi, timeoutMs: 1000, onTimeout: 'continue' }]), /only in an "if"/);
+
+  const r = await rig();
+  on(r); // input BD (Blu-ray), volume -40
+  const a = await r.eng.save(rule([{ type: 'change', prop: 'input', to: 'SAT/CBL', settleMs: 500 }], script));
+  r.eng.observe();
+  r.line('SIMPLAY'); await r.clock.tick(1000); // to Kodi: not the trigger
+  r.line('SISAT/CBL'); await r.clock.tick(1000); // Kodi -> Fire TV Stick: lower by 3
+  assert.deepEqual(r.sent, ['MV37']);
+  assert.equal(r.last()!.steps[0].result, 'true');
+
+  r.line('SIBD'); await r.clock.tick(1000);
+  r.line('SISAT/CBL'); await r.clock.tick(1000); // Blu-ray -> Fire TV Stick: nothing
+  assert.deepEqual(r.sent, ['MV37']);
+  assert.equal(r.last()!.steps[0].result, 'false');
+
+  // A trigger on any input change that changes again while settling: "before" is the state before the first
+  // change (Kodi), not the input passed through on the way.
+  await r.eng.remove(a.id);
+  const any = await r.eng.save(rule([{ type: 'change', prop: 'input', settleMs: 500 }], script));
+  r.line('SIMPLAY'); await r.clock.tick(1000); // Fire TV Stick -> Kodi: false
+  r.line('SIGAME'); await r.clock.tick(200);
+  r.line('SISAT/CBL'); await r.clock.tick(1000); // Kodi -> Game -> Fire TV Stick, one run
+  assert.deepEqual(r.sent, ['MV37', 'MV34']);
+
+  // Run by hand: "before" is now.
+  r.line('SIMPLAY'); await r.clock.tick(1000);
+  r.eng.runNow(any.id); await r.clock.tick(100);
+  assert.equal(r.last()!.steps[0].result, 'true');
+});
+
 test('an action the receiver ignores is reported as not applied', async () => {
   const r = await rig({ echo: (c) => !c.startsWith('PSLFE') }); // like LFE with a PCM source
   on(r);

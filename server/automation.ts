@@ -11,7 +11,7 @@ import { OPS, argKind, compare, sameValue, RELATIVE_MAX_DB, type Value } from '.
 // ---------- model ----------
 
 export type Cond =
-  | { type: 'cmp'; prop: string; param?: string; op: string; value?: unknown }
+  | { type: 'cmp'; prop: string; param?: string; op: string; value?: unknown; before?: boolean } // before: its value just before the trigger
   | { type: 'channels'; of: 'input' | 'speakers'; present: string[]; absent: string[] }
   | { type: 'all' | 'any'; items: Cond[] }
   | { type: 'not'; item: Cond };
@@ -128,7 +128,9 @@ function checkValue(def: PropDef, v: unknown, forWrite: boolean): Value {
   }
 }
 
-function checkCond(c: unknown, depth = 0): Cond {
+/** before: comparisons may use the value just before the trigger (only in an "if": a trigger or a "wait until"
+ *  would compare against a value that never changes during the run). */
+function checkCond(c: unknown, depth = 0, before = false): Cond {
   if (depth > LIMITS.condNesting) bad('conditions are nested too deep');
   if (!isObj(c)) return bad('bad condition');
   switch (c.type) {
@@ -147,7 +149,8 @@ function checkCond(c: unknown, depth = 0): Cond {
         if (!Array.isArray(c.value) || !c.value.length || c.value.length > LIMITS.listItems) bad(`${def.label}: needs a list of values`);
         value = [...new Set(c.value.map((x: unknown) => checkValue(def, x, false)))];
       }
-      return { type: 'cmp', prop: def.id, ...(param ? { param } : {}), op: c.op, ...(kind === 'none' ? {} : { value }) };
+      if (c.before && !before) bad(`${def.label}: "before" works only in an "if" condition`);
+      return { type: 'cmp', prop: def.id, ...(param ? { param } : {}), op: c.op, ...(kind === 'none' ? {} : { value }), ...(c.before ? { before: true } : {}) };
     }
     case 'channels': {
       if (c.of !== 'input' && c.of !== 'speakers') bad('channels: input or speakers');
@@ -163,9 +166,9 @@ function checkCond(c: unknown, depth = 0): Cond {
     case 'all':
     case 'any':
       if (!Array.isArray(c.items) || !c.items.length || c.items.length > LIMITS.condItems) bad(`${c.type === 'all' ? 'all of' : 'any of'}: needs 1 to ${LIMITS.condItems} conditions`);
-      return { type: c.type, items: c.items.map((x: unknown) => checkCond(x, depth + 1)) };
+      return { type: c.type, items: c.items.map((x: unknown) => checkCond(x, depth + 1, before)) };
     case 'not':
-      return { type: 'not', item: checkCond(c.item, depth + 1) };
+      return { type: 'not', item: checkCond(c.item, depth + 1, before) };
   }
   return bad('bad condition');
 }
@@ -213,7 +216,7 @@ function checkBlocks(list: unknown, depth: number, count: { n: number }): Block[
           ...(b.confirmAmp ? { confirmAmp: true } : {}) };
       }
       case 'if':
-        return { type: 'if', cond: checkCond(b.cond), then: checkBlocks(b.then ?? [], depth + 1, count), else: checkBlocks(b.else ?? [], depth + 1, count) };
+        return { type: 'if', cond: checkCond(b.cond, 0, true), then: checkBlocks(b.then ?? [], depth + 1, count), else: checkBlocks(b.else ?? [], depth + 1, count) };
       case 'wait':
         return { type: 'wait', ms: ms(b.ms, LIMITS.waitMs, 'wait') };
       case 'waitUntil':
@@ -255,19 +258,40 @@ export function validate(a: unknown): Automation {
 
 const keyOf = (prop: string, param?: string) => (param ? `${prop}:${param}` : prop);
 
-export function evalCond(c: Cond, ctx: Ctx): boolean {
+/** The properties a rule compares "before" (they're tracked like the ones its triggers watch). */
+function beforeProps(a: Automation): { prop: string; param?: string }[] {
+  const out: { prop: string; param?: string }[] = [];
+  const cond = (c: Cond | null | undefined) => {
+    if (!c) return;
+    if (c.type === 'cmp') { if (c.before) out.push({ prop: c.prop, param: c.param }); }
+    else if (c.type === 'all' || c.type === 'any') c.items.forEach(cond);
+    else if (c.type === 'not') cond(c.item);
+  };
+  const blocks = (list: Block[]) => { for (const b of list) if (b.type === 'if') { cond(b.cond); blocks(b.then); blocks(b.else); } };
+  blocks(a.script);
+  return out;
+}
+
+/** Values just before the trigger (for "before" comparisons). A property it doesn't have (a rule run by hand, or
+ *  nothing known yet) is compared as it is now. */
+export type Before = Map<string, Value>;
+
+export function evalCond(c: Cond, ctx: Ctx, before?: Before): boolean {
   switch (c.type) {
     case 'cmp': {
       const def = PROPS[c.prop];
-      return !!def && compare(def.type, def.read(ctx, c.param), c.op, c.value);
+      if (!def) return false;
+      const k = keyOf(c.prop, c.param);
+      const v = c.before && before?.has(k) ? before.get(k)! : def.read(ctx, c.param);
+      return compare(def.type, v, c.op, c.value);
     }
     case 'channels': {
       const list = PROPS[c.of === 'input' ? 'input.channels' : 'speakers.channels'].read(ctx) as string[] | null;
       return !!list && c.present.every((x) => list.includes(x)) && c.absent.every((x) => !list.includes(x));
     }
-    case 'all': return c.items.every((x) => evalCond(x, ctx));
-    case 'any': return c.items.some((x) => evalCond(x, ctx));
-    case 'not': return !evalCond(c.item, ctx);
+    case 'all': return c.items.every((x) => evalCond(x, ctx, before));
+    case 'any': return c.items.some((x) => evalCond(x, ctx, before));
+    case 'not': return !evalCond(c.item, ctx, before);
   }
 }
 
@@ -311,7 +335,7 @@ export type AutomationIo = {
 };
 
 const CANCEL = Symbol('cancelled');
-type Live = Run & { cancelled: boolean; cancel: () => void; pending: Set<() => void> };
+type Live = Run & { cancelled: boolean; cancel: () => void; pending: Set<() => void>; before: Before };
 
 export class Automations {
   private file: string;
@@ -319,6 +343,7 @@ export class Automations {
   private clock: Clock;
   private list: Automation[] = [];
   private values = new Map<string, Value>(); // last known (non-null) value per watched property
+  private armedBefore = new Map<string, Before>(); // per armed trigger: the values just before its change
   private becomesPrev = new Map<string, boolean>();
   private armed = new Map<string, unknown>(); // settle timers per trigger
   private current: Live | null = null; // only one rule runs at a time
@@ -474,6 +499,7 @@ export class Automations {
   stop() {
     for (const t of this.armed.values()) this.clock.clearTimeout(t);
     this.armed.clear();
+    this.armedBefore.clear();
     this.current?.cancel();
   }
 
@@ -491,14 +517,14 @@ export class Automations {
 
     const active = this.list.filter((a) => a.enabled && !a.disabled);
     const events = new Map<string, { from: Value; to: Value }>();
+    const before: Before = new Map(this.values); // the values as they were before this change
     const read = new Set<string>(); // each property is read once, even when several triggers watch it
     for (const a of active) {
-      for (const t of a.when) {
-        if (t.type !== 'change') continue;
-        const k = keyOf(t.prop, t.param);
+      for (const w of this.watched(a)) {
+        const k = keyOf(w.prop, w.param);
         if (read.has(k)) continue;
         read.add(k);
-        const v = PROPS[t.prop].read(ctx, t.param);
+        const v = PROPS[w.prop].read(ctx, w.param);
         if (v === null || v === undefined) continue; // unknown: keep the last known value
         const prev = this.values.get(k);
         this.values.set(k, v);
@@ -514,12 +540,12 @@ export class Automations {
           if (!e || quiet) return;
           if (t.from !== undefined && !sameValue(t.from, e.from)) return;
           if (t.to !== undefined && !sameValue(t.to, e.to)) return;
-          this.arm(a, i, depth);
+          this.arm(a, i, depth, before);
         } else {
           const b = evalCond(t.cond, ctx);
           const prev = this.becomesPrev.get(tk);
           this.becomesPrev.set(tk, b);
-          if (!quiet && prev === false && b) this.arm(a, i, depth);
+          if (!quiet && prev === false && b) this.arm(a, i, depth, before);
         }
       });
     }
@@ -529,39 +555,49 @@ export class Automations {
   /** Forget a rule's pending triggers, and take the current values as its new baseline (so a rule that is
    *  turned on or edited doesn't fire on changes that happened while it wasn't watching). */
   private reset(id: string) {
-    for (const [k, t] of this.armed) if (k.startsWith(`${id}#`)) { this.clock.clearTimeout(t); this.armed.delete(k); }
+    for (const [k, t] of this.armed) if (k.startsWith(`${id}#`)) { this.clock.clearTimeout(t); this.armed.delete(k); this.armedBefore.delete(k); }
     for (const k of this.becomesPrev.keys()) if (k.startsWith(`${id}#`)) this.becomesPrev.delete(k);
     const a = this.get(id);
     if (!a) return;
     const ctx = this.io.ctx();
-    for (const t of a.when) {
-      if (t.type !== 'change') continue;
-      const v = PROPS[t.prop].read(ctx, t.param);
-      if (v !== null && v !== undefined) this.values.set(keyOf(t.prop, t.param), v);
+    for (const w of this.watched(a)) {
+      const v = PROPS[w.prop].read(ctx, w.param);
+      if (v !== null && v !== undefined) this.values.set(keyOf(w.prop, w.param), v);
     }
   }
 
+  /** The properties whose last value is kept for a rule: those its "change" triggers watch, and those it compares
+   *  "before". */
+  private watched(a: Automation) {
+    return [...a.when.flatMap((t) => (t.type === 'change' ? [{ prop: t.prop, param: t.param }] : [])), ...beforeProps(a)];
+  }
+
   /** Start (or restart) a trigger's settle time; when it ends and the trigger still holds, run. */
-  private arm(a: Automation, i: number, depth: number) {
+  private arm(a: Automation, i: number, depth: number, before: Before) {
     const t = a.when[i];
     const tk = `${a.id}#${i}`;
+    // Settling again (it changed again meanwhile): "before" is still the state before the first change.
+    if (!this.armed.has(tk)) this.armedBefore.set(tk, before);
     const settle = t.settleMs ?? (t.type === 'change' ? PROPS[t.prop].settleMs : settleOf(t.cond)) ?? LIMITS.defaultSettleMs;
     this.clock.clearTimeout(this.armed.get(tk));
     this.armed.set(tk, this.clock.setTimeout(() => {
       this.armed.delete(tk);
+      const was = this.armedBefore.get(tk) ?? new Map();
+      this.armedBefore.delete(tk);
       const cur = this.get(a.id);
       if (!cur || !cur.enabled || cur.disabled || cur.when[i] !== t) return;
       if (this.current) return; // another rule started while this one was settling
       const ctx = this.io.ctx();
       if (t.type === 'change' && t.to !== undefined && !sameValue(PROPS[t.prop].read(ctx, t.param), t.to)) return; // changed again meanwhile
       if (t.type === 'becomes' && !evalCond(t.cond, ctx)) return;
-      this.start(cur, describeTrigger(t), depth);
+      this.start(cur, describeTrigger(t), depth, was);
     }, settle));
   }
 
   // ----- runs -----
 
-  private start(a: Automation, trigger: string, depth: number): Live | null {
+  /** before: the values just before the trigger (none when run by hand: "before" then means now). */
+  private start(a: Automation, trigger: string, depth: number, before: Before = new Map()): Live | null {
     if (depth > LIMITS.chainDepth) {
       this.log(`"${a.name}" not run: started by a chain of ${depth} rules (limit ${LIMITS.chainDepth})`);
       return null;
@@ -583,7 +619,7 @@ export class Automations {
 
     const run: Live = {
       id: newId(), automation: a.id, name: a.name, trigger, depth, at: now, endedAt: null, status: 'running', steps: [],
-      cancelled: false, pending: new Set(),
+      cancelled: false, pending: new Set(), before,
       cancel: () => { run.cancelled = true; for (const p of [...run.pending]) p(); },
     };
     this.current = run;
@@ -620,7 +656,7 @@ export class Automations {
           await this.doSet(run, a, b, p);
           break;
         case 'if': {
-          const ok = evalCond(b.cond, this.io.ctx());
+          const ok = evalCond(b.cond, this.io.ctx(), run.before);
           this.step(run, { path: p, what: 'if', result: ok ? 'true' : 'false' });
           if (!(await this.seq(run, a, ok ? b.then : b.else, `${p}.${ok ? 'then' : 'else'}`))) return false;
           break;
