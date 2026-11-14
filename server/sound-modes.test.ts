@@ -67,6 +67,12 @@ test('one list per decoder; PCM split by channels', () => {
   const k = (...ls: string[]) => { const st = emptyState(); for (const l of ls) applyLine(st, l); return signalKey(st); };
   assert.equal(k('SYSDA PCM', 'SSINFAISFOR 2/0/.0'), 'PCM:2CH');
   assert.equal(k('SYSDA PCM', 'SSINFAISFOR 3/2/.1'), 'PCM:MULTI');
+  // HEOS 3.139.174: SSINFAISFOR is a name, so the channels in the signal decide.
+  const pcm = emptyState();
+  for (const l of ['SYSDA PCM', 'SSINFAISFOR PCM']) applyLine(pcm, l);
+  assert.equal(signalKey(pcm, 5), 'PCM:MULTI');
+  assert.equal(signalKey(pcm, 2), 'PCM:2CH');
+  assert.equal(signalKey(pcm, null), 'PCM:2CH');
   assert.equal(k('SYSDA Dolby Atmos'), 'DOLBYATMOS');
   assert.equal(k('SYSDA Dolby Audio - DD'), 'DOLBYAUDIO-DD');
   assert.equal(k('SYSDA DTS-HD MSTR'), 'DTS-HDMSTR');

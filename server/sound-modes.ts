@@ -42,12 +42,15 @@ export const BUTTONS = ['MSMOVIE', 'MSMUSIC', 'MSGAME'] as const;
 
 /** The key the lists are kept under: the decoder as the receiver names it ("DTS-HDMSTR", "DOLBYATMOS"), with
  *  PCM split into stereo and multi-channel. null = no signal. */
-export function signalKey(st: AvrState): string | null {
+export function signalKey(st: AvrState, channels?: number | null): string | null {
   const d = (st.decoder ?? '').toUpperCase().replace(/\s+/g, '');
   if (!d || /ZERO|UNKNOWN|NONE|^-+$/.test(d)) return null;
   if (/^(PCM|ANALOG)/.test(d)) {
+    // SSINFAISFOR gave the layout ("3/2/.1") up to HEOS 3.139.173; since 3.139.174 it gives a name ("PCM"),
+    // so the count of channels in the signal (`channels`, from the input grid, without LFE) decides then.
     const m = st.audioFormat?.match(/^(\d+)\/(\d+)/);
-    return m && Number(m[1]) + Number(m[2]) > 2 ? 'PCM:MULTI' : 'PCM:2CH';
+    const n = m ? Number(m[1]) + Number(m[2]) : channels ?? 0;
+    return n > 2 ? 'PCM:MULTI' : 'PCM:2CH';
   }
   return d;
 }
@@ -145,6 +148,7 @@ const PROBED_FW = 'D400-9123-9071-9031'; // the v1 cycles came from the probe on
 
 export type SoundModeIo = {
   state: () => AvrState;
+  inputChannels?: () => number | null; // channels in the incoming signal, without LFE (null = not known)
   cmd: (c: string) => { ok: boolean; reason?: string };
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
@@ -190,6 +194,7 @@ export class SoundModes {
   private now() { return this.io.now?.() ?? Date.now(); }
   private sig(key: string): Signal { return (this.store.signals[key] ??= { modes: [] }); }
   private firmware() { return this.io.state().firmware?.AVR ?? null; }
+  private key() { return signalKey(this.io.state(), this.io.inputChannels?.()); }
 
   async load() {
     let raw: any;
@@ -248,7 +253,7 @@ export class SoundModes {
       return;
     }
     if (!/^MS(?!QUICK)/.test(line)) return;
-    const mode = st.surround, key = signalKey(st);
+    const mode = st.surround, key = this.key();
     if (!mode) return;
     this.lastMs = { mode, at: now };
     if (now - this.lastMi.at <= PAIR_MS) this.name(mode, this.lastMi.text);
@@ -262,7 +267,7 @@ export class SoundModes {
     clearTimeout(this.pendingLearn);
     this.pendingLearn = setTimeout(() => {
       const s = this.io.state();
-      if (s.surround !== mode || signalKey(s) !== key || groupOf(mode) !== 'surround') return;
+      if (s.surround !== mode || this.key() !== key || groupOf(mode) !== 'surround') return;
       const sig = this.sig(key);
       let changed = false;
       const name = s.decoder?.trim();
@@ -286,7 +291,7 @@ export class SoundModes {
   /** Call when a command is sent (from anywhere): MSDOLBY DIGITAL / MSDTS SURROUND teach the native mode, MSAUTO
    *  what Auto selects. */
   onCommand(cmd: string) {
-    const key = signalKey(this.io.state());
+    const key = this.key();
     if (key && /^MS(DOLBY DIGITAL|DTS SURROUND)$/.test(cmd)) this.expectNative = { key, until: this.now() + REPLY_MS };
     if (key && cmd === 'MSAUTO') this.expectAuto = { key, until: this.now() + REPLY_MS };
   }
@@ -323,7 +328,7 @@ export class SoundModes {
   }
 
   /** "Learn modes" is offered until this signal's cycles are learned, and again after a firmware update. */
-  canLearn(key = signalKey(this.io.state())) {
+  canLearn(key = this.key()) {
     if (!key) return false;
     const sig = this.store.signals[key];
     if (!this.complete(sig)) return true;
@@ -350,7 +355,7 @@ export class SoundModes {
   /** The modes known for the signal playing now, for the panel and the editor. */
   summary() {
     const st = this.io.state();
-    const key = signalKey(st);
+    const key = this.key();
     const current = st.surround;
     // Surround modes: the one that plays the source as it is first, then upmixes, then effects, each by name.
     const modes = this.modesFor(key);
@@ -380,7 +385,7 @@ export class SoundModes {
   select(target: { exact?: string; text?: string }, opts: { back?: boolean; waitSignalMs?: number } = {}): Promise<SelectResult> {
     return this.exclusive('select', async () => {
       // Right after an input change the new signal may not be there yet: wait a little for it.
-      for (let t = 0; t < (opts.waitSignalMs ?? 0) && !signalKey(this.io.state()); t += 250) await this.sleep(250);
+      for (let t = 0; t < (opts.waitSignalMs ?? 0) && !this.key(); t += 250) await this.sleep(250);
       return this.run(target, opts);
     }, (note) => ({ ok: false, mode: this.io.state().surround, note }));
   }
@@ -388,7 +393,7 @@ export class SoundModes {
   /** Step through each button's full cycle for the signal playing, remember it, and return to where it was. */
   learn(): Promise<{ ok: boolean; modes: string[]; note?: string }> {
     return this.exclusive('learn', async () => {
-      const key = signalKey(this.io.state());
+      const key = this.key();
       if (!key) return { ok: false, modes: [], note: 'no signal' };
       const start = this.io.state().surround;
       const sig = this.sig(key);
@@ -397,7 +402,7 @@ export class SoundModes {
         const seen: string[] = [];
         for (let i = 0; i < MAX_STEPS; i++) {
           const got = await this.step(b);
-          if (signalKey(this.io.state()) !== key) return { ok: false, modes: [], note: 'the signal changed' };
+          if (this.key() !== key) return { ok: false, modes: [], note: 'the signal changed' };
           if (!got.length) break; // the button does nothing here
           const fresh = got.filter((m) => !seen.includes(m));
           seen.push(...fresh);
@@ -468,7 +473,7 @@ export class SoundModes {
       return this.watch(before, REPLY_MS);
     };
     const cur = this.io.state().surround;
-    const key = signalKey(this.io.state());
+    const key = this.key();
     const remembers = key ? this.store.signals[key]?.remembers?.[button as (typeof BUTTONS)[number]] : undefined;
     let got: string[];
     if (cur && remembers === cur) got = await pair(); // a single press would only show the mode
@@ -482,7 +487,7 @@ export class SoundModes {
       }
     }
     const last = got[got.length - 1];
-    if (key && last && signalKey(this.io.state()) === key) {
+    if (key && last && this.key() === key) {
       const sig = this.sig(key);
       if ((sig.remembers ??= {})[button as (typeof BUTTONS)[number]] !== last) { sig.remembers[button as (typeof BUTTONS)[number]] = last; this.save(); }
     }
@@ -506,7 +511,7 @@ export class SoundModes {
   private async run(t: { exact?: string; text?: string }, opts: { back?: boolean }): Promise<SelectResult> {
     const start = this.io.state().surround;
     if (this.matches(start, t)) return { ok: true, mode: start, note: 'already set' };
-    const key = signalKey(this.io.state());
+    const key = this.key();
     const sig = key ? this.store.signals[key] : undefined;
     const want = t.exact ?? [...this.modesFor(key), ...FIXED.map((f) => f.mode)].find((m) => this.matches(m, t));
 

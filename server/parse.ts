@@ -25,7 +25,7 @@ export type AvrState = {
   decoder: string | null; // SYSDA, e.g. "PCM"
   sampleRate: string | null; // SSINFAISFSV e.g. "48K"
   signal: string | null; // SSINFAISSIG
-  audioFormat: string | null; // SSINFAISFOR, channels in the source: "3/2/.1" = 3 front, 2 surround, LFE
+  audioFormat: string | null; // SSINFAISFOR. Up to HEOS 3.139.173 the channels in the source ("3/2/.1" = 3 front, 2 surround, LFE); since 3.139.174 a format name ("PCM", "Atmos")
   video: VideoSignal; // HDMI signal info (what the receiver's Information page shows)
   ps: Record<string, string>; // raw PS params: DYNEQ -> "ON"
   channels: Record<string, number>; // CV levels in dB (listening adjustment); remembers every channel seen
@@ -217,7 +217,9 @@ function applyZone2(z: Zone2, r: string): void {
 function applySS(st: AvrState, r: string): void {
   let m: RegExpMatchArray | null;
   if (r.startsWith('FUN')) {
-    if (r === 'FUN END') return;
+    // "SSFUNGARBD <name>" ... "SSFUNGAR END" is another list the receiver pushes (it isn't part of the SSFUN ?
+    // reply; the names look like the ones the HDMI devices report). Not input renames.
+    if (r === 'FUN END' || r.startsWith('FUNGAR')) return;
     m = r.slice(3).match(/^(\S+) (.*)$/);
     if (m) st.inputs[m[1]] = { name: m[2].trim(), hidden: st.inputs[m[1]]?.hidden ?? false };
     return;
@@ -247,7 +249,8 @@ function applySS(st: AvrState, r: string): void {
   const info = (s: string) => { const v = s.trim(); return v && v !== 'NON' ? v : null; };
   if (r.startsWith('INFAISFSV')) { st.sampleRate = info(r.slice(9)); return; }
   if (r.startsWith('INFAISSIG')) { st.signal = info(r.slice(9)); return; }
-  if (r.startsWith('INFAISFOR')) { st.audioFormat = info(r.slice(9)); return; }
+  // The name can start with control characters (the display's Dolby logo): "\x02\x07Atmos".
+  if (r.startsWith('INFAISFOR')) { st.audioFormat = info(r.slice(9).replace(/[\x00-\x1f]/g, '')); return; }
   if ((m = r.match(/^INFSIG(HDR|FRL) ([IO])(.*)$/))) {
     st.video[`${m[1].toLowerCase()}${m[2] === 'I' ? 'In' : 'Out'}` as 'hdrIn'] = m[3].trim();
     return;

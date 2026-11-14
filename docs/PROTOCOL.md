@@ -1,6 +1,6 @@
 # Denon AVR-X1700H — control protocol notes
 
-Findings from probing the receiver at `192.168.1.50` (firmware AVR D400-9123-9071-9031, HEOS 3.139.173)
+Findings from probing the receiver at `192.168.1.50` (firmware AVR D400-9123-9071-9031, HEOS 3.139.173; 3.139.174 since 2026-11-14)
 plus community research. Everything here was verified read-only on the actual unit unless marked *(unverified)*.
 
 The receiver exposes **four** interfaces:
@@ -76,7 +76,7 @@ SSLEV ?          -> SSLEVC 53 ...                (Audyssey/setup speaker levels,
 SSVCTZMA ?       -> LIM OFF / PON LAS / DIS REL / MLV MUT  (volume limit, power-on level, display, mute level)
 SSINFAISFSV ?    -> 48K                          (input sample rate; NON when none, e.g. Dolby bitstream)
 SSINFFRM ?       -> firmware versions
-SSINFAISFOR ?    -> 3/2/.1                       (source channel format: front/surround/LFE)
+SSINFAISFOR ?    -> 3/2/.1                       (source channel format: front/surround/LFE; see the note below)
 SYSDV ?          -> SYSDVIN 4K24, SYSDVOUT 4K24, SYSDV END   (HDMI resolution in/out)
 SSINFSIGHDR ?    -> SSINFSIGHDR IHDR10, SSINFSIGHDR OHDR10   (HDR in/out; "---" = SDR)
 SSINFSIGCOS ?    -> 99                           (color space code, input digit + output digit; 9 = BT.2020)
@@ -85,6 +85,14 @@ SSINFSIGFRL ?    -> SSINFSIGFRL I---, O---       (HDMI 2.1 FRL rate in/out)
 SSINFSIGGMS ?    -> 00000000                     (game flags: ALLM / QMS / QFT, layout unconfirmed)
 SYMO             -> AVR-X1700HUSA
 ```
+**After the update to HEOS 3.139.174 (2026-11-14; the AVR string stayed D400-9123-9071-9031):** `SSINFAISFOR` returns a
+format name, not the layout: `PCM` for 5.1 PCM (`SSINFAISSIG 02`, where it used to say `3/2/.1`) and `<0x02><0x07>Atmos`
+for Dolby Atmos (two control characters, the display's Dolby logo). The app strips the control characters and counts
+the channels of a PCM signal from the input grid (`GetInputSignal`) instead. Everything else answered as before: all
+readable setup pages, `Deviceinfo.xml` (identical), `SSFUN`, `SSSOD`, `SSINFFRM`, `GetAudioInfo`, HEOS.
+The receiver also pushes a second list, `SSFUNGARBD Videocore` ... `SSFUNGAR END` (seen for BD, SAT/CBL, MPLAY, AUX2;
+not part of the `SSFUN ?` reply; probably the names the HDMI devices report). The app ignores it.
+
 These are the same lines the receiver emits while building its **Information** web page (setup API general type 12).
 That page itself takes **~32 s** to load, and the receiver's whole setup server (port 10443) answers nothing
 else meanwhile, so the app queries these over telnet instead. `SSINFSIG ?` alone returns nothing; query each one.

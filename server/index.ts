@@ -230,6 +230,7 @@ const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 
 // ---------- sound modes (learned from the receiver; the manual promises modes this unit doesn't offer) ----------
 const soundModes = new SoundModes(DATA, {
   state: () => state,
+  inputChannels: () => audioMap ? audioMap.input.flat().filter((c) => c?.on && c.ch !== 'LFE').length : null,
   cmd: (c) => sendCommand(c, 'sound mode'),
   log: (m) => log(m),
   changed: () => scheduleBroadcast(),

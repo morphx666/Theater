@@ -62,7 +62,7 @@
           <div class="line"><span class="pill accent mode" title={st.soundModeText ?? ''}><Icon name="wave" size={14} /><span class="txt">{st.soundModeText ?? '—'}</span></span></div>
           <div class="line">
             <span class="lead" title="Audio"><Icon name="vol" size={14} /></span>
-            <span class="pill" title={st.audioFormat ? `Channels in the source: ${st.audioFormat} (front/surround/LFE)` : ''}>{st.decoder || '—'}</span>
+            <span class="pill" title={/^\d+\//.test(st.audioFormat ?? '') ? `Channels in the source: ${st.audioFormat} (front/surround/LFE)` : ''}>{st.decoder || '—'}</span>
             {#if st.sampleRate}<span class="pill">{st.sampleRate}Hz</span>{/if}
             {#if layout}<span class="pill"><Icon name="speaker" size={14} />{layout}</span>{/if}
           </div>

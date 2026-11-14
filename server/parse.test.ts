@@ -216,6 +216,13 @@ test('HDMI video signal info', async () => {
     'SSINFSIGCOS 99', 'SSINFSIGPIX 22', 'SSINFSIGFRL I---', 'SSINFSIGFRL O---', 'SSINFAISFOR 3/2/.1']) applyLine(st, l);
   assert.deepEqual(st.video, { resIn: '4K24', resOut: '4K24', hdrIn: 'HDR10', hdrOut: 'HDR10', cos: '99', pix: '22', frlIn: '---', frlOut: '---' });
   assert.equal(st.audioFormat, '3/2/.1');
+  // HEOS 3.139.174 sends a name instead, with the display's logo characters in front of "Atmos".
+  applyLine(st, 'SSINFAISFOR \x02\x07Atmos');
+  assert.equal(st.audioFormat, 'Atmos');
+  // The pushed SSFUNGAR list isn't input renames.
+  const before = Object.keys(st.inputs).length;
+  for (const l of ['SSFUNGARBD Videocore', 'SSFUNGARSAT/CBL Fire TV Stick', 'SSFUNGAR END']) applyLine(st, l);
+  assert.equal(Object.keys(st.inputs).length, before);
   // The Information page also emits the tuner region, which must not replace the model.
   applyLine(st, 'SYMOAVR-X1700HUSA'); applyLine(st, 'SYMODTUN USA');
   assert.equal(st.model, 'AVR-X1700HUSA');
