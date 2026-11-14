@@ -9,6 +9,7 @@ Example rules:
 - When **Input** changes to *Game*, and **Volume** ≥ −20 dB → set **Dialog Enhancer** to *Off* and **Sound mode** to *Stereo*.
 - When **Decoder** changes, and the **input signal contains LFE** → set **Subwoofer level** to −2 dB.
 - When **Input channels (count)** changes, and it is ≤ 3 (stereo, or stereo + LFE) → set **Sound mode** to *Multi Ch Stereo*.
+- When **Decoder** changes, and input channels **C** and **FHL** are present → set **Dialog Enhancer** to *Medium*.
 - When **Tuner preset** changes, and **Dialog Enhancer** is not *Off* → set **Cinema EQ** to *Off*.
 - At **23:00 every day**, if the **Main zone** is on → set **Volume** to −35 dB (*only lower*) and **Dynamic Volume** to *Heavy*.
 
@@ -21,7 +22,7 @@ Example rules:
 | **Property** | Anything the app knows and can name: input, volume, mute, sound mode, decoder, sample rate, input channels, Dialog Enhancer, tuner preset, Zone 2 volume, HEOS play state, and so on. Every property is defined once in a shared **catalog** (§3). |
 | **Automation** | One named, enable-able graph: one canvas in the editor. It has one or more trigger nodes. |
 | **Trigger** | "Property P changed", optionally narrowed ("changed **to** X", "changed **from** X **to** Y", "rose above / fell below N"). |
-| **Condition** | One or more comparisons of a property against a user value ("Volume ≥ −20 dB", "Dialog Enhancer is not Off", "Input channels contain LFE"), joined by **All of** (AND) or **Any of** (OR). It has a *true* and a *false* output. |
+| **Condition** | One or more comparisons of a property against a user value ("Volume ≥ −20 dB", "Dialog Enhancer is not Off", "Input channels C and FHL are present"), joined by **All of** (AND) or **Any of** (OR). It has a *true* and a *false* output. |
 | **Action** | Set one property to a fixed value ("Sound mode = Stereo", "Volume = −30 dB"), or run an app action ("Apply speaker preset Movie", "Play HEOS favorite 2"). There are no relative actions ("Volume −3 dB"): a re-run would keep stacking them, and a fixed value is always predictable. |
 | **Run** | One pass through the graph after a trigger fires. |
 
@@ -118,7 +119,7 @@ Option lists and ranges come from the existing panels (Seg options, Slider range
 |---|---|---|
 | Power | Receiver power, Main zone power | both (`PW…`, `ZM…`) |
 | Volume | Master volume (dB), Mute | volume set to a fixed value (capped, optional *only lower*, §6), mute |
-| Input & signal | Input; Sound mode (raw text, "contains" comparisons); Quick Select; Decoder (`SYSDA`); Sample rate; Audio format (`3/2/.1`); **Input channels (count)**; **Input channel layout**; **Input channels (list)**; **Contains LFE**; **Active speakers** (set, from the audio map's output grid). See "Input channels" below. | input, sound mode (the MS commands in docs/PROTOCOL.md), Quick Select recall |
+| Input & signal | Input; Sound mode (raw text, "contains" comparisons); Quick Select; Decoder (`SYSDA`); Sample rate; Audio format (`3/2/.1`); **Input channels (count)**; **Input channel layout**; **Input channel** *X* (each channel); **Active speaker** *X* (each speaker); **Active speakers (count)**. See "Input channels and active speakers" below. | input, sound mode (the MS commands in docs/PROTOCOL.md), Quick Select recall |
 | Video | Input / output resolution, HDR in / out, color space, pixel depth (decoded, `videoInfo`) | — |
 | Audio | Audyssey (MultEQ, Dynamic EQ, Ref. level, Dynamic Volume); Dialog Enhancer; Subwoofer on/off and level; LFE; Cinema EQ; Tone control, bass, treble; DRC; Loudness management; Restorer; Audio delay; Neural:X; Center spread | all of them (`PS…`) |
 | Speakers | Channel level (per channel, `CV`); Speaker preset (app preset) | channel level; **apply speaker preset** (app action, §6) |
@@ -129,21 +130,29 @@ Option lists and ranges come from the existing panels (Seg options, Slider range
 | App | Receiver connected (telnet / HTTP / offline) | — |
 | Time (phase 4) | Time of day, day of week (conditions only; schedules are their own trigger node) | — |
 
-### Input channels
+### Input channels and active speakers
 
-"How many channels the input stream has" is a first-class property, with three views of the same thing:
+Rules can test the number of channels in the input stream **and any single channel**, e.g. "if **C** and **FHL** are in the signal, then…". The receiver reports two grids of channels (the Status panel's signal view shows both):
+
+- **Input signal:** which channels the source stream contains.
+- **Active speakers:** which speakers are playing now (depends on the sound mode as well as the source).
 
 | Property | Type | Examples |
 |---|---|---|
 | **Input channels (count)** | number, LFE counts as one | 1 mono · 2 stereo · 3 stereo + LFE (2.1) · 6 for 5.1 · 8 for 7.1 · 10 for 5.1.4 |
 | **Input channel layout** | text, `main.lfe[.height]` | `2.0`, `2.1`, `5.1`, `7.1`, `5.1.4` |
-| **Input channels (list)** | set of channel codes | `FL FR C LFE SL SR …` (for "contains LFE", "contains C") |
-| **Contains LFE** | bool | shortcut for "list contains LFE" |
+| **Input channel** *X* | bool, one per channel (`param` = channel code) | "Input channel **C** is present", "Input channel **FHL** is not present" |
+| **Active speaker** *X* | bool, one per speaker (`param` = channel code) | "Speaker **SW** is playing" |
+| **Active speakers (count)** | number | |
+
+Each per-channel property works as a trigger too ("when input channel FHL appears", "when speaker C stops").
+
+**Channel picker in the editor.** Checking several channels with one row each would be clumsy, so the condition node has a **Channels** row type: a small speaker-layout grid of chips (the same layout as the Status panel's signal view), one per channel. Tapping a chip cycles it through *don't care* → *present* (green) → *absent* (red). "C and FHL present" is two taps. The row is true when every marked chip matches, and is stored as two plain lists (`present: ['C', 'FHL'], absent: []`), so the server evaluates it like any other row. The same picker, set to *Active speakers*, tests which speakers are playing. A trigger node can also use the picker: "when the set of input channels changes so that it matches …".
 
 Source, in order of preference:
 
 1. The audio map's input grid (`AppCommand0300.xml`, [audio-map.ts](../server/audio-map.ts)): the cells with `on: true` are the channels present in the signal, height channels included. This is what the Status panel's signal view shows.
-2. When the grid isn't available yet (main zone just turned on, or the HTTP read failed): `audioFormat` (`SSINFAISFOR`, "front/surround/LFE", e.g. `3/2/.1` → 3 + 2 + 1 = 6). It doesn't list height channels, so the layout is reported without them.
+2. When the grid isn't available yet (main zone just turned on, or the HTTP read failed): `audioFormat` (`SSINFAISFOR`, "front/surround/LFE", e.g. `3/2/.1` → 3 + 2 + 1 = 6). It gives the count and layout (without heights) but not the individual channels, so the per-channel properties are *unknown* (null) until the grid arrives, and conditions on them are false (§3, operators). The active-speaker properties come from the grid only.
 
 Both are read again after every input, format and sound-mode change (index.ts already does this), and the trigger's default settle time for these properties is longer (about 3 s) because the format can flip while the HDMI handshake settles or at track starts.
 
@@ -238,8 +247,8 @@ Server-side validation on save (never trust the client): known node types, known
 
 ### Where it lives
 
-- A new Setup tab **Automation** (`TABS` in [Setup.svelte](../web/src/pages/Setup.svelte), so `#setup/automation` opens it) holds one wide panel, **Automation** (`id: 'automation'`, `section: 'setup'`, `tab: 'automation'` in [panels/index.js](../web/src/panels/index.js)). It's a normal panel, so it can also be pinned to Home for quick enable / disable.
-- The editor opens full screen over the app from the panel, at `#setup/automation/<id>` so the browser's back button closes it. `fromHash()` in App.svelte passes the third part of the hash on to the panel. No new top-level page, so the phone tab bar keeps its 7 tabs.
+- One panel, **Automation** (`id: 'automation'`, `section: 'setup'`, `tab: 'app'` in [panels/index.js](../web/src/panels/index.js)), in the existing **App & Info** tab next to "This app". **No new Setup tab** and no new page: the Setup tab bar and the phone tab bar stay as they are. (Every Setup panel must belong to an existing tab, because [Section.svelte](../web/src/pages/Section.svelte) filters by `tab`.) It's a normal panel, so it can also be pinned to Home for quick enable / disable.
+- The panel is the only way into the editor: **Edit** on a rule, or **New automation**. The editor opens full screen over the app at `#setup/app/rule/<id>` (`/rule/new` for a new one), so the browser's back button closes it. `fromHash()` in App.svelte passes the rest of the hash on to the panel.
 
 ### The Automation panel (list view)
 
@@ -301,9 +310,9 @@ Comparison kept for reference:
 | `server/index.ts` | wiring: hook in the broadcast timer, REST routes, snapshot summary, run messages |
 | `web/src/lib/automation/ops.js` | operator evaluation shared by the editor's live ✔/✘ (keep in step with the server; the test checks both against the same cases) |
 | `web/src/lib/automation/store.svelte.js` | catalog, list, editor state, undo stack |
-| `web/src/panels/Automation.svelte` | the Setup › Automation panel (list view), registered in `panels/index.js` |
-| `web/src/pages/Setup.svelte` | new `automation` tab |
-| `web/src/App.svelte` | pass `#setup/automation/<id>` through to the panel |
+| `web/src/panels/Automation.svelte` | the Automation panel (list view) in Setup › App & Info, registered in `panels/index.js` |
+| `web/src/App.svelte` | pass `#setup/app/rule/<id>` through to the panel |
+| `web/src/lib/automation/ChannelPicker.svelte` | the tri-state channel chip grid (§3) |
 | `web/src/lib/automation/Editor.svelte` + `nodes/*.svelte` | full-screen canvas and node components (lazy-loaded) |
 | `docs/AUTOMATION.md` | this document, updated to describe what was built |
 | `CLAUDE.md` | short section on the engine and "if you add a state field, add it to the catalog" |
@@ -314,7 +323,7 @@ Comparison kept for reference:
 
 Unit tests (`node --test`, no receiver), in the style of `speaker-presets.test.ts` with a fake receiver and fake clock:
 
-- Catalog: `read` from sample states, `write` produces commands the guard accepts, every enum option round-trips. Input channels: count and layout from sample audio-map grids (2.0, 2.1, 5.1, 7.1, 5.1.4) and the `audioFormat` fallback.
+- Catalog: `read` from sample states, `write` produces commands the guard accepts, every enum option round-trips. Input channels: count, layout and each channel from sample audio-map grids (2.0, 2.1, 5.1, 7.1, 5.1.4); count and layout from the `audioFormat` fallback, with per-channel values unknown; Channels rows (present / absent lists) against those grids.
 - Volume: no relative commands can be produced; *only lower* skips when the volume is already at or below the value.
 - Schedules (phase 4): fires once per matching minute, not on missed minutes after a restart, across a DST change.
 - Operators: every operator × type, including `null`.
@@ -332,7 +341,7 @@ Live testing on the receiver follows the standing rule: **automations may lower 
 Each phase ends with a commit that works on its own.
 
 1. **Engine without UI.** Catalog (Power, Volume, Input & signal including the input-channel properties, Audio groups first), change detection hook, engine, storage, REST, tests. Usable by posting JSON, which proves the model.
-2. **Panel and editor basics.** Setup › Automation tab and panel (list, enable, run, edit, delete), full-screen Svelte Flow editor, trigger / condition / action nodes, palette, save and validation.
+2. **Panel and editor basics.** Automation panel in Setup › App & Info (list, enable, run, edit, delete, new), full-screen Svelte Flow editor, trigger / condition / action nodes, the channel picker, palette, save and validation.
 3. **Live feedback.** Current values and ✔/✘ on nodes, run highlighting, Test (dry run), run history.
 4. **Rest of the catalog, and time.** Zone 2, Tuner, HEOS, speaker presets (with the Amp Assign confirmation), General, video properties; Delay and Comment nodes; duplicate, copy/paste, undo/redo. **Schedule trigger** ("at 23:00 on weekdays", "every 15 minutes") and **time conditions** ("time is between 22:00 and 07:00", "day is Sat or Sun"). These come after the rest of the engine is proven because they need only a 1-minute timer in the engine and no new receiver interface. Times use the server's local time zone (the Pi's), shown in the editor so it's never a surprise; a missed minute (server down) is not run later.
 5. **Later, if wanted.** `wait-until` and `restore` nodes, a small allowlist of setup-API actions, templates ("Night mode", "Movie with Atmos"), import/export as JSON.
@@ -344,7 +353,7 @@ Each phase ends with a commit that works on its own.
 Made on 2026-11-13:
 
 1. **Editor library:** Svelte Flow (`@xyflow/svelte`), lazy-loaded.
-2. **Placement:** a Setup tab **Automation** with one panel that lists every rule, with buttons to edit and delete them; the editor opens full screen from there (§7). No new top-level page.
+2. **Placement:** one **Automation** panel in Setup › App & Info that lists every rule, with buttons to edit and delete them and to create a new one; the editor opens full screen from there (§7). No new Setup tab, no new page.
 3. **Volume:** actions set fixed values only, never relative steps; still capped by the guard, with an optional *Only lower, never raise* switch (§6).
-4. **"Channel number"** means the number of channels in the input stream (2 = stereo, 3 = stereo + LFE, 6 = 5.1, …): the *Input channels* properties in §3. The tuner preset is still in the catalog as its own property.
+4. **"Channel number"** means the number of channels in the input stream (2 = stereo, 3 = stereo + LFE, 6 = 5.1, …), and rules must also be able to test **individual channels** ("if C and FHL then…"): the per-channel properties and the channel picker in §3. The tuner preset is still in the catalog as its own property.
 5. **Date / time:** schedule triggers and time conditions in phase 4 (§10).
