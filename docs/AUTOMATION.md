@@ -1,65 +1,36 @@
 # Automation — implementation plan
 
-Status: **plan only, nothing implemented yet** (branch `automation`). The decisions from the review are in §11.
+Status: **phase 1 (engine, no UI) in progress** on branch `automation`. Decisions are in §11.
 
-Goal: let the user build rules of the form **trigger → conditions → actions** in a graphical node editor (in the style of Node-RED or Blender's node editor). The rules run on the server, so they keep working when no browser is open (the Pi runs 24/7).
+Goal: let the user build rules of the form **when (trigger) → if (conditions) → do (actions)** in a graphical, **Scratch-style block editor**. The rules run on the server, so they keep working when no browser is open (the Pi runs 24/7).
 
 Example rules:
 
-- When **Input** changes to *Game*, and **Volume** ≥ −20 dB → set **Dialog Enhancer** to *Off* and **Sound mode** to *Stereo*.
-- When **Decoder** changes, and the **input signal contains LFE** → set **Subwoofer level** to −2 dB.
-- When **Input channels (count)** changes, and it is ≤ 3 (stereo, or stereo + LFE) → set **Sound mode** to *Multi Ch Stereo*.
-- When **Decoder** changes, and input channels **C** and **FHL** are present → set **Dialog Enhancer** to *Medium*.
-- When **Tuner preset** changes, and **Dialog Enhancer** is not *Off* → set **Cinema EQ** to *Off*.
-- At **23:00 every day**, if the **Main zone** is on → set **Volume** to −35 dB (*only lower*) and **Dynamic Volume** to *Heavy*.
+- When **Input** changes to *Game*: if **Volume** ≥ −20 dB → set **Dialog Enhancer** to *Off* and **Sound mode** to *Stereo*.
+- When **Input channels (count)** changes: if it is ≤ 3 (stereo, or stereo + LFE) → set **Sound mode** to *Multi Ch Stereo*.
+- When **Decoder** changes: if input channels **C** and **FHL** are present → set **Dialog Enhancer** to *Medium*, else *Off*.
+- When **Input** changes to *Blu-ray*: **wait until** input channels C and FHL are present (up to 10 s) → set **Dialog Enhancer** to *Medium*.
+- At **23:00 every day** (phase 4): if the **Main zone** is on → set **Volume** to −35 dB (*only lower*) and **Dynamic Volume** to *Heavy*.
 
 ---
 
 ## 1. Concepts
 
-| Term | Meaning |
-|---|---|
-| **Property** | Anything the app knows and can name: input, volume, mute, sound mode, decoder, sample rate, input channels, Dialog Enhancer, tuner preset, Zone 2 volume, HEOS play state, and so on. Every property is defined once in a shared **catalog** (§3). |
-| **Automation** | One named, enable-able graph: one canvas in the editor. It has one or more trigger nodes. |
-| **Trigger** | "Property P changed", optionally narrowed ("changed **to** X", "changed **from** X **to** Y", "rose above / fell below N"). |
-| **Condition** | One or more comparisons of a property against a user value ("Volume ≥ −20 dB", "Dialog Enhancer is not Off", "Input channels C and FHL are present"), joined by **All of** (AND) or **Any of** (OR). It has a *true* and a *false* output. |
-| **Action** | Set one property to a fixed value ("Sound mode = Stereo", "Volume = −30 dB"), or run an app action ("Apply speaker preset Movie", "Play HEOS favorite 2"). There are no relative actions ("Volume −3 dB"): a re-run would keep stacking them, and a fixed value is always predictable. |
-| **Run** | One pass through the graph after a trigger fires. |
+| Term | Meaning | Scratch equivalent |
+|---|---|---|
+| **Property** | Anything the app knows and can name: input, volume, mute, sound mode, decoder, input channels, Dialog Enhancer, tuner preset, Zone 2 volume, HEOS play state… Each is defined once in a shared **catalog** (§3). | variables / sensing |
+| **Automation** | One named rule that can be turned on and off: a *when* block with a script under it. | one script |
+| **Trigger** | The *when* block: "when P changes", narrowed with *from* / *to*, or "when ⟨condition⟩ becomes true". Several triggers can share one script ("when A … or when B …"). | hat block |
+| **Condition** | A true/false block: a comparison ("Volume ≥ −20 dB", "Dialog Enhancer is not Off"), a channel check ("C and FHL present"), or **all of** / **any of** / **not** around other conditions. | boolean reporter (hexagon) |
+| **Action** | "Set P to value": always a fixed value, never relative ("Volume −3 dB" would stack on every re-run). Phase 4 adds app actions (apply a speaker preset, play a HEOS favorite). | "set … to …" |
+| **Control** | *if / else*, *wait N seconds*, *wait until ⟨condition⟩ (up to N s)*, *stop*. | control blocks |
+| **Run** | One pass through the script after a trigger fires. | |
 
 ---
 
-## 2. Graph model and semantics
+## 2. Model and semantics
 
-Flow-based, like Node-RED: wires carry *execution*, not data. A trigger fires, and the run walks the wires from that trigger. This is easier to reason about than a Blender-style data-flow graph, where every value would be a node, and it still allows AND, OR and NOT without extra node types:
-
-- **AND**: chain condition nodes, or use one condition node in *All of* mode.
-- **OR**: one condition node in *Any of* mode, or several wires into the same node (it runs when any of them arrives).
-- **NOT**: use the condition node's *false* output.
-
-### Node types
-
-| Node | Inputs | Outputs | Settings |
-|---|---|---|---|
-| `trigger` | — | `out` | `prop` (+ `param`, e.g. channel `C`), `when`: `change` \| `to` \| `from-to` \| `above` \| `below`, values, `settle` ms |
-| `schedule` (trigger) | — | `out` | `at` (HH:MM) and `days` (Mon–Sun), or `every` N minutes; phase 4 |
-| `condition` | `in` | `true`, `false` | `mode`: `all` \| `any`; `rows`: `[{ prop, param?, op, value }]` |
-| `action` | `in` | `out` (after it was sent) | `prop` + `value` (fixed values only), or `app` action + args; volume actions also have `onlyLower` |
-| `delay` | `in` | `out` | `ms` (max e.g. 10 min); can go anywhere in the graph |
-| `wait-until` | `in` | `met`, `timeout` | condition rows (same editor as `condition`, channel picker included), `timeoutMs` (max e.g. 10 min), optional `checks` + `everyMs` |
-| `comment` | — | — | text (documentation on the canvas) |
-
-Later (phase 5): `restore` (put back the values an earlier action replaced).
-
-### Delay and Wait until (instead of loops)
-
-Values sometimes arrive late: the channel grid after an HDMI handshake, settings the receiver restores after an input change. Two nodes handle that:
-
-- **Delay** pauses the run for a fixed time.
-- **Wait until** is the safe form of a loop: it checks its condition when the run reaches it and **again on every change of the properties it uses**, until the condition is true (→ `met`) or the timeout ends (→ `timeout`). In the editor it reads as "check up to *N* times, every *S* seconds" or "wait up to *T* seconds", and both are stored as a timeout. Event-driven checking reacts at once and costs nothing while waiting. The "*N* times every *S* seconds" form also re-checks on that schedule, for values that change without an event.
-
-  Example: "When Input changes to Blu-ray → **wait until** input channels C and FHL are present (up to 10 s) → `met`: Dialog Enhancer Medium · `timeout`: Dialog Enhancer Off".
-
-There is no general loop node and no wire back to an earlier node. The graph stays acyclic, so every run ends: a wait always has a timeout, and the `concurrency` setting (`restart` by default) cancels a waiting run when its trigger fires again. Repeating something on a schedule is the job of the schedule trigger (phase 4).
+A rule is a **tree**, not a graph: a script is a list of blocks, and an *if* holds two more lists. Because there are no wires there are no loose ends, no unreachable blocks and no cycles; every run ends by construction.
 
 ### Stored format
 
@@ -68,247 +39,235 @@ There is no general loop node and no wire back to an earlier node. The graph sta
 {
   "version": 1,
   "automations": [{
-    "id": "a7f3…",            // stable id, never reused
-    "name": "Game night",
+    "id": "k3x9f2a1",              // stable id, never reused
+    "name": "Blu-ray dialog",
     "enabled": true,
-    "concurrency": "restart",  // a new trigger cancels a pending run (delays) | "ignore" | "queue"
-    "cooldownMs": 2000,
-    "nodes": [
-      { "id": "n1", "type": "trigger",   "x": 40,  "y": 80, "prop": "input", "when": "to", "to": "GAME" },
-      { "id": "n2", "type": "condition", "x": 300, "y": 80, "mode": "all",
-        "rows": [{ "prop": "volume", "op": ">=", "value": -20 }] },
-      { "id": "n3", "type": "action",    "x": 560, "y": 40, "prop": "ps.DEH", "value": "OFF" },
-      { "id": "n4", "type": "action",    "x": 560, "y": 140, "prop": "soundMode", "value": "STEREO" }
+    "concurrency": "restart",     // a new trigger cancels a running script | "ignore" (drop new triggers while running)
+    "when": [                     // any of these starts the script
+      { "type": "change", "prop": "input", "to": "BD" }
     ],
-    "edges": [
-      { "from": "n1", "out": "out",  "to": "n2" },
-      { "from": "n2", "out": "true", "to": "n3" },
-      { "from": "n3", "out": "out",  "to": "n4" }
+    "script": [
+      { "type": "waitUntil", "timeoutMs": 10000, "onTimeout": "continue",
+        "cond": { "type": "channels", "of": "input", "present": ["C", "FHL"], "absent": [] } },
+      { "type": "if",
+        "cond": { "type": "all", "items": [
+          { "type": "channels", "of": "input", "present": ["C", "FHL"], "absent": [] },
+          { "type": "cmp", "prop": "volume", "op": "le", "value": -20 } ] },
+        "then": [ { "type": "set", "prop": "ps.DEH", "value": "MED" } ],
+        "else": [ { "type": "set", "prop": "ps.DEH", "value": "OFF" } ] }
     ]
   }]
 }
 ```
 
+### Blocks
+
+| Block | Fields | Notes |
+|---|---|---|
+| **Triggers** (`when`) | | |
+| `change` | `prop`, `param?` (e.g. channel `C`), `from?`, `to?`, `settleMs?` | "when Input changes", "… to Game", "… from Game to Blu-ray" |
+| `becomes` | `cond`, `settleMs?` | "when ⟨Volume > −20 dB⟩ becomes true", "when ⟨C and FHL present⟩ becomes true" |
+| `schedule` | `at` (HH:MM), `days` | phase 4 |
+| **Script** | | |
+| `set` | `prop`, `param?`, `value`, `onlyLower?` (volume) | fixed values only |
+| `if` | `cond`, `then[]`, `else[]` | |
+| `wait` | `ms` (≤ 10 min) | |
+| `waitUntil` | `cond`, `timeoutMs` (≤ 10 min), `onTimeout`: `continue` \| `stop` | re-checks on every change of the state and once a second |
+| `stop` | | ends the run |
+| **Conditions** | | |
+| `cmp` | `prop`, `param?`, `op`, `value?` | operators per type (§3) |
+| `channels` | `of`: `input` \| `speakers`, `present[]`, `absent[]` | the channel picker (§3) |
+| `all` / `any` | `items[]` | AND / OR, any number of items |
+| `not` | `item` | |
+
+Later (phase 5): `restore` (put back the values the script replaced).
+
 ### Run semantics
 
-1. A trigger matches a change event (§4). Its `settle` delay starts (default from the catalog, e.g. 1.5 s after an input or power change, because the receiver restores per-input settings right after switching; see `POWER_ON_QUERIES` in index.ts). Another matching change during the delay restarts it.
-2. After the delay, the run walks the graph from the trigger. **Conditions read the live state at the moment they're evaluated**, not the state at trigger time.
-3. Actions are sent one at a time, in wire order. Fan-out (one output to several nodes) runs the branches in the order of their y position on the canvas, so the order is visible.
-4. A node reached twice in the same run runs once.
-5. The graph must be acyclic (validated on save), so a run always ends.
+1. A trigger matches (§4). Its **settle** time starts (default from the catalog, e.g. 1.5 s after an input change because the receiver restores per-input settings right after switching, about 3 s for input channels because the format can flip during the HDMI handshake). Another match during the settle time restarts it. When it ends, the trigger is checked again ("still Blu-ray?"); if it no longer holds, nothing runs.
+2. The script runs top to bottom. **Conditions read the live state when they're evaluated**, not the state at trigger time.
+3. Actions are sent one at a time, in order, through the guarded command path (§6).
+4. `wait until` is the safe kind of loop: it re-checks its condition whenever the state changes and once a second, until it's true or the timeout ends. `onTimeout: continue` carries on (an *if* below can then branch on the same condition); `stop` ends the run.
+5. `concurrency: restart` (default): a new trigger cancels a running script (for example one that is waiting) and starts again. `ignore`: new triggers are dropped while the script runs.
 
 ---
 
 ## 3. The property catalog
 
-One server module, `server/automation-catalog.ts`, describes every property. The client never hard-codes property lists: it gets the catalog from `GET /api/automation/catalog`, so the editor's dropdowns, value pickers and units always match what the server accepts.
+One server module, [server/automation-catalog.ts](../server/automation-catalog.ts), describes every property. The client never hard-codes property lists: it gets the catalog from `GET /api/automation/catalog`, so the editor's menus, value pickers and units always match what the server accepts.
 
 ```ts
 type PropDef = {
-  id: string;                 // 'input', 'volume', 'ps.DEH', 'channel.level'
+  id: string;                 // 'input', 'volume', 'ps.DEH', 'channel.level', 'input.channel'
   label: string;              // 'Dialog Enhancer'
-  group: string;              // palette group: 'Power', 'Volume', 'Input & signal', 'Audio', 'Video', 'Zone 2', 'Tuner', 'HEOS', …
+  group: string;              // 'Power', 'Volume', 'Input & signal', 'Audio', 'Speakers', …
   type: 'number' | 'enum' | 'bool' | 'text' | 'set';
-  unit?: 'dB' | 'min' | 'ms' | 'MHz';
+  unit?: 'dB' | 'ms' | 'min' | 'MHz';
   min?: number; max?: number; step?: number;
-  options?: { value: string; label: string }[] | ((st) => …); // enums; dynamic for inputs (names, hidden ones left out), presets, quick selects
-  param?: { label: string; options: … };                    // e.g. channel for 'channel.level'
-  read: (ctx) => Value | null;   // from state / audioMap / nowPlaying / speaker presets; null = unknown
-  write?: (value, ctx) => string[] | AppAction;              // telnet commands (still go through guard) or an app action
-  settleMs?: number;             // default trigger settle delay
-  needsZone?: boolean;           // action only makes sense with the main zone on
-  needsInput?: string;           // e.g. tuner actions need input TUNER
+  options?: { value: string; label: string }[];   // enums; filled from the state for inputs and Quick Select names
+  param?: { label: string; options: … };          // e.g. the channel for 'channel.level' and 'input.channel'
+  read(ctx, param?): Value | null;                // null = unknown
+  write?(value, param?): string[];                // telnet commands, still guarded
+  settleMs?: number;
+  needsZone?: boolean;                            // the action is skipped while the main zone is off
+  onlyLower?: boolean;                            // the action supports "only lower, never raise"
 };
 ```
 
-Values are always in **human units**: dB numbers, enum ids with labels, booleans. Encodings (`MV375`, levels where 50 = 0 dB, `PSLFE 05` = −5 dB) stay inside `read` / `write`, reusing `volToDb`, `dbToVol`, `levelToDb`, `dbToLevel` from parse.ts.
+Values are always in **human units**: dB numbers, enum ids with labels, booleans. Encodings (`MV375`, levels where 50 = 0 dB, `PSLFE 05` = −5 dB) stay inside `read` / `write`, reusing `volToDb`, `dbToVol`, `levelToDb`, `dbToLevel` from parse.ts. Option lists and ranges are the same as the panels', which follow the manual.
 
-### First version of the catalog
+| Group | Properties (trigger + condition) | Writable (action) | Phase |
+|---|---|---|---|
+| Power | Receiver power, Main zone power | both | 1 |
+| Volume | Master volume (dB), Mute | volume (fixed value, capped, optional *only lower*), mute | 1 |
+| Input & signal | Input; Sound mode (text); Quick Select; Decoder; Sample rate; Audio format (`3/2/.1`); Input channels (count, layout, each channel, list); Active speakers (count, each speaker, list) | input; sound mode (Pure Direct, Direct, Stereo, Multi Ch Stereo, Auto); Quick Select recall | 1 |
+| Audio | MultEQ, Dynamic EQ, Ref. level, Dynamic Volume; Dialog Enhancer; Subwoofer on/off and level; LFE; Cinema EQ; Tone control, bass, treble; Loudness management; Dynamic compression; Restorer; Audio delay; Neural:X; Center spread | all | 1 |
+| Speakers | Channel level (per channel) | channel level | 1 |
+| Speakers | Speaker preset (app preset) | apply speaker preset | 4 |
+| Video | Resolution, HDR, color space, pixel depth (in / out) | — | 4 |
+| Zone 2 | Power, source, volume, mute | all (Zone 2 volume capped) | 4 |
+| General | Sleep timer, ECO, Dimmer, Auto standby, All Zone Stereo, Bluetooth transmitter | all | 4 |
+| Tuner | Band, frequency, preset | all (only with input TUNER; the guard enforces this) | 4 |
+| HEOS | Play state, source, station, artist, title, album | transport, play favorite N | 4 |
+| Time | Time of day, day of week | — | 4 |
 
-Option lists and ranges come from the existing panels (Seg options, Slider ranges), which already follow the manual.
+Sound mode actions are limited to modes that name one mode. *Movie*, *Music* and *Game* cycle through a category on each press, so they can't be "set" reliably.
 
-| Group | Properties (trigger + condition) | Writable (action) |
-|---|---|---|
-| Power | Receiver power, Main zone power | both (`PW…`, `ZM…`) |
-| Volume | Master volume (dB), Mute | volume set to a fixed value (capped, optional *only lower*, §6), mute |
-| Input & signal | Input; Sound mode (raw text, "contains" comparisons); Quick Select; Decoder (`SYSDA`); Sample rate; Audio format (`3/2/.1`); **Input channels (count)**; **Input channel layout**; **Input channel** *X* (each channel); **Active speaker** *X* (each speaker); **Active speakers (count)**. See "Input channels and active speakers" below. | input, sound mode (the MS commands in docs/PROTOCOL.md), Quick Select recall |
-| Video | Input / output resolution, HDR in / out, color space, pixel depth (decoded, `videoInfo`) | — |
-| Audio | Audyssey (MultEQ, Dynamic EQ, Ref. level, Dynamic Volume); Dialog Enhancer; Subwoofer on/off and level; LFE; Cinema EQ; Tone control, bass, treble; DRC; Loudness management; Restorer; Audio delay; Neural:X; Center spread | all of them (`PS…`) |
-| Speakers | Channel level (per channel, `CV`); Speaker preset (app preset) | channel level; **apply speaker preset** (app action, §6) |
-| Zone 2 | Power, source, volume, mute | all (Zone 2 volume capped) |
-| General | Sleep timer, ECO, Dimmer, Auto standby, All Zone Stereo, Bluetooth transmitter | all |
-| Tuner | Band, frequency, **preset ("channel")** | band, frequency, preset (only with input TUNER; the guard enforces this) |
-| HEOS | Play state, source, station, artist, title, album | play / pause / stop / next / previous; play favorite N |
-| App | Receiver connected (telnet / HTTP / offline) | — |
-| Time (phase 4) | Time of day, day of week (conditions only; schedules are their own trigger node) | — |
+**Not in v1:** values that live only in the setup API (port 10443), such as Graphic EQ or Subwoofer Mode. The receiver doesn't push them, and reading them is slow and serialized (some reads hang the receiver for 30 s), so they can't be triggers. Setup-API *actions* are a phase-5 option, limited to a small allowlist and still going through `setup.set`.
 
 ### Input channels and active speakers
 
-Rules can test the number of channels in the input stream **and any single channel**, e.g. "if **C** and **FHL** are in the signal, then…". The receiver reports two grids of channels (the Status panel's signal view shows both):
-
-- **Input signal:** which channels the source stream contains.
-- **Active speakers:** which speakers are playing now (depends on the sound mode as well as the source).
+Rules can test the number of channels in the input stream **and any single channel**: "if **C** and **FHL** are in the signal, then…". The receiver reports two grids (the Status panel's signal view shows both): the **input signal** (which channels the source contains) and the **active speakers** (which speakers are playing, which also depends on the sound mode).
 
 | Property | Type | Examples |
 |---|---|---|
-| **Input channels (count)** | number, LFE counts as one | 1 mono · 2 stereo · 3 stereo + LFE (2.1) · 6 for 5.1 · 8 for 7.1 · 10 for 5.1.4 |
+| **Input channels (count)** | number, LFE counts as one | 1 mono · 2 stereo · 3 stereo + LFE · 6 for 5.1 · 8 for 7.1 · 10 for 5.1.4 |
 | **Input channel layout** | text, `main.lfe[.height]` | `2.0`, `2.1`, `5.1`, `7.1`, `5.1.4` |
-| **Input channel** *X* | bool, one per channel (`param` = channel code) | "Input channel **C** is present", "Input channel **FHL** is not present" |
-| **Active speaker** *X* | bool, one per speaker (`param` = channel code) | "Speaker **SW** is playing" |
-| **Active speakers (count)** | number | |
+| **Input channel** *X* | bool, `param` = channel code | "Input channel C is present" |
+| **Input channels** | set of channel codes | used by triggers ("when the input channels change") |
+| **Active speaker** *X*, **Active speakers (count)**, **Active speakers** | as above, from the output grid | "Speaker SW is playing" |
 
-Each per-channel property works as a trigger too ("when input channel FHL appears", "when speaker C stops").
-
-**Channel picker in the editor.** Checking several channels with one row each would be clumsy, so the condition node has a **Channels** row type: a small speaker-layout grid of chips (the same layout as the Status panel's signal view), one per channel. Tapping a chip cycles it through *don't care* → *present* (green) → *absent* (red). "C and FHL present" is two taps. The row is true when every marked chip matches, and is stored as two plain lists (`present: ['C', 'FHL'], absent: []`), so the server evaluates it like any other row. The same picker, set to *Active speakers*, tests which speakers are playing. A trigger node can also use the picker: "when the set of input channels changes so that it matches …".
+**Channel picker.** The `channels` condition is edited as a small speaker-layout grid of chips (the layout of the Status panel's signal view). Tapping a chip cycles *don't care* → *present* (green) → *absent* (red), so "C and FHL present" is two taps. It is true when every marked chip matches.
 
 Source, in order of preference:
 
-1. The audio map's input grid (`AppCommand0300.xml`, [audio-map.ts](../server/audio-map.ts)): the cells with `on: true` are the channels present in the signal, height channels included. This is what the Status panel's signal view shows.
-2. When the grid isn't available yet (main zone just turned on, or the HTTP read failed): `audioFormat` (`SSINFAISFOR`, "front/surround/LFE", e.g. `3/2/.1` → 3 + 2 + 1 = 6). It gives the count and layout (without heights) but not the individual channels, so the per-channel properties are *unknown* (null) until the grid arrives, and conditions on them are false (§3, operators). The active-speaker properties come from the grid only.
+1. The audio map's input grid (`AppCommand0300.xml`, [audio-map.ts](../server/audio-map.ts)): cells with `on: true` are the channels in the signal, height channels included.
+2. Before the grid arrives (zone just turned on, or the HTTP read failed): `audioFormat` (`SSINFAISFOR`, "front/surround/LFE", `3/2/.1` → 6). It gives the count and layout (no heights) but not the individual channels, so the per-channel properties are *unknown* until the grid arrives, and conditions on them are false.
 
-Both are read again after every input, format and sound-mode change (index.ts already does this), and the trigger's default settle time for these properties is longer (about 3 s) because the format can flip while the HDMI handshake settles or at track starts.
-
-Phase 1 checks on the receiver that the grid and `SSINFAISFOR` agree for stereo PCM, 5.1 Dolby Digital and an Atmos source, and records what each reports for 2.0 PCM over HDMI vs analog.
-
-**Not in v1:** values that live only in the setup API (port 10443), such as Graphic EQ, Subwoofer Mode, or input assignment. The receiver doesn't push them, and reading them is slow and serialized (and some reads hang the receiver for 30 s), so they can't be triggers. Setup-API *actions* are a phase-5 option, limited to a small allowlist and still going through `setup.set` (backups, `ROOTS`, power-on volume cap).
+Still to check on the receiver: the grid and `SSINFAISFOR` agree for stereo PCM, 5.1 Dolby Digital and an Atmos source.
 
 ### Comparison operators by type
 
-| Type | Operators |
+| Type | Operators (`op`) |
 |---|---|
-| number | `=` `≠` `<` `≤` `>` `≥` `between` |
-| enum | `is` `is not` `is one of` `is none of` |
-| bool | `is on` `is off` |
-| text | `is` `is not` `contains` `doesn't contain` `starts with` |
-| set | `contains` `doesn't contain` `contains any of` `contains all of` `is empty` |
-| any | `is known` `is unknown` |
+| number | `eq` `ne` `lt` `le` `gt` `ge` `between` (value `[lo, hi]`) |
+| enum | `is` `isNot` `in` `notIn` (value list) |
+| bool | `isOn` `isOff` |
+| text | `is` `isNot` `contains` `notContains` `startsWith` (case-insensitive) |
+| set | `has` `hasNot` `hasAny` `hasAll` `empty` `notEmpty` |
+| any | `known` `unknown` |
 
-An unknown value (`null`) makes every comparison false except `is unknown`.
+An unknown value (`null`) makes every comparison false except `unknown`.
 
 ---
 
 ## 4. Server: detecting changes
 
-Changes reach `state` from several places: telnet lines, the HTTP poller, the audio map fetch, HEOS events, speaker presets, settings. All of them end in `scheduleBroadcast()`. That is the one place to hook in:
+Changes reach `state` from several places: telnet lines, the HTTP poller, the audio map fetch, HEOS, speaker presets. All of them end in `scheduleBroadcast()`. That is the one hook:
 
-1. In the broadcast timer (index.ts), before sending the snapshot, call `automation.observe(ctx)`.
-2. `observe` reads every property in the catalog that some *enabled trigger* uses (only those, to keep it cheap), compares with the previous values, and turns each difference into a change event `{ prop, param, from, to }`.
-3. Change events are matched against triggers.
+1. In the broadcast timer (index.ts), before sending the snapshot, call `automations.observe()`.
+2. `observe` reads the properties that enabled triggers and waiting `wait until` blocks use (only those), compares them with the previous values, and turns each difference into a change event `{ key, from, to }`. `becomes` triggers re-evaluate their condition and fire on false → true.
+3. The 40 ms batching merges multi-line bursts (a CV run, a SYSDV pair) into one event per property.
 
-This catches every source with one hook, and the 40 ms batching merges multi-line bursts (a CV run, a SYSDV pair) into one event per property.
-
-**No triggers from startup noise.** Changes from `null` (unknown) to a value don't fire, so the server starting or telnet reconnecting (`REFRESH_QUERIES`) doesn't run every automation. Values read right after a reconnect become the new baseline (a short warm-up window after `telnet.on('status', true)`).
+**No triggers from startup noise.** Changes from unknown (`null`) to a value don't fire, and neither does anything during a short warm-up after telnet (re)connects and `REFRESH_QUERIES` fills the state.
 
 ---
 
 ## 5. Server: the engine
 
-New module `server/automation.ts`, kept free of I/O like `speaker-presets.ts`, with dependencies injected:
+[server/automation.ts](../server/automation.ts), free of I/O like `speaker-presets.ts`, with dependencies injected so tests run on a fake clock:
 
 ```ts
 new Automations(dataDir, {
-  catalog,
-  read: () => ctx,                         // state, audioMap, nowPlaying, speakerPresets.summary(), conn
-  cmd: (c, who) => sendCommand(c, who),    // the guarded path; who = 'automation: Game night'
-  app: (action) => …,                      // speaker preset apply, HEOS transport / favorite
-  now, setTimeout, clearTimeout,           // injectable so tests run on a fake clock
-  log, changed: () => scheduleBroadcast(),
+  ctx: () => ({ state, audioMap }),       // what the catalog reads
+  cmd: (c, who) => sendCommand(c, who),    // the guarded path; who = 'automation: Blu-ray dialog'
+  clock: { now, setTimeout, clearTimeout },
+  log, changed: () => scheduleBroadcast(), run: (r) => broadcast({ type: 'automation-run', run: r }),
 });
 ```
 
-Responsibilities:
-
-- Load, validate and save `data/automations.json` (write to a temp file, then rename).
-- `observe(ctx)` → change events → trigger matching → settle timers → runs.
-- Graph walk (pure function `step(graph, nodeId, ctx)`, unit-tested).
-- Run bookkeeping: a ring buffer of the last ~200 runs `{ automationId, at, trigger: {prop, from, to}, path: [nodeId, result][], error? }`, kept in memory, sent to the editor for live feedback.
-- **Verify actions:** about 2.5 s after an action, check that the property now has the value it was set to. If not, record "not applied by the receiver" in the run (the receiver silently ignores, for example, LFE with PCM or Dialog Enhancer in Direct; see `IGNORED` in web/src/lib/rules.js).
-- **Skip needless actions:** if a set-action's property already has the target value, skip it. This removes most of the loops in §6 and avoids audible re-applies.
+- Load, validate and save `data/automations.json` (temp file, then rename).
+- `observe()` → change events → triggers → settle → runs.
+- Runs keep a record: `{ id, automation, trigger, at, status, steps: [{ path, what, result }] }`; the last 100 are kept in memory for the editor (phase 3).
+- **Skip needless actions:** if the property already has the value, the action is skipped. This breaks most loops (§6) and avoids audible re-applies.
+- **Verify actions:** about 2.5 s after an action, check the property took the value; if not, the run records "not applied by the receiver" (it silently ignores, for example, LFE with PCM, or Dialog Enhancer in Direct).
+- **Dry run** (`test`): walk the script against the current state and list what *would* be sent, sending nothing.
 
 REST, in index.ts next to the speaker-presets routes:
 
 | Route | |
 |---|---|
-| `GET /api/automation/catalog` | the catalog, with dynamic option lists filled in (input names, presets, quick select names) |
-| `GET /api/automations` | all automations |
-| `POST /api/automations` | `{ action: 'save', automation }` (create or replace, fully validated) \| `delete` \| `enable` \| `run` (manual "Run now") \| `test` (dry run: walk the graph against the current state and return the path and the actions it *would* send, sending nothing) |
-| `GET /api/automations/runs` | recent runs |
+| `GET /api/automation/catalog` | the catalog, with option lists filled in from the state |
+| `GET /api/automations` | `{ automations, runs }` |
+| `POST /api/automations` | `{ action: 'save', automation }` (create or replace; fully validated) · `delete` · `enable` · `run` (run now) · `test` (dry run) |
 
-The snapshot gets a small `automations` summary (`[{ id, name, enabled, lastRun, lastError }]`) so every device sees enable/disable changes and last-run status, the same way it gets `speakerPresets`. Full graphs are fetched only by the editor.
+The snapshot gets a small `automations` summary (`[{ id, name, enabled, disabled, lastRun }]`) so every device sees on/off changes and last results.
 
-Server-side validation on save (never trust the client): known node types, known property ids, operators allowed for the type, values in the option lists or ranges, edges only between existing nodes and allowed ports, no cycles, at least one trigger, limits (e.g. 100 automations, 60 nodes each, delay ≤ 10 min, names ≤ 40 characters).
+Server-side validation on save (never trust the client): known block types, known property ids, operators allowed for the type, values in the option lists or ranges, `param` valid, read-only properties not used in `set`, limits (100 automations, 8 triggers and 100 blocks each, nesting ≤ 8, waits ≤ 10 min, names ≤ 40 characters).
 
 ---
 
 ## 6. Safety (does not weaken the existing layer)
 
-- **Every telnet action goes through `sendCommand` → `guard()`.** Same allowlist, same `BLOCKED` list, same volume cap (`effectiveCap`) for Main and Zone 2, same "tuner commands need input TUNER" rule. The audit log line names the automation.
-- The catalog's `write` only builds commands for listed properties; there is no "raw command" action. (A "Console command" action could come later, still guarded.)
-- **Volume:** only fixed values (`MV<n>`, `Z2<n>`): no `MVUP` / `MVDOWN` or relative steps from automations. The guard clamps the value to the cap, the same as for the UI. The action has an **Only lower, never raise** switch: with it on, the action is skipped when the current volume is already at or below the value, so a rule can act as a ceiling ("at 23:00, at most −35 dB").
-- **Loops:** automation A sets X, which triggers B, which sets Y, which triggers A…
-  - Skipping needless actions (§5) breaks most loops: the second pass finds nothing to change.
-  - Per-automation cooldown (default 2 s) and a rate limit: more than 10 runs in 60 s **disables the automation**, with a log line and an error in the summary that the UI shows.
-  - Chain depth: change events within ~3 s of an automation's own action are tagged as caused by it. A run started by such an event is depth + 1, and depth > 3 stops.
-- **Speaker presets:** `apply()` is already serialized (`busy`). The Amp Assign confirmation can't be answered by an automation. The editor asks for it when the action is created (stored as `confirmAmp` on the action, as docs/SPEAKER-PRESETS.md suggests), or the server refuses to save the rule.
-- **Power:** actions that need the main zone (`needsZone`) are skipped with a note when it's off, rather than sent to be ignored. A "Main zone power off" action is allowed (it's what the power button does). "Receiver power on" is allowed too; it's the obvious use for schedules later.
+- **Every action goes through `sendCommand` → `guard()`.** Same allowlist, same `BLOCKED` list, same volume cap (`effectiveCap`), same tuner rule. The log line names the automation.
+- The catalog's `write` only builds commands for listed properties; there is no raw-command action.
+- **Volume:** fixed values only (`MV<n>`); automations never send `MVUP` / `MVDOWN`. The guard clamps to the cap. **Only lower, never raise** skips the action when the volume is already at or below the value, so a rule can act as a ceiling.
+- **Loops** (A sets X, which triggers B, which sets Y, which triggers A…):
+  - Needless actions are skipped (§5), so a second pass usually finds nothing to change.
+  - A rule that runs more than 10 times in 60 s **turns itself off**, with a log line and a reason the UI shows.
+  - Chain depth: changes within 3 s of an automation's action count as caused by it; a run caused by a run caused by a run… stops at depth 3.
+- **Power:** actions that need the main zone are skipped (with a note in the run) while it's off. Power actions themselves are allowed.
+- **Speaker presets** (phase 4): `apply()` is serialized. The Amp Assign confirmation is asked when the action is created (stored as `confirmAmp`), or the server refuses the rule.
 - Runs never call the setup API in v1.
 
 ---
 
-## 7. Frontend: the node editor
+## 7. Frontend: the block editor
 
 ### Where it lives
 
-- One panel, **Automation** (`id: 'automation'`, `section: 'setup'`, `tab: 'app'` in [panels/index.js](../web/src/panels/index.js)), in the existing **App & Info** tab next to "This app". **No new Setup tab** and no new page: the Setup tab bar and the phone tab bar stay as they are. (Every Setup panel must belong to an existing tab, because [Section.svelte](../web/src/pages/Section.svelte) filters by `tab`.) It's a normal panel, so it can also be pinned to Home for quick enable / disable.
-- The panel is the only way into the editor: **Edit** on a rule, or **New automation**. The editor opens full screen over the app at `#setup/app/rule/<id>` (`/rule/new` for a new one), so the browser's back button closes it. `fromHash()` in App.svelte passes the rest of the hash on to the panel.
-
-### The Automation panel (list view)
-
-Rows, one per automation: name, enable switch, a one-line plain-language summary generated from the graph ("When Input changes to Game · if Volume ≥ −20 dB · set Dialog Enhancer Off, Sound mode Stereo"), last run time and result, and buttons for **Edit**, **Run now**, **Duplicate**, **Delete** (with a confirmation). Tapping the row also opens the editor. A **New automation** button opens an empty canvas with one trigger node. Rows that the server disabled (loop protection, §6) show the reason.
+- One panel, **Automation** (`id: 'automation'`, `section: 'setup'`, `tab: 'app'` in [panels/index.js](../web/src/panels/index.js)), in the existing **App & Info** tab. No new Setup tab, no new page. Like any panel it can be pinned to Home.
+- The panel lists every rule: name, on/off switch, a one-line summary ("When Input changes to Blu-ray · wait until C, FHL · if … set Dialog Enhancer Medium"), last run and result, and **Edit**, **Run now**, **Duplicate**, **Delete**. **New automation** starts an empty rule. A rule the server turned off (loop protection) shows why.
+- The editor opens full screen over the app at `#setup/app/rule/<id>` (`/rule/new`), so the browser's back button closes it.
 
 ### Editor
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│ ← Game night          [● Enabled]   Test   Undo Redo   Save              │
-├────────────┬─────────────────────────────────────────────────────────────┤
-│ TRIGGERS   │   ┌───────────────┐      ┌──────────────────┐     ┌────────┐│
-│  Input     │   │ ⚡ Input       │      │ ? All of         │     │ ▶ Dialog││
-│  Volume    │   │ changes to    ●─────▶● Volume ≥ −20 dB  │true │ Enhancer││
-│  Decoder…  │   │ [Game     ▾]  │      │ + condition      ●────▶● [Off ▾] ●┐
-│ CONDITIONS │   │ now: Blu-ray  │      │ now: ✔ −32 dB    │     └────────┘│
-│ ACTIONS    │   └───────────────┘      │            false ●              ││
-│ FLOW       │                          └──────────────────┘   ┌──────────┘│
-│  Delay     │                                                 ▼          │
-│  Comment   │                                     ┌───────────────┐      │
-│            │                                     │ ▶ Sound mode  │      │
-│            │                                     │ [Stereo ▾]    │      │
-│            │                                     └───────────────┘      │
-└────────────┴─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ ← Blu-ray dialog          [● On]   Test   ↶ ↷   Save         │
+├───────────┬──────────────────────────────────────────────────┤
+│ ● Events  │ ╭ when  [Input ▾]  changes to  [Blu-ray ▾] ─────╮ │
+│ ● Control │ │ + or when …                                   │ │
+│ ● Checks  │ ╰───────────────────────────────────────────────╯ │
+│ ● Audio   │ ┃ wait until ⟨ input  [C] [FHL] ⟩  up to [10] s  │
+│ ● Volume  │ ┃ ┌ if ⟨ all of ⟨ input [C] [FHL] ⟩                │
+│ ● Input   │ ┃ │            ⟨ Volume [≤ ▾] [−20] dB ✔ ⟩  + ⟩    │
+│ ● Speakers│ ┃ │   set [Dialog Enhancer ▾] to [Medium ▾]        │
+│           │ ┃ ├ else                                           │
+│ [search]  │ ┃ │   set [Dialog Enhancer ▾] to [Off ▾]           │
+│           │ ┃ └──────                                          │
+└───────────┴──────────────────────────────────────────────────┘
 ```
 
-- **Canvas:** pan (drag background, two-finger drag), zoom (wheel, pinch, buttons), snap to grid, a "fit" button, and a mini-map on large screens.
-- **Nodes** are app-styled cards (`--card`, the accent color per node kind: trigger, condition, action, flow) with inline editors that reuse the existing controls: `Seg` for short enums, a select for long ones, `Slider` for dB values with the same ranges as the panels.
-- **Ports and wires:** drag from an output port to an input port; wires are SVG bezier curves. Only valid connections snap (no wire into a trigger, no cycles). Tap a wire to delete it.
-- **Palette:** a sidebar on wide screens and a bottom sheet on phones, grouped like the catalog (Power, Volume, Input & signal, …), with search. Drag (or tap) to add.
-- **Live values:** every node shows the property's current value ("now: Blu-ray"), and condition rows show ✔ / ✘ against the live state, evaluated in the browser from `avr.state` with the same operator code (a small shared module, see §8). This makes it easy to see why a rule would or wouldn't run.
-- **Run feedback:** when a run of this automation happens, its path lights up briefly (nodes and wires pulse in the order they ran; actions that weren't applied show a warning). The data comes from a `{ type: 'automation-run' }` WebSocket message.
-- **Test:** dry run against the current state (`action: 'test'`); highlights the path and lists the actions that would be sent, without sending anything.
-- **Editing:** multi-select (box select / shift-click), delete, duplicate, copy/paste, undo/redo (a snapshot stack of the graph), keyboard shortcuts on desktop. Unsaved changes warn on leave.
-- **Validation** in the editor mirrors the server's (missing values, unconnected actions, unreachable nodes) and marks the faulty node in red; the server's answer is still final.
+- **Blocks look like Scratch's**: a rounded *when* hat on top, stacked command blocks that snap under each other, C-shaped *if / else* and *wait until* blocks that wrap their contents, and hexagon-shaped condition blocks that drop into the hexagon slots. Colors per category (events, control, checks, and one per property group), from `app.css` tokens so they follow the theme.
+- **Palette**: categories on the left (a bottom sheet on phones), with search. Drag a block into the script, or tap it to insert at the selected gap (on phones, tap a gap in the script first).
+- **Fields inside the blocks**: property menu (grouped, searchable), operator menu, and a value field that fits the property: `Seg` or a select for enums, a number stepper or `Slider` for dB values (the panels' ranges), a switch for booleans, the **channel picker** for channels.
+- **Moving and editing**: drag a block (with what's inside it) to reorder or nest; each block's ⋯ menu has duplicate, delete, move up / down (the keyboard and accessibility alternative to dragging). Undo / redo. Unsaved changes warn on leave.
+- **Live state** (phase 3): every condition shows ✔ / ✘ against the current state, set-blocks show the current value, and the blocks glow in order while a run executes (like a running Scratch script), from the `automation-run` WebSocket message. **Test** does a dry run and highlights the path.
+- **Validation** mirrors the server's and outlines the faulty block in red; the server's answer is final.
+- It's a vertical stack: no canvas, no pan or zoom, so it works the same on a phone.
 
-### Library: Svelte Flow (decided)
-
-Comparison kept for reference:
-
-| | [Svelte Flow](https://svelteflow.dev) (`@xyflow/svelte`, MIT) | Hand-built |
-|---|---|---|
-| Pan, zoom, pinch, mini-map, connection dragging, selection | built in, touch-tested | ~800–1200 lines to write and test on phones |
-| Custom nodes | Svelte components (our panels' controls fit directly) | same |
-| Styling | its CSS variables, themed to `app.css` | full control |
-| Cost | one more runtime dependency (the app has two), larger bundle, only on the Automation page (lazy-loaded with `import()`) | none |
-
-**Svelte Flow**, lazy-loaded (the editor is imported with `import()` when it opens) so the rest of the app doesn't grow. Check at implementation time that the current version supports Svelte 5 runes (1.x does) and works with Vite 8.
+**Built by hand in Svelte**, no new dependency. The pieces are a recursive block component, a palette, pointer-event drag-and-drop with drop gaps, and the field editors. Blockly (the library behind Scratch's editor) was considered and left out: it's large and wouldn't look like the rest of the app.
 
 ---
 
@@ -316,33 +275,29 @@ Comparison kept for reference:
 
 | File | Purpose |
 |---|---|
-| `server/automation-catalog.ts` | property catalog (read/write/encode), operators |
+| `server/automation-ops.ts` | operator evaluation, no dependencies (shared with the editor's live ✔/✘ in phase 3) |
+| `server/automation-catalog.ts` | property catalog (read / write / encode) |
 | `server/automation.ts` | engine: storage, validation, change detection, runs, safety limits |
 | `server/automation.test.ts` | tests (§9) |
 | `server/index.ts` | wiring: hook in the broadcast timer, REST routes, snapshot summary, run messages |
-| `web/src/lib/automation/ops.js` | operator evaluation shared by the editor's live ✔/✘ (keep in step with the server; the test checks both against the same cases) |
-| `web/src/lib/automation/store.svelte.js` | catalog, list, editor state, undo stack |
-| `web/src/panels/Automation.svelte` | the Automation panel (list view) in Setup › App & Info, registered in `panels/index.js` |
-| `web/src/App.svelte` | pass `#setup/app/rule/<id>` through to the panel |
-| `web/src/lib/automation/ChannelPicker.svelte` | the tri-state channel chip grid (§3) |
-| `web/src/lib/automation/Editor.svelte` + `nodes/*.svelte` | full-screen canvas and node components (lazy-loaded) |
-| `docs/AUTOMATION.md` | this document, updated to describe what was built |
-| `CLAUDE.md` | short section on the engine and "if you add a state field, add it to the catalog" |
+| `web/src/panels/Automation.svelte` | the list panel (Setup › App & Info) |
+| `web/src/lib/automation/Editor.svelte`, `Block.svelte`, `Palette.svelte`, `ChannelPicker.svelte`, fields | the block editor (lazy-loaded) |
+| `web/src/lib/automation/store.svelte.js` | catalog, rule being edited, undo stack |
+| `web/src/App.svelte` | pass `#setup/app/rule/<id>` on to the panel |
+| `CLAUDE.md` | short section on the engine, and "when you add a state field, add it to the catalog" |
 
 ---
 
 ## 9. Testing
 
-Unit tests (`node --test`, no receiver), in the style of `speaker-presets.test.ts` with a fake receiver and fake clock:
+Unit tests (`node --test`, no receiver), with a fake clock:
 
-- Catalog: `read` from sample states, `write` produces commands the guard accepts, every enum option round-trips. Input channels: count, layout and each channel from sample audio-map grids (2.0, 2.1, 5.1, 7.1, 5.1.4); count and layout from the `audioFormat` fallback, with per-channel values unknown; Channels rows (present / absent lists) against those grids.
-- Volume: no relative commands can be produced; *only lower* skips when the volume is already at or below the value.
-- Schedules (phase 4): fires once per matching minute, not on missed minutes after a restart, across a DST change.
-- Operators: every operator × type, including `null`.
-- Change detection: one event per property per batch; no events from `null`; the reconnect baseline.
-- Runs: trigger narrowing (`to`, `from-to`, `above`), settle restart, AND / OR / false branch, fan-out order, delay with `restart` / `ignore`, wait-until (met on a later change, met on a timed re-check, timeout, cancelled by a new trigger), needless-action skip, verify ("not applied").
-- Safety: volume above the cap is clamped; tuner action rejected unless input is TUNER; loop detection disables an automation; chain depth stops.
-- Validation: cycles, bad ports, unknown props, out-of-range values, limits.
+- Operators: every operator × type, including unknown values.
+- Catalog: `read` from sample states; every `write` produces commands the guard accepts; enum options round-trip; input channels (count, layout, each channel) from sample grids (2.0, 2.1, 5.1, 5.1.4) and from the `audioFormat` fallback with per-channel values unknown.
+- Change detection: one event per property per batch; nothing from unknown; warm-up.
+- Runs: `from` / `to` triggers, `becomes`, settle restart and re-check, if / else, all / any / not, channels, wait, wait until (met later, timeout + continue / stop, cancelled by a new trigger), `restart` / `ignore`, needless-action skip, *only lower*, zone-off skip, verify ("not applied").
+- Safety: volume above the cap is clamped by the guard; rate limit turns a rule off; chain depth stops.
+- Validation: unknown types and props, wrong operators, out-of-range values, read-only props in `set`, limits.
 
 Live testing on the receiver follows the standing rule: **automations may lower or mute the volume, never raise it**, during tests.
 
@@ -352,11 +307,11 @@ Live testing on the receiver follows the standing rule: **automations may lower 
 
 Each phase ends with a commit that works on its own.
 
-1. **Engine without UI.** Catalog (Power, Volume, Input & signal including the input-channel properties, Audio groups first), change detection hook, engine, storage, REST, tests. Usable by posting JSON, which proves the model.
-2. **Panel and editor basics.** Automation panel in Setup › App & Info (list, enable, run, edit, delete, new), full-screen Svelte Flow editor, trigger / condition / action / **delay / wait-until** nodes, the channel picker, palette, save and validation. (The engine side of delay and wait-until is built in phase 1.)
-3. **Live feedback.** Current values and ✔/✘ on nodes, run highlighting, Test (dry run), run history.
-4. **Rest of the catalog, and time.** Zone 2, Tuner, HEOS, speaker presets (with the Amp Assign confirmation), General, video properties; Comment node; duplicate, copy/paste, undo/redo. **Schedule trigger** ("at 23:00 on weekdays", "every 15 minutes") and **time conditions** ("time is between 22:00 and 07:00", "day is Sat or Sun"). These come after the rest of the engine is proven because they need only a 1-minute timer in the engine and no new receiver interface. Times use the server's local time zone (the Pi's), shown in the editor so it's never a surprise; a missed minute (server down) is not run later.
-5. **Later, if wanted.** `restore` node, a small allowlist of setup-API actions, templates ("Night mode", "Movie with Atmos"), import/export as JSON.
+1. **Engine without UI.** Operators, catalog (Power, Volume, Input & signal with the channel properties, Audio, channel levels), change detection, engine (triggers, if/else, wait, wait until, stop, set), storage, REST, safety limits, tests. Usable by posting JSON.
+2. **Panel and editor.** Automation panel (list, on/off, run, edit, duplicate, delete, new); full-screen block editor with palette, drag-and-drop, field editors, the channel picker, undo / redo, save and validation.
+3. **Live feedback.** ✔ / ✘ and current values in the blocks, run highlighting, Test (dry run), run history.
+4. **Rest of the catalog, and time.** Zone 2, Tuner, HEOS, speaker presets (with the Amp Assign confirmation), General, video properties. **Schedule trigger** ("at 23:00 on weekdays") and **time conditions** ("time is between 22:00 and 07:00", "day is Sat or Sun"), in the Pi's local time zone (shown in the editor); a missed time (server down) is not run later. Block comments.
+5. **Later, if wanted.** `restore` block, a small allowlist of setup-API actions, templates ("Night mode", "Movie with Atmos"), import / export as JSON.
 
 ---
 
@@ -364,8 +319,9 @@ Each phase ends with a commit that works on its own.
 
 Made on 2026-11-13:
 
-1. **Editor library:** Svelte Flow (`@xyflow/svelte`), lazy-loaded.
-2. **Placement:** one **Automation** panel in Setup › App & Info that lists every rule, with buttons to edit and delete them and to create a new one; the editor opens full screen from there (§7). No new Setup tab, no new page.
-3. **Volume:** actions set fixed values only, never relative steps; still capped by the guard, with an optional *Only lower, never raise* switch (§6).
-4. **"Channel number"** means the number of channels in the input stream (2 = stereo, 3 = stereo + LFE, 6 = 5.1, …), and rules must also be able to test **individual channels** ("if C and FHL then…"): the per-channel properties and the channel picker in §3. The tuner preset is still in the catalog as its own property.
-5. **Date / time:** schedule triggers and time conditions in phase 4 (§10).
+1. **Editor:** Scratch-style blocks, built by hand in Svelte (no dependency). This replaces the first choice, a Node-RED-style node editor with Svelte Flow: the rules work like Scratch scripts (events, if / else, wait, wait until, set), not like Node-RED's data flows, and a vertical block stack works better on a phone than a canvas with wires.
+2. **Placement:** one **Automation** panel in Setup › App & Info that lists every rule, with buttons to edit and delete them and to create a new one; the editor opens full screen from there. No new Setup tab, no new page.
+3. **Volume:** actions set fixed values only, never relative steps; still capped by the guard, with an optional *Only lower, never raise* switch.
+4. **"Channel number"** means the number of channels in the input stream (2 = stereo, 3 = stereo + LFE, 6 = 5.1, …), and rules can also test **individual channels** ("if C and FHL then…") with the channel picker.
+5. **Date / time:** schedule triggers and time conditions in phase 4.
+6. **Waiting:** *wait* and *wait until* (with a timeout) instead of a general loop block; every run ends.
