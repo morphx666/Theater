@@ -66,7 +66,7 @@
           <!-- The rule as pseudo code: one line per step, if / else bodies indented. -->
           <span class="code">
             {#each lines as ln, i (i)}
-              <span class="ln" style:--depth={ln.depth}>{#each ln.parts as p, j (j)}{#if p.kw}<b>{p.t}</b>{:else}{p.t}{/if}{/each}</span>
+              <span class="ln" style:--depth={ln.depth}>{#each ln.parts as p, j (j)}<span class={p.k}>{p.t}</span>{/each}</span>
             {/each}
           </span>
           {#if s?.disabled}
@@ -102,7 +102,12 @@
   /* The whole rule, never cut. A wrapped line hangs under its own text, so the indentation stays readable. */
   .code { display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
   .ln { padding-left: calc(var(--depth) * 12px + 10px); text-indent: -10px; }
-  .ln b { font-weight: 600; color: var(--text); }
+  /* Syntax colors (app.css): control words, actions, properties, operators, values. */
+  .ln .kw { font-weight: 650; color: var(--text); }
+  .ln .verb { color: var(--syn-verb); }
+  .ln .prop { color: var(--syn-prop); }
+  .ln .op { color: var(--muted); }
+  .ln .val { color: var(--syn-val); }
   .warn { color: var(--bad); }
   .pill.run { font-size: 11px; padding: 1px 8px; color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
   /* Every button as wide as the widest; icons in one column, the text after them. */

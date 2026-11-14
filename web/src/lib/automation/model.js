@@ -147,20 +147,20 @@ function propText(def, param) {
   return def ? `${def.label}${param ? ` ${param}` : ''}` : '?';
 }
 
-export function condText(c, catalog, ops = OP_LABELS) {
+export function condText(c, catalog) {
   if (!c) return '…';
   switch (c.type) {
     case 'cmp': {
       const def = catalog.find((p) => p.id === c.prop);
       const v = argKind(c.op) === 'pair' ? `${valueText(def, c.value?.[0])} and ${valueText(def, c.value?.[1])}` : argKind(c.op) === 'none' ? '' : ` ${valueText(def, c.value)}`;
-      return `${propText(def, c.param)} ${ops[c.op] ?? c.op}${argKind(c.op) === 'pair' ? ` ${v}` : v}`;
+      return `${propText(def, c.param)} ${OP_LABELS[c.op] ?? c.op}${argKind(c.op) === 'pair' ? ` ${v}` : v}`;
     }
     case 'channels': {
       const parts = [c.present.length && `${c.present.join(' ')} present`, c.absent.length && `${c.absent.join(' ')} absent`].filter(Boolean);
       return `${c.of === 'input' ? 'input' : 'speakers'} ${parts.join(', ') || '…'}`;
     }
-    case 'all': case 'any': return c.items.map((x) => condText(x, catalog, ops)).join(c.type === 'all' ? ' and ' : ' or ') || '…';
-    case 'not': return `not (${condText(c.item, catalog, ops)})`;
+    case 'all': case 'any': return c.items.map((x) => condText(x, catalog)).join(c.type === 'all' ? ' and ' : ' or ') || '…';
+    case 'not': return `not (${condText(c.item, catalog)})`;
   }
   return '?';
 }
@@ -171,45 +171,86 @@ export function triggerText(t, catalog) {
   return `${propText(def, t.param)} changes${t.from !== undefined ? ` from ${valueText(def, t.from)}` : ''}${t.to !== undefined ? ` to ${valueText(def, t.to)}` : ''}`;
 }
 
-/** One step as text (not "if", which outline() lays out over several lines). */
-function stepText(b, catalog) {
-  const def = catalog.find((p) => p.id === b.prop);
-  switch (b.type) {
-    case 'set': return b.relative ? `change ${propText(def, b.param)} by ${valueText(def, signed(b.value))}`
-      : `set ${propText(def, b.param)} to ${valueText(def, b.value)}${b.onlyLower ? ' (only lower)' : ''}`;
-    case 'findMode': return `find sound mode "${b.text}"`;
-    case 'wait': return `wait ${fmtMs(b.ms)}`;
-    case 'waitUntil': return `wait until ${condText(b.cond, catalog, PSEUDO_OPS)}`;
-    case 'stop': return 'stop';
+// ---------- the rule as pseudo code (Automation panel) ----------
+// Pieces of text tagged with what they are, for syntax colors: kw (when / if / then / else / and / or / not),
+// verb (set, change, wait…), prop (a property), op (=, >, changes to, by…), val (a value). Untagged: punctuation.
+
+/** Conditions read like code: "Input = Kodi". */
+const PSEUDO_OPS = { ...OP_LABELS, is: '=', isNot: '≠' };
+const piece = (k) => (t) => ({ t, k });
+const kw = piece('kw'), verb = piece('verb'), prop = piece('prop'), op = piece('op'), val = piece('val'), plain = piece(undefined);
+
+const propPieces = (def, param) => [prop(propText(def, param))];
+const valPieces = (def, v) => [val(valueText(def, v))];
+
+function condPieces(c, catalog) {
+  if (!c) return [plain('…')];
+  switch (c.type) {
+    case 'cmp': {
+      const def = catalog.find((p) => p.id === c.prop);
+      const head = [...propPieces(def, c.param), op(` ${PSEUDO_OPS[c.op] ?? c.op}`)];
+      const kind = argKind(c.op);
+      if (kind === 'none') return head;
+      if (kind === 'pair') return [...head, plain(' '), ...valPieces(def, c.value?.[0]), op(' and '), ...valPieces(def, c.value?.[1])];
+      return [...head, plain(' '), ...valPieces(def, c.value)];
+    }
+    case 'channels': {
+      const out = [prop(c.of === 'input' ? 'input' : 'speakers')];
+      if (c.present.length) out.push(plain(' '), val(c.present.join(' ')), op(' present'));
+      if (c.absent.length) out.push(plain(c.present.length ? ', ' : ' '), val(c.absent.join(' ')), op(' absent'));
+      return out;
+    }
+    case 'all': case 'any':
+      return c.items.length ? c.items.flatMap((x, i) => [...(i ? [kw(c.type === 'all' ? ' and ' : ' or ')] : []), ...condPieces(x, catalog)]) : [plain('…')];
+    case 'not': return [kw('not '), plain('('), ...condPieces(c.item, catalog), plain(')')];
   }
-  return '?';
+  return [plain('?')];
 }
 
-/** Conditions read like code in the outline: "Input = Kodi". */
-const PSEUDO_OPS = { ...OP_LABELS, is: '=', isNot: '≠' };
+function triggerPieces(t, catalog) {
+  if (t.type === 'becomes') return [...condPieces(t.cond, catalog), op(' becomes true')];
+  const def = catalog.find((p) => p.id === t.prop);
+  return [...propPieces(def, t.param), op(' changes'),
+    ...(t.from !== undefined ? [op(' from '), ...valPieces(def, t.from)] : []),
+    ...(t.to !== undefined ? [op(' to '), ...valPieces(def, t.to)] : [])];
+}
+
+/** One step (not "if", which outline() lays out over several lines). */
+function stepPieces(b, catalog) {
+  const def = catalog.find((p) => p.id === b.prop);
+  switch (b.type) {
+    case 'set': return b.relative
+      ? [verb('change '), ...propPieces(def, b.param), op(' by '), ...valPieces(def, signed(b.value))]
+      : [verb('set '), ...propPieces(def, b.param), op(' to '), ...valPieces(def, b.value), ...(b.onlyLower ? [op(' (only lower)')] : [])];
+    case 'findMode': return [verb('find sound mode '), val(`"${b.text}"`)];
+    case 'wait': return [verb('wait '), val(fmtMs(b.ms))];
+    case 'waitUntil': return [verb('wait until '), ...condPieces(b.cond, catalog)];
+    case 'stop': return [verb('stop')];
+  }
+  return [plain('?')];
+}
 
 /**
- * The rule as indented pseudo code, one line per step, for the Automation panel:
+ * The rule as indented pseudo code, one line per step:
  *   When Input changes to Fire TV Stick
  *     if Input = Kodi then change Volume by -3 dB
  *     set Speaker preset to Default
  * An "if" with one simple step stays on one line; otherwise its steps are indented under it, then "else".
- * Lines: [{ depth, parts: [{ t, kw? }] }] (kw: when / or / if / then / else).
+ * Lines: [{ depth, parts: [{ t, k }] }] (k: see above).
  */
 export function outline(rule, catalog) {
   if (!catalog?.length) return [];
-  const kw = (t) => ({ t, kw: true }), tx = (t) => ({ t });
-  const lines = [{ depth: 0, parts: rule.when.flatMap((t, i) => [kw(i ? ' or ' : 'When '), tx(triggerText(t, catalog))]) }];
+  const lines = [{ depth: 0, parts: rule.when.flatMap((t, i) => [kw(i ? ' or ' : 'When '), ...triggerPieces(t, catalog)]) }];
   const single = (list) => list?.length === 1 && list[0].type !== 'if';
   const walk = (list, depth) => {
     for (const b of list) {
-      if (b.type !== 'if') { lines.push({ depth, parts: [tx(stepText(b, catalog))] }); continue; }
-      const cond = [kw('if '), tx(condText(b.cond, catalog, PSEUDO_OPS))];
-      if (single(b.then) && !b.else?.length) { lines.push({ depth, parts: [...cond, kw(' then '), tx(stepText(b.then[0], catalog))] }); continue; }
+      if (b.type !== 'if') { lines.push({ depth, parts: stepPieces(b, catalog) }); continue; }
+      const cond = [kw('if '), ...condPieces(b.cond, catalog)];
+      if (single(b.then) && !b.else?.length) { lines.push({ depth, parts: [...cond, kw(' then '), ...stepPieces(b.then[0], catalog)] }); continue; }
       lines.push({ depth, parts: [...cond, kw(' then')] });
-      if (b.then.length) walk(b.then, depth + 1); else lines.push({ depth: depth + 1, parts: [tx('(nothing)')] });
+      if (b.then.length) walk(b.then, depth + 1); else lines.push({ depth: depth + 1, parts: [plain('(nothing)')] });
       if (!b.else?.length) continue;
-      if (single(b.else)) lines.push({ depth, parts: [kw('else '), tx(stepText(b.else[0], catalog))] });
+      if (single(b.else)) lines.push({ depth, parts: [kw('else '), ...stepPieces(b.else[0], catalog)] });
       else { lines.push({ depth, parts: [kw('else')] }); walk(b.else, depth + 1); }
     }
   };

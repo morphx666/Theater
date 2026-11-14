@@ -21,6 +21,10 @@
   --thumb: #2b3140;
   --thumb-ring: #9aa3b5;
   --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  /* Syntax colors for rules shown as pseudo code (Automation panel); the same in every accent. */
+  --syn-verb: #c3a3ff;
+  --syn-prop: #6fd6e6;
+  --syn-val: #f2bd6b;
 }
 
 @media (prefers-color-scheme: light) {
@@ -40,6 +44,9 @@
     --thumb: #ffffff;
     --thumb-ring: #9aa2b1;
     --shadow: 0 8px 24px -14px rgb(20 30 50 / 0.35);
+    --syn-verb: #7340d6;
+    --syn-prop: #0b7f91;
+    --syn-val: #a35a00;
   }
 }
 
