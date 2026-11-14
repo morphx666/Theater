@@ -1,6 +1,6 @@
 # Automation — implementation plan
 
-Status: **plan only, nothing implemented yet** (branch `automation`).
+Status: **plan only, nothing implemented yet** (branch `automation`). The decisions from the review are in §11.
 
 Goal: let the user build rules of the form **trigger → conditions → actions** in a graphical node editor (in the style of Node-RED or Blender's node editor). The rules run on the server, so they keep working when no browser is open (the Pi runs 24/7).
 
@@ -8,7 +8,9 @@ Example rules:
 
 - When **Input** changes to *Game*, and **Volume** ≥ −20 dB → set **Dialog Enhancer** to *Off* and **Sound mode** to *Stereo*.
 - When **Decoder** changes, and the **input signal contains LFE** → set **Subwoofer level** to −2 dB.
+- When **Input channels (count)** changes, and it is ≤ 3 (stereo, or stereo + LFE) → set **Sound mode** to *Multi Ch Stereo*.
 - When **Tuner preset** changes, and **Dialog Enhancer** is not *Off* → set **Cinema EQ** to *Off*.
+- At **23:00 every day**, if the **Main zone** is on → set **Volume** to −35 dB (*only lower*) and **Dynamic Volume** to *Heavy*.
 
 ---
 
@@ -20,7 +22,7 @@ Example rules:
 | **Automation** | One named, enable-able graph: one canvas in the editor. It has one or more trigger nodes. |
 | **Trigger** | "Property P changed", optionally narrowed ("changed **to** X", "changed **from** X **to** Y", "rose above / fell below N"). |
 | **Condition** | One or more comparisons of a property against a user value ("Volume ≥ −20 dB", "Dialog Enhancer is not Off", "Input channels contain LFE"), joined by **All of** (AND) or **Any of** (OR). It has a *true* and a *false* output. |
-| **Action** | Set one property to a value ("Sound mode = Stereo"), change it by a step ("Volume −3 dB"), or run an app action ("Apply speaker preset Movie", "Play HEOS favorite 2"). |
+| **Action** | Set one property to a fixed value ("Sound mode = Stereo", "Volume = −30 dB"), or run an app action ("Apply speaker preset Movie", "Play HEOS favorite 2"). There are no relative actions ("Volume −3 dB"): a re-run would keep stacking them, and a fixed value is always predictable. |
 | **Run** | One pass through the graph after a trigger fires. |
 
 ---
@@ -38,8 +40,9 @@ Flow-based, like Node-RED: wires carry *execution*, not data. A trigger fires, a
 | Node | Inputs | Outputs | Settings |
 |---|---|---|---|
 | `trigger` | — | `out` | `prop` (+ `param`, e.g. channel `C`), `when`: `change` \| `to` \| `from-to` \| `above` \| `below`, values, `settle` ms |
+| `schedule` (trigger) | — | `out` | `at` (HH:MM) and `days` (Mon–Sun), or `every` N minutes; phase 4 |
 | `condition` | `in` | `true`, `false` | `mode`: `all` \| `any`; `rows`: `[{ prop, param?, op, value }]` |
-| `action` | `in` | `out` (after it was sent) | `prop` + `value`, or `prop` + `delta`, or `app` action + args |
+| `action` | `in` | `out` (after it was sent) | `prop` + `value` (fixed values only), or `app` action + args; volume actions also have `onlyLower` |
 | `delay` | `in` | `out` | `ms` (max e.g. 10 min) |
 | `comment` | — | — | text (documentation on the canvas) |
 
@@ -114,8 +117,8 @@ Option lists and ranges come from the existing panels (Seg options, Slider range
 | Group | Properties (trigger + condition) | Writable (action) |
 |---|---|---|
 | Power | Receiver power, Main zone power | both (`PW…`, `ZM…`) |
-| Volume | Master volume (dB), Mute | volume set / step (capped, §6), mute |
-| Input & signal | Input; Sound mode (raw text, "contains" comparisons); Quick Select; Decoder (`SYSDA`); Sample rate; Audio format (`3/2/.1`); **Input channels** (set, from the audio map's input grid); **Contains LFE** (derived bool); **Channel count** (derived); **Active speakers** (set, from the audio map's output grid) | input, sound mode (the MS commands in docs/PROTOCOL.md), Quick Select recall |
+| Volume | Master volume (dB), Mute | volume set to a fixed value (capped, optional *only lower*, §6), mute |
+| Input & signal | Input; Sound mode (raw text, "contains" comparisons); Quick Select; Decoder (`SYSDA`); Sample rate; Audio format (`3/2/.1`); **Input channels (count)**; **Input channel layout**; **Input channels (list)**; **Contains LFE**; **Active speakers** (set, from the audio map's output grid). See "Input channels" below. | input, sound mode (the MS commands in docs/PROTOCOL.md), Quick Select recall |
 | Video | Input / output resolution, HDR in / out, color space, pixel depth (decoded, `videoInfo`) | — |
 | Audio | Audyssey (MultEQ, Dynamic EQ, Ref. level, Dynamic Volume); Dialog Enhancer; Subwoofer on/off and level; LFE; Cinema EQ; Tone control, bass, treble; DRC; Loudness management; Restorer; Audio delay; Neural:X; Center spread | all of them (`PS…`) |
 | Speakers | Channel level (per channel, `CV`); Speaker preset (app preset) | channel level; **apply speaker preset** (app action, §6) |
@@ -124,6 +127,27 @@ Option lists and ranges come from the existing panels (Seg options, Slider range
 | Tuner | Band, frequency, **preset ("channel")** | band, frequency, preset (only with input TUNER; the guard enforces this) |
 | HEOS | Play state, source, station, artist, title, album | play / pause / stop / next / previous; play favorite N |
 | App | Receiver connected (telnet / HTTP / offline) | — |
+| Time (phase 4) | Time of day, day of week (conditions only; schedules are their own trigger node) | — |
+
+### Input channels
+
+"How many channels the input stream has" is a first-class property, with three views of the same thing:
+
+| Property | Type | Examples |
+|---|---|---|
+| **Input channels (count)** | number, LFE counts as one | 1 mono · 2 stereo · 3 stereo + LFE (2.1) · 6 for 5.1 · 8 for 7.1 · 10 for 5.1.4 |
+| **Input channel layout** | text, `main.lfe[.height]` | `2.0`, `2.1`, `5.1`, `7.1`, `5.1.4` |
+| **Input channels (list)** | set of channel codes | `FL FR C LFE SL SR …` (for "contains LFE", "contains C") |
+| **Contains LFE** | bool | shortcut for "list contains LFE" |
+
+Source, in order of preference:
+
+1. The audio map's input grid (`AppCommand0300.xml`, [audio-map.ts](../server/audio-map.ts)): the cells with `on: true` are the channels present in the signal, height channels included. This is what the Status panel's signal view shows.
+2. When the grid isn't available yet (main zone just turned on, or the HTTP read failed): `audioFormat` (`SSINFAISFOR`, "front/surround/LFE", e.g. `3/2/.1` → 3 + 2 + 1 = 6). It doesn't list height channels, so the layout is reported without them.
+
+Both are read again after every input, format and sound-mode change (index.ts already does this), and the trigger's default settle time for these properties is longer (about 3 s) because the format can flip while the HDMI handshake settles or at track starts.
+
+Phase 1 checks on the receiver that the grid and `SSINFAISFOR` agree for stereo PCM, 5.1 Dolby Digital and an Atmos source, and records what each reports for 2.0 PCM over HDMI vs analog.
 
 **Not in v1:** values that live only in the setup API (port 10443), such as Graphic EQ, Subwoofer Mode, or input assignment. The receiver doesn't push them, and reading them is slow and serialized (and some reads hang the receiver for 30 s), so they can't be triggers. Setup-API *actions* are a phase-5 option, limited to a small allowlist and still going through `setup.set` (backups, `ROOTS`, power-on volume cap).
 
@@ -199,7 +223,7 @@ Server-side validation on save (never trust the client): known node types, known
 
 - **Every telnet action goes through `sendCommand` → `guard()`.** Same allowlist, same `BLOCKED` list, same volume cap (`effectiveCap`) for Main and Zone 2, same "tuner commands need input TUNER" rule. The audit log line names the automation.
 - The catalog's `write` only builds commands for listed properties; there is no "raw command" action. (A "Console command" action could come later, still guarded.)
-- **Volume:** absolute set is clamped by the guard. Relative "volume up" actions are limited to small steps (e.g. ≤ 6 dB per action) and to the cap. Optionally (decision below) volume *increases* need an explicit "Allow raising the volume" switch on the action.
+- **Volume:** only fixed values (`MV<n>`, `Z2<n>`): no `MVUP` / `MVDOWN` or relative steps from automations. The guard clamps the value to the cap, the same as for the UI. The action has an **Only lower, never raise** switch: with it on, the action is skipped when the current volume is already at or below the value, so a rule can act as a ceiling ("at 23:00, at most −35 dB").
 - **Loops:** automation A sets X, which triggers B, which sets Y, which triggers A…
   - Skipping needless actions (§5) breaks most loops: the second pass finds nothing to change.
   - Per-automation cooldown (default 2 s) and a rate limit: more than 10 runs in 60 s **disables the automation**, with a log line and an error in the summary that the UI shows.
@@ -214,11 +238,12 @@ Server-side validation on save (never trust the client): known node types, known
 
 ### Where it lives
 
-A new page **Automation** (`#automation`, editor at `#automation/<id>`), registered in `PAGES` in App.svelte like the others. The phone bottom bar already has 7 tabs, so see decision 2.
+- A new Setup tab **Automation** (`TABS` in [Setup.svelte](../web/src/pages/Setup.svelte), so `#setup/automation` opens it) holds one wide panel, **Automation** (`id: 'automation'`, `section: 'setup'`, `tab: 'automation'` in [panels/index.js](../web/src/panels/index.js)). It's a normal panel, so it can also be pinned to Home for quick enable / disable.
+- The editor opens full screen over the app from the panel, at `#setup/automation/<id>` so the browser's back button closes it. `fromHash()` in App.svelte passes the third part of the hash on to the panel. No new top-level page, so the phone tab bar keeps its 7 tabs.
 
-### List view
+### The Automation panel (list view)
 
-Cards, one per automation: name, enable switch, a one-line plain-language summary generated from the graph ("When Input changes to Game · if Volume ≥ −20 dB · set Dialog Enhancer Off, Sound mode Stereo"), last run time and result, and buttons for **Edit**, **Run now**, **Duplicate**, **Delete**. A **New automation** button opens an empty canvas with one trigger node.
+Rows, one per automation: name, enable switch, a one-line plain-language summary generated from the graph ("When Input changes to Game · if Volume ≥ −20 dB · set Dialog Enhancer Off, Sound mode Stereo"), last run time and result, and buttons for **Edit**, **Run now**, **Duplicate**, **Delete** (with a confirmation). Tapping the row also opens the editor. A **New automation** button opens an empty canvas with one trigger node. Rows that the server disabled (loop protection, §6) show the reason.
 
 ### Editor
 
@@ -251,7 +276,9 @@ Cards, one per automation: name, enable switch, a one-line plain-language summar
 - **Editing:** multi-select (box select / shift-click), delete, duplicate, copy/paste, undo/redo (a snapshot stack of the graph), keyboard shortcuts on desktop. Unsaved changes warn on leave.
 - **Validation** in the editor mirrors the server's (missing values, unconnected actions, unreachable nodes) and marks the faulty node in red; the server's answer is still final.
 
-### Library or hand-built
+### Library: Svelte Flow (decided)
+
+Comparison kept for reference:
 
 | | [Svelte Flow](https://svelteflow.dev) (`@xyflow/svelte`, MIT) | Hand-built |
 |---|---|---|
@@ -260,7 +287,7 @@ Cards, one per automation: name, enable switch, a one-line plain-language summar
 | Styling | its CSS variables, themed to `app.css` | full control |
 | Cost | one more runtime dependency (the app has two), larger bundle, only on the Automation page (lazy-loaded with `import()`) | none |
 
-**Recommendation: Svelte Flow**, lazy-loaded so the rest of the app doesn't grow. Check at implementation time that the current version supports Svelte 5 runes (1.x does) and works with Vite 8.
+**Svelte Flow**, lazy-loaded (the editor is imported with `import()` when it opens) so the rest of the app doesn't grow. Check at implementation time that the current version supports Svelte 5 runes (1.x does) and works with Vite 8.
 
 ---
 
@@ -274,8 +301,10 @@ Cards, one per automation: name, enable switch, a one-line plain-language summar
 | `server/index.ts` | wiring: hook in the broadcast timer, REST routes, snapshot summary, run messages |
 | `web/src/lib/automation/ops.js` | operator evaluation shared by the editor's live ✔/✘ (keep in step with the server; the test checks both against the same cases) |
 | `web/src/lib/automation/store.svelte.js` | catalog, list, editor state, undo stack |
-| `web/src/pages/Automation.svelte` | list view |
-| `web/src/lib/automation/Editor.svelte` + `nodes/*.svelte` | canvas and node components |
+| `web/src/panels/Automation.svelte` | the Setup › Automation panel (list view), registered in `panels/index.js` |
+| `web/src/pages/Setup.svelte` | new `automation` tab |
+| `web/src/App.svelte` | pass `#setup/automation/<id>` through to the panel |
+| `web/src/lib/automation/Editor.svelte` + `nodes/*.svelte` | full-screen canvas and node components (lazy-loaded) |
 | `docs/AUTOMATION.md` | this document, updated to describe what was built |
 | `CLAUDE.md` | short section on the engine and "if you add a state field, add it to the catalog" |
 
@@ -285,7 +314,9 @@ Cards, one per automation: name, enable switch, a one-line plain-language summar
 
 Unit tests (`node --test`, no receiver), in the style of `speaker-presets.test.ts` with a fake receiver and fake clock:
 
-- Catalog: `read` from sample states, `write` produces commands the guard accepts, every enum option round-trips.
+- Catalog: `read` from sample states, `write` produces commands the guard accepts, every enum option round-trips. Input channels: count and layout from sample audio-map grids (2.0, 2.1, 5.1, 7.1, 5.1.4) and the `audioFormat` fallback.
+- Volume: no relative commands can be produced; *only lower* skips when the volume is already at or below the value.
+- Schedules (phase 4): fires once per matching minute, not on missed minutes after a restart, across a DST change.
 - Operators: every operator × type, including `null`.
 - Change detection: one event per property per batch; no events from `null`; the reconnect baseline.
 - Runs: trigger narrowing (`to`, `from-to`, `above`), settle restart, AND / OR / false branch, fan-out order, delay with `restart` / `ignore`, needless-action skip, verify ("not applied").
@@ -300,18 +331,20 @@ Live testing on the receiver follows the standing rule: **automations may lower 
 
 Each phase ends with a commit that works on its own.
 
-1. **Engine without UI.** Catalog (Power, Volume, Input & signal, Audio groups first), change detection hook, engine, storage, REST, tests. Usable by posting JSON, which proves the model.
-2. **List page and editor basics.** Automation page, list view with enable/run/delete, Svelte Flow canvas, trigger / condition / action nodes, palette, save and validation.
-3. **Live feedback.** Current values and ✔/✘ on nodes, run highlighting, Test (dry run), run history panel.
-4. **Rest of the catalog.** Zone 2, Tuner, HEOS, speaker presets (with the Amp Assign confirmation), General, video properties; Delay and Comment nodes; duplicate, copy/paste, undo/redo.
-5. **Later, if wanted.** Time-of-day / schedule triggers ("at 23:00 on weekdays"), `wait-until` and `restore` nodes, a small allowlist of setup-API actions, templates ("Night mode", "Movie with Atmos"), import/export as JSON, an "automation" pin-able Home panel showing the enable switches.
+1. **Engine without UI.** Catalog (Power, Volume, Input & signal including the input-channel properties, Audio groups first), change detection hook, engine, storage, REST, tests. Usable by posting JSON, which proves the model.
+2. **Panel and editor basics.** Setup › Automation tab and panel (list, enable, run, edit, delete), full-screen Svelte Flow editor, trigger / condition / action nodes, palette, save and validation.
+3. **Live feedback.** Current values and ✔/✘ on nodes, run highlighting, Test (dry run), run history.
+4. **Rest of the catalog, and time.** Zone 2, Tuner, HEOS, speaker presets (with the Amp Assign confirmation), General, video properties; Delay and Comment nodes; duplicate, copy/paste, undo/redo. **Schedule trigger** ("at 23:00 on weekdays", "every 15 minutes") and **time conditions** ("time is between 22:00 and 07:00", "day is Sat or Sun"). These come after the rest of the engine is proven because they need only a 1-minute timer in the engine and no new receiver interface. Times use the server's local time zone (the Pi's), shown in the editor so it's never a surprise; a missed minute (server down) is not run later.
+5. **Later, if wanted.** `wait-until` and `restore` nodes, a small allowlist of setup-API actions, templates ("Night mode", "Movie with Atmos"), import/export as JSON.
 
 ---
 
-## 11. Decisions for the user
+## 11. Decisions
 
-1. **Editor library:** Svelte Flow (recommended) or hand-built, no new dependency.
-2. **Where the page goes:** an 8th top-level page (the phone tab bar gets tight), or a Setup tab that opens the editor full screen (recommended: top-level on desktop sidebar, and on phones move it under Setup to keep 7 tabs).
-3. **Volume increases by automations:** allowed up to the cap like the UI (simplest), or only with a per-action "Allow raising the volume" switch (safer).
-4. **"Channel number":** this plan reads it as the **tuner preset** (and frequency). The receiver has no TV channel; if a different source is meant (e.g. a HEOS station), say so.
-5. **Time-based triggers** (schedules): in v1, or later (phase 5, current plan).
+Made on 2026-11-13:
+
+1. **Editor library:** Svelte Flow (`@xyflow/svelte`), lazy-loaded.
+2. **Placement:** a Setup tab **Automation** with one panel that lists every rule, with buttons to edit and delete them; the editor opens full screen from there (§7). No new top-level page.
+3. **Volume:** actions set fixed values only, never relative steps; still capped by the guard, with an optional *Only lower, never raise* switch (§6).
+4. **"Channel number"** means the number of channels in the input stream (2 = stereo, 3 = stereo + LFE, 6 = 5.1, …): the *Input channels* properties in §3. The tuner preset is still in the catalog as its own property.
+5. **Date / time:** schedule triggers and time conditions in phase 4 (§10).
