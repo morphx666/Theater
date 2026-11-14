@@ -85,7 +85,6 @@
     <button class="btn auto" disabled={!on || busy || azs} title="Matches the input format" onclick={() => send('MSAUTO')}>Auto</button>
   </div>
   <div class="remote">
-    <span class="faint small">Remote buttons</span>
     {#each [['MSMOVIE', 'Movie'], ['MSMUSIC', 'Music'], ['MSGAME', 'Game']] as [cmd, label] (cmd)}
       <button class="btn small" disabled={!on || busy || azs} title="Press again for the next mode" onclick={() => send(cmd)}>{label}</button>
     {/each}
@@ -104,7 +103,7 @@
     {#if openGroup === 'surround' && sm?.canLearn}
       <div class="sep"></div>
       <button class="learn" class:armed={learnArmed} onclick={learn}>
-        <span class="check"></span>{learnArmed ? 'Tap again (audio drops a few times)' : 'Learn modes for this signal'}
+        <span class="check"></span>{learnArmed ? 'Tap again (audio drops a few times)' : `Learn available modes for '${sm.signalName ?? 'this signal'}'`}
       </button>
     {/if}
   {/if}
@@ -124,8 +123,7 @@
   .grp:active { transform: none; }
   .main:active, .arrow:active { transform: scale(0.94); }
   .auto { min-height: 52px; }
-  .remote { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-  .remote span { margin-right: 4px; }
+  .remote { display: flex; justify-content: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
 
   .menu {
     position: fixed; inset: auto; margin: 0; padding: 4px; border: 1px solid var(--line); border-radius: 12px;
