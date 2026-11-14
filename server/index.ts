@@ -522,7 +522,12 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
       }
     }
     if (p === '/api/sound-mode' && req.method === 'POST') {
-      const { mode } = await readBody(req);
+      const { mode, action } = await readBody(req);
+      if (action === 'learn') {
+        const r = await soundModes.learn();
+        log(`sound modes: ${r.ok ? `learned ${r.modes.join(', ')}` : r.note} (from ${req.socket.remoteAddress ?? 'http'})`);
+        return json(res, r.ok ? 200 : 409, r.ok ? { ok: true, modes: r.modes } : { error: r.note });
+      }
       if (typeof mode !== 'string' || !/^[ -~]{1,40}$/.test(mode)) throw new HttpError(400, 'bad sound mode');
       const r = await soundModes.select({ exact: mode });
       log(`sound mode ${mode}: ${r.ok ? 'selected' : r.note} (from ${req.socket.remoteAddress ?? 'http'})`);

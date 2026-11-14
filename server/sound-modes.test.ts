@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { applyLine, emptyState, type AvrState } from './parse.ts';
-import { SoundModes, signalKind, groupOf, directCommand } from './sound-modes.ts';
+import { SoundModes, signalKey, familyOf, groupOf, directCommand } from './sound-modes.ts';
 
 /**
  * A receiver that behaves like the X1700H did when probed (2026-11-14): each button cycles through `cycle`
@@ -12,7 +12,7 @@ import { SoundModes, signalKind, groupOf, directCommand } from './sound-modes.ts
  */
 function receiver(lines: string[], cycle: string[], native: string) {
   const st: AvrState = emptyState();
-  for (const l of ['ZMON', ...lines]) applyLine(st, l);
+  for (const l of ['ZMON', 'SSINFFRMAVR D400-9123-9071-9031', ...lines]) applyLine(st, l);
   const sent: string[] = [];
   const memory: Record<string, string> = {};
   const cmd = (c: string) => {
@@ -31,38 +31,44 @@ function receiver(lines: string[], cycle: string[], native: string) {
   return { st, sent, cmd };
 }
 
-async function rig(lines: string[], cycle: string[], native: string) {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sound-modes-'));
+async function rig(lines: string[], cycle: string[], native: string, dir?: string) {
+  dir ??= await fs.mkdtemp(path.join(os.tmpdir(), 'sound-modes-'));
   const r = receiver(lines, cycle, native);
   const sm = new SoundModes(dir, { state: () => r.st, cmd: r.cmd, sleep: async () => {}, settleMs: 5 });
   await sm.load();
   return { ...r, sm, dir };
 }
 const wait = (ms: number) => new Promise((res) => setTimeout(res, ms));
+const DTS_HD = ['SYSDA DTS-HD MSTR', 'SSINFAISFOR 3/4/.1'];
+const surround = (sm: SoundModes) => sm.summary().available.filter((m) => m.group === 'surround').map((m) => m.mode);
 
-test('signal kinds and groups', () => {
-  const k = (...ls: string[]) => { const st = emptyState(); for (const l of ls) applyLine(st, l); return signalKind(st); };
-  assert.equal(k('SYSDA PCM', 'SSINFAISFOR 2/0/.0'), 'pcm2');
-  assert.equal(k('SYSDA PCM', 'SSINFAISFOR 3/2/.1'), 'pcm-multi');
-  assert.equal(k('SYSDA Dolby Atmos'), 'atmos');
-  assert.equal(k('SYSDA DOLBY DIGITAL +'), 'dolby');
-  assert.equal(k('SYSDA DTS-HD MSTR'), 'dts');
-  assert.equal(k('SYSDA DTS:X'), 'dtsx');
+test('one list per decoder; PCM split by channels', () => {
+  const k = (...ls: string[]) => { const st = emptyState(); for (const l of ls) applyLine(st, l); return signalKey(st); };
+  assert.equal(k('SYSDA PCM', 'SSINFAISFOR 2/0/.0'), 'PCM:2CH');
+  assert.equal(k('SYSDA PCM', 'SSINFAISFOR 3/2/.1'), 'PCM:MULTI');
+  assert.equal(k('SYSDA Dolby Atmos'), 'DOLBYATMOS');
+  assert.equal(k('SYSDA Dolby Audio - DD'), 'DOLBYAUDIO-DD');
+  assert.equal(k('SYSDA DTS-HD MSTR'), 'DTS-HDMSTR');
+  assert.equal(k('SYSDA DTS'), 'DTS'); // plain DTS keeps its own list
   assert.equal(k('SYSDA PCM ZERO'), null); // no audio
   assert.equal(k(), null);
+  assert.equal(familyOf('DTS-HDMSTR'), 'dts');
+  assert.equal(familyOf('DOLBYAUDIO-DD'), 'dolby');
   assert.equal(groupOf('PURE DIRECT'), 'direct');
   assert.equal(groupOf('MCH STEREO'), 'stereo');
-  assert.equal(groupOf('DOLBY AUDIO-DSUR'), 'surround');
-  assert.equal(directCommand('DOLBY ATMOS', 'DOLBY ATMOS', 'atmos'), 'MSDOLBY DIGITAL');
-  assert.equal(directCommand('DTS NEURAL:X', 'DTS SURROUND', 'dts'), null); // only by cycling
+  assert.equal(directCommand('DOLBY ATMOS', 'DOLBY ATMOS', 'DOLBYATMOS'), 'MSDOLBY DIGITAL');
+  assert.equal(directCommand('DTS HD+NEURAL:X', 'DTS HD+NEURAL:X', 'DTS-HDMSTR'), 'MSDTS SURROUND');
+  assert.equal(directCommand('MONO MOVIE', 'DTS HD+NEURAL:X', 'DTS-HDMSTR'), null); // only by cycling
 });
 
-test('the panel list starts from what the receiver was seen to offer', async () => {
+test('hints fill the lists before anything is learned', async () => {
   const r = await rig(['SYSDA PCM', 'SSINFAISFOR 2/0/.0', 'MSSTEREO'], ['DOLBY AUDIO-DSUR', 'MCH STEREO', 'STEREO'], 'DOLBY AUDIO-DSUR');
-  const s = r.sm.summary();
-  assert.equal(s.kind, 'pcm2');
-  assert.deepEqual(s.available.map((m) => `${m.group}:${m.label}`),
+  assert.deepEqual(r.sm.summary().available.map((m) => `${m.group}:${m.label}`),
     ['surround:Dolby Surround', 'stereo:Stereo', 'stereo:Multi Ch Stereo', 'direct:Direct', 'direct:Pure Direct']);
+  assert.equal(r.sm.summary().canLearn, true);
+  // A different DTS decoder doesn't get the DTS-HD hints.
+  const p = await rig(['SYSDA DTS', 'SSINFAISFOR 3/2/.1', 'MSSTEREO'], ['DTS SURROUND', 'MCH STEREO', 'STEREO'], 'DTS SURROUND');
+  assert.deepEqual(surround(p.sm), []);
 });
 
 test('select uses a direct command when there is one', async () => {
@@ -74,35 +80,46 @@ test('select uses a direct command when there is one', async () => {
   assert.deepEqual(r.sent, ['MSDOLBY DIGITAL', 'MSPURE DIRECT']);
 });
 
-test('select cycles for a mode without a direct command, and gives up when the modes repeat', async () => {
+test('select cycles for a mode without a direct command, remembers full cycles, and goes back', async () => {
   const cycle = ['DTS SURROUND', 'DTS NEURAL:X', 'MCH STEREO', 'STEREO'];
   const r = await rig(['SYSDA DTS', 'SSINFAISFOR 3/2/.1', 'MSSTEREO'], cycle, 'DTS SURROUND');
-  const ok = await r.sm.select({ text: 'neural' });
-  assert.deepEqual(ok, { ok: true, mode: 'DTS NEURAL:X' });
+  assert.deepEqual(await r.sm.select({ text: 'neural' }), { ok: true, mode: 'DTS NEURAL:X' });
   assert.deepEqual(r.sent, ['MSMOVIE', 'MSMOVIE']);
 
-  // Not offered at all: each button goes round once (and is remembered), then back to where it started.
   r.sent.length = 0;
   const no = await r.sm.select({ text: 'virtual:x' }, { back: true });
-  assert.equal(no.ok, false);
-  assert.equal(no.note, 'not available for this signal');
+  assert.deepEqual([no.ok, no.note], [false, 'not available for this signal']);
   assert.equal(r.st.surround, 'DTS NEURAL:X'); // back
-  const presses = r.sent.length;
-  assert.ok(presses <= 3 * (cycle.length + 1) + cycle.length + 1, `${presses} presses`);
-
-  // The second time it's known not to be there: no switching at all.
-  r.sent.length = 0;
+  assert.ok(r.sent.length <= 4 * (cycle.length + 1), `${r.sent.length} presses`);
+  r.sent.length = 0; // the second time it's known not to be there: no switching at all
   assert.equal((await r.sm.select({ text: 'virtual:x' })).ok, false);
   assert.deepEqual(r.sent, []);
 });
 
-test('built in from the probe: no switching for modes this unit does not offer', async () => {
-  const r = await rig(['SYSDA Dolby Atmos', 'SSINFAISFOR Atmos', 'MSDOLBY ATMOS'], ['DOLBY ATMOS', 'MCH STEREO', 'STEREO'], 'DOLBY ATMOS');
-  const res = await r.sm.select({ text: 'neural:x' }, { back: true });
-  assert.deepEqual([res.ok, res.note, r.sent], [false, 'not available for this signal', []]);
+test('hints never rule a button out', async () => {
+  // A receiver whose DTS-HD MSTR cycle differs from the hints (no Mono Movie, but Rock Arena).
+  const cycle = ['DTS HD+NEURAL:X', 'DTS HD MSTR', 'ROCK ARENA', 'MCH STEREO', 'STEREO'];
+  const r = await rig([...DTS_HD, 'MSDTS HD+NEURAL:X'], cycle, 'DTS HD+NEURAL:X');
+  assert.ok(surround(r.sm).includes('MONO MOVIE')); // a hint, for now
+  assert.equal((await r.sm.select({ text: 'rock arena' })).ok, true); // not in the hints: found by cycling anyway
 });
 
-test('learns modes per signal, names from SYSMI, and the native mode', async () => {
+test('learn modes: full cycles, back to the start, hints this receiver lacks drop out, then not offered', async () => {
+  const cycle = ['DTS HD+NEURAL:X', 'DTS HD MSTR', 'ROCK ARENA', 'MCH STEREO', 'STEREO'];
+  const r = await rig([...DTS_HD, 'MSDTS HD+NEURAL:X'], cycle, 'DTS HD+NEURAL:X');
+  assert.equal(r.sm.summary().canLearn, true);
+  const res = await r.sm.learn();
+  assert.equal(res.ok, true);
+  assert.deepEqual(res.modes, ['DTS HD+NEURAL:X', 'DTS HD MSTR', 'ROCK ARENA']);
+  assert.equal(r.st.surround, 'DTS HD+NEURAL:X'); // back where it was
+  assert.deepEqual(surround(r.sm), ['DTS HD+NEURAL:X', 'DTS HD MSTR', 'ROCK ARENA']); // Mono Movie, Virtual, DSur gone
+  assert.equal(r.sm.summary().canLearn, false);
+  // A firmware update offers it again.
+  applyLine(r.st, 'SSINFFRMAVR D400-9200-0000-0000');
+  assert.equal(r.sm.summary().canLearn, true);
+});
+
+test('learns modes, names and the native mode from what the receiver reports', async () => {
   const r = await rig(['SYSDA DTS', 'SSINFAISFOR 3/2/.1', 'MSSTEREO'], ['DTS SURROUND', 'MCH STEREO', 'STEREO'], 'DTS SURROUND');
   r.sm.onCommand('MSDTS SURROUND');
   applyLine(r.st, 'MSDTS SURROUND');
@@ -121,21 +138,38 @@ test('learns modes per signal, names from SYSMI, and the native mode', async () 
   await wait(30);
   applyLine(r.st, 'SYSDA DTS');
   applyLine(r.st, 'MSSTEREO');
-  assert.deepEqual(r.sm.summary().available.filter((m) => m.group === 'surround').map((m) => m.mode), ['DTS HD+NEURAL:X', 'DTS SURROUND']); // seed + learned
+  assert.deepEqual(surround(r.sm), ['DTS SURROUND']);
 
   // Saved and loaded back.
   await wait(1100);
   const again = new SoundModes(r.dir, { state: () => r.st, cmd: r.cmd });
   await again.load();
-  applyLine(r.st, 'MSSTEREO');
   assert.equal(again.summary().native, 'DTS SURROUND');
+});
+
+test('the first file format is migrated: lists per decoder, probed cycles count as learned', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sound-modes-'));
+  const three = (m: string) => Object.fromEntries(['MSMOVIE', 'MSMUSIC', 'MSGAME'].map((b) => [b, [m, 'MCH STEREO', 'STEREO']]));
+  await fs.writeFile(path.join(dir, 'sound-modes.json'), JSON.stringify({
+    names: { 'DTS HD MSTR': 'DTS-HD MSTR' },
+    kinds: { pcm2: ['DOLBY AUDIO-DSUR'], dts: ['DTS HD+NEURAL:X', 'DTS HD MSTR', 'MONO MOVIE'] },
+    native: { dts: 'DTS HD+NEURAL:X' },
+    cycles: { pcm2: three('DOLBY AUDIO-DSUR'), atmos: three('DOLBY ATMOS') },
+  }));
+  const pcm = await rig(['SYSDA PCM', 'SSINFAISFOR 2/0/.0', 'MSSTEREO'], [], '', dir);
+  assert.equal(pcm.sm.summary().canLearn, false); // probed
+  const dts = await rig([...DTS_HD, 'MSSTEREO'], [], '', dir);
+  assert.deepEqual(surround(dts.sm).slice(0, 3), ['DTS HD+NEURAL:X', 'DTS HD MSTR', 'MONO MOVIE']);
+  assert.equal(dts.sm.summary().native, 'DTS HD+NEURAL:X');
+  assert.equal(dts.sm.summary().canLearn, true); // cycled with the remote, but no full cycles recorded
 });
 
 test('nothing happens while the main zone is off, or while another change runs', async () => {
   const r = await rig(['SYSDA PCM', 'SSINFAISFOR 2/0/.0', 'MSSTEREO', 'ZMOFF'], ['DOLBY AUDIO-DSUR', 'MCH STEREO', 'STEREO'], 'DOLBY AUDIO-DSUR');
   assert.equal((await r.sm.select({ exact: 'DIRECT' })).note, 'main zone is off');
+  assert.equal((await r.sm.learn()).note, 'main zone is off');
   applyLine(r.st, 'ZMON');
-  r.sm.busy = true;
+  r.sm.busy = 'select';
   assert.match((await r.sm.select({ exact: 'DIRECT' })).note!, /in progress/);
   assert.deepEqual(r.sent, []);
 });

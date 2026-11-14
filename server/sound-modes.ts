@@ -1,35 +1,47 @@
-// Sound modes the receiver actually offers, learned per kind of input signal, and selecting one.
+// Sound modes the receiver actually offers, learned per input signal (decoder), and selecting one.
 //
 // The owner's manual promises modes this unit doesn't offer (probed 2026-11-14, firmware D400-9123-9071-9031:
 // with stereo PCM and with Dolby Atmos, MOVIE / MUSIC / GAME all cycle through just three modes: the signal's
-// native mode, Multi Ch Stereo and Stereo; Neural:X and the effect modes never appear). Dolby Digital 5.1 and
-// DTS-HD MA 7.1 sources were seen playing in "+ Neural:X" modes, as the manual (p.261-262) says. So the app goes by what
-// the receiver reports, not by the manual: every mode seen while a signal kind is playing is remembered.
+// native mode, Multi Ch Stereo and Stereo). With Dolby Digital 5.1 and DTS-HD MA 7.1 it offers "+ Neural:X" and,
+// for DTS-HD, effect modes too. So the app goes by what the receiver reports, not by the manual:
+//  - every mode seen while a signal plays is remembered for that signal (one list per decoder: DTS-HD MSTR and
+//    plain DTS offer differently named modes);
+//  - "Learn modes" steps through the three buttons once and records each one's full cycle;
+//  - built-in hints (what this project's unit offered) fill the lists before anything is learned, and drop out
+//    once this receiver's full cycle for that signal is known and doesn't have them.
 //
 // Selecting a mode uses a direct command when one is known (Stereo, Multi Ch Stereo, Direct, Pure Direct, and
 // MSDOLBY DIGITAL / MSDTS SURROUND, which pick the signal's native mode). Anything else is reached by pressing
-// MOVIE, MUSIC and GAME until the receiver reports it, or until the modes start repeating.
+// MOVIE, MUSIC and GAME until the receiver reports it. Each switch drops the audio for a moment, and many in a row
+// make streaming players stop, so buttons whose learned cycle doesn't have the mode are skipped.
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { AvrState } from './parse.ts';
 
-export type Kind = 'pcm2' | 'pcm-multi' | 'dolby' | 'atmos' | 'dts' | 'dtsx' | 'other';
+export type Family = 'pcm' | 'dolby' | 'dts' | 'other';
 export type Group = 'surround' | 'stereo' | 'direct';
 export type ModeInfo = { mode: string; label: string; group: Group };
 
-/** What kind of signal is playing, from the decoder (SYSDA) and the format. null = no signal / unknown. */
-export function signalKind(st: AvrState): Kind | null {
-  const d = (st.decoder ?? '').toUpperCase();
-  if (!d || /ZERO|UNKNOWN|NONE/.test(d)) return null;
-  if (/ATMOS/.test(d)) return 'atmos';
-  if (/DTS:?X/.test(d)) return 'dtsx';
-  if (/DTS/.test(d)) return 'dts';
-  if (/DOLBY|TRUEHD|DD/.test(d)) return 'dolby';
-  if (/PCM|ANALOG/.test(d)) {
+export const BUTTONS = ['MSMOVIE', 'MSMUSIC', 'MSGAME'] as const;
+
+/** The key the lists are kept under: the decoder as the receiver names it ("DTS-HDMSTR", "DOLBYATMOS"), with
+ *  PCM split into stereo and multi-channel. null = no signal. */
+export function signalKey(st: AvrState): string | null {
+  const d = (st.decoder ?? '').toUpperCase().replace(/\s+/g, '');
+  if (!d || /ZERO|UNKNOWN|NONE|^-+$/.test(d)) return null;
+  if (/^(PCM|ANALOG)/.test(d)) {
     const m = st.audioFormat?.match(/^(\d+)\/(\d+)/);
-    return m && Number(m[1]) + Number(m[2]) > 2 ? 'pcm-multi' : 'pcm2';
+    return m && Number(m[1]) + Number(m[2]) > 2 ? 'PCM:MULTI' : 'PCM:2CH';
   }
+  return d;
+}
+
+export function familyOf(key: string | null): Family {
+  if (!key) return 'other';
+  if (key.startsWith('PCM')) return 'pcm';
+  if (key.includes('DTS')) return 'dts';
+  if (/DOLBY|TRUEHD|^DD/.test(key)) return 'dolby';
   return 'other';
 }
 
@@ -40,12 +52,12 @@ export function groupOf(mode: string): Group {
 }
 
 /** Command that selects `mode` in one step, or null when it can only be reached by cycling. */
-export function directCommand(mode: string, native: string | undefined, kind: Kind | null): string | null {
+export function directCommand(mode: string, native: string | undefined, key: string | null): string | null {
   if (/^PURE DIRECT/.test(mode)) return 'MSPURE DIRECT';
   if (/^DIRECT/.test(mode)) return 'MSDIRECT';
   if (/^STEREO/.test(mode)) return 'MSSTEREO';
   if (/^(MCH STEREO|MULTI CH STEREO)/.test(mode)) return 'MSMCH STEREO';
-  if (native && mode === native) return kind === 'dts' || kind === 'dtsx' ? 'MSDTS SURROUND' : 'MSDOLBY DIGITAL';
+  if (native && mode === native) return familyOf(key) === 'dts' ? 'MSDTS SURROUND' : 'MSDOLBY DIGITAL';
   return null;
 }
 
@@ -56,30 +68,31 @@ const FIXED: ModeInfo[] = [
   { mode: 'PURE DIRECT', label: 'Pure Direct', group: 'direct' },
 ];
 
-type Store = {
-  names: Record<string, string>; // MS mode -> the receiver's display text (SYSMI)
-  kinds: Partial<Record<Kind, string[]>>; // surround modes seen per signal kind
-  native: Partial<Record<Kind, string>>; // what MSDOLBY DIGITAL / MSDTS SURROUND selects per kind
-  cycles: Partial<Record<Kind, Record<string, string[]>>>; // the modes each button went round, per kind
+type Signal = {
+  modes: string[]; // surround modes seen on this receiver with this signal
+  native?: string; // what MSDOLBY DIGITAL / MSDTS SURROUND selected
+  cycles?: Partial<Record<(typeof BUTTONS)[number], string[]>>; // each button's full cycle
+  learnedFw?: string; // firmware when all three cycles were learned ("Learn modes" is offered again after an update)
+};
+type Store = { version: 2; names: Record<string, string>; signals: Record<string, Signal> };
+
+/** What this project's unit offered (2026-11-14). Shown until this receiver's own cycles say otherwise. */
+const HINT_NAMES: Record<string, string> = {
+  'DOLBY AUDIO-DSUR': 'Dolby Surround', 'DOLBY ATMOS': 'Dolby Atmos', 'MCH STEREO': 'Multi Ch Stereo',
+  'DOLBY AUDIO-DD+NEURAL:X': 'DD + Neural:X', 'DTS HD+NEURAL:X': 'DTS-HD + Neural:X', 'DTS HD MSTR': 'DTS-HD MSTR',
+  'DTS HD+DSUR': 'DTS-HD + DSur', 'MONO MOVIE': 'Mono Movie', VIRTUAL: 'Virtual',
+};
+const HINTS: Record<string, { modes: string[]; native?: string }> = {
+  'PCM:2CH': { modes: ['DOLBY AUDIO-DSUR'], native: 'DOLBY AUDIO-DSUR' },
+  'PCM:MULTI': { modes: ['DOLBY AUDIO-DSUR'], native: 'DOLBY AUDIO-DSUR' },
+  DOLBYATMOS: { modes: ['DOLBY ATMOS'], native: 'DOLBY ATMOS' },
+  'DOLBYAUDIO-DD': { modes: ['DOLBY AUDIO-DD+NEURAL:X'] },
+  'DTS-HDMSTR': { modes: ['DTS HD+NEURAL:X', 'DTS HD MSTR', 'DTS HD+DSUR', 'MONO MOVIE', 'VIRTUAL'], native: 'DTS HD+NEURAL:X' },
 };
 
-// What the probe found (see the header), so the panel is right before anything is learned.
-const SEED: Store = {
-  names: {
-    'DOLBY AUDIO-DSUR': 'Dolby Surround', 'DOLBY ATMOS': 'Dolby Atmos', 'MCH STEREO': 'Multi Ch Stereo',
-    'DOLBY AUDIO-DD+NEURAL:X': 'DD + Neural:X', 'DTS HD+NEURAL:X': 'DTS-HD + Neural:X',
-  },
-  // Also seen playing (not probed): Dolby Digital 5.1 in "DD + Neural:X", DTS-HD MA 7.1 in "DTS-HD + Neural:X".
-  kinds: {
-    pcm2: ['DOLBY AUDIO-DSUR'], 'pcm-multi': ['DOLBY AUDIO-DSUR'], atmos: ['DOLBY ATMOS'],
-    dolby: ['DOLBY AUDIO-DD+NEURAL:X'], dts: ['DTS HD+NEURAL:X'],
-  },
-  native: { pcm2: 'DOLBY AUDIO-DSUR', 'pcm-multi': 'DOLBY AUDIO-DSUR', atmos: 'DOLBY ATMOS' },
-  cycles: {
-    pcm2: Object.fromEntries(['MSMOVIE', 'MSMUSIC', 'MSGAME'].map((b) => [b, ['DOLBY AUDIO-DSUR', 'MCH STEREO', 'STEREO']])),
-    atmos: Object.fromEntries(['MSMOVIE', 'MSMUSIC', 'MSGAME'].map((b) => [b, ['DOLBY ATMOS', 'MCH STEREO', 'STEREO']])),
-  },
-};
+/** The first file format (one list per family) -> per decoder. Only the families whose decoder is known. */
+const V1_KEYS: Record<string, string> = { pcm2: 'PCM:2CH', 'pcm-multi': 'PCM:MULTI', atmos: 'DOLBYATMOS', dolby: 'DOLBYAUDIO-DD', dts: 'DTS-HDMSTR' };
+const PROBED_FW = 'D400-9123-9071-9031'; // the v1 cycles came from the probe on this firmware
 
 export type SoundModeIo = {
   state: () => AvrState;
@@ -96,15 +109,16 @@ export type SelectResult = { ok: boolean; mode: string | null; note?: string };
 const SETTLE_MS = 2000; // a mode must stay put this long, with the same signal, before it's remembered
 const REPLY_MS = 5000; // how long to wait for the receiver to report a new mode
 const MAX_PRESSES = 12;
+const okText = (m: unknown): m is string => typeof m === 'string' && /^[\x20-\x7E]{1,40}$/.test(m);
 
 export class SoundModes {
   private file: string;
   private io: SoundModeIo;
-  private store: Store = structuredClone(SEED);
+  private store: Store = { version: 2, names: {}, signals: {} };
   private pendingLearn: ReturnType<typeof setTimeout> | undefined;
-  private expectNative: { kind: Kind; until: number } | null = null;
+  private expectNative: { key: string; until: number } | null = null;
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
-  busy = false;
+  busy: false | 'select' | 'learn' = false;
 
   constructor(dataDir: string, io: SoundModeIo) {
     this.file = path.join(dataDir, 'sound-modes.json');
@@ -113,24 +127,37 @@ export class SoundModes {
 
   private sleep(ms: number) { return this.io.sleep ? this.io.sleep(ms) : new Promise<void>((r) => setTimeout(r, ms)); }
   private now() { return this.io.now?.() ?? Date.now(); }
+  private sig(key: string): Signal { return (this.store.signals[key] ??= { modes: [] }); }
+  private firmware() { return this.io.state().firmware?.AVR ?? null; }
 
   async load() {
-    try {
-      const raw = JSON.parse(await fs.readFile(this.file, 'utf8'));
-      const ok = (m: unknown): m is string => typeof m === 'string' && /^[\x20-\x7E]{1,40}$/.test(m);
-      for (const [k, v] of Object.entries(raw.names ?? {})) if (ok(k) && ok(v)) this.store.names[k] = v as string;
-      for (const [k, list] of Object.entries(raw.kinds ?? {})) {
-        if (!Array.isArray(list)) continue;
-        const cur = (this.store.kinds[k as Kind] ??= []);
-        for (const m of list) if (ok(m) && !cur.includes(m)) cur.push(m);
+    let raw: any;
+    try { raw = JSON.parse(await fs.readFile(this.file, 'utf8')); } catch { return; }
+    for (const [k, v] of Object.entries(raw.names ?? {})) if (okText(k) && okText(v)) this.store.names[k] = v as string;
+    if (raw.version === 2) {
+      for (const [key, s] of Object.entries(raw.signals ?? {}) as [string, any][]) {
+        if (!okText(key) || !s || typeof s !== 'object') continue;
+        const sig = this.sig(key);
+        sig.modes = (Array.isArray(s.modes) ? s.modes : []).filter(okText);
+        if (okText(s.native)) sig.native = s.native;
+        if (okText(s.learnedFw)) sig.learnedFw = s.learnedFw;
+        for (const b of BUTTONS) if (Array.isArray(s.cycles?.[b]) && s.cycles[b].every(okText)) (sig.cycles ??= {})[b] = s.cycles[b];
       }
-      for (const [k, v] of Object.entries(raw.native ?? {})) if (ok(v)) this.store.native[k as Kind] = v as string;
-      for (const [k, byButton] of Object.entries(raw.cycles ?? {})) {
-        for (const [b, list] of Object.entries(byButton as Record<string, unknown>)) {
-          if (/^MS(MOVIE|MUSIC|GAME)$/.test(b) && Array.isArray(list) && list.every(ok)) ((this.store.cycles[k as Kind] ??= {})[b] = list as string[]);
-        }
+      return;
+    }
+    // Version 1 (one list per family). Kept for the families whose decoder name is known; the cycles came from
+    // the probe, which was on PROBED_FW.
+    for (const [old, key] of Object.entries(V1_KEYS)) {
+      const sig = this.sig(key);
+      for (const m of raw.kinds?.[old] ?? []) if (okText(m) && !sig.modes.includes(m)) sig.modes.push(m);
+      if (okText(raw.native?.[old])) sig.native = raw.native[old];
+      const c = raw.cycles?.[old];
+      if (c && BUTTONS.every((b) => Array.isArray(c[b]) && c[b].every(okText))) {
+        sig.cycles = Object.fromEntries(BUTTONS.map((b) => [b, c[b]]));
+        sig.learnedFw = PROBED_FW;
       }
-    } catch { /* first run: the seed */ }
+    }
+    this.save();
   }
 
   private save() {
@@ -148,47 +175,75 @@ export class SoundModes {
     const st = this.io.state();
     if (line.startsWith('SYSMI') && st.surround && groupOf(st.surround) === 'surround') {
       const text = line.slice(5).trim().replace(/^Dolby Audio - /, '');
-      if (text && this.store.names[st.surround] !== text) { this.store.names[st.surround] = text; this.save(); this.io.changed?.(); }
+      if (okText(text) && this.store.names[st.surround] !== text) { this.store.names[st.surround] = text; this.save(); this.io.changed?.(); }
       return;
     }
     if (!/^MS(?!QUICK)/.test(line)) return;
-    const mode = st.surround, kind = signalKind(st);
-    if (!mode || !kind) return;
+    const mode = st.surround, key = signalKey(st);
+    if (!mode || !key) return;
     // Remember it only if it stays, with the same signal, for a moment (mode reports arrive mid-handshake too).
     clearTimeout(this.pendingLearn);
-    const expect = this.expectNative && this.now() < this.expectNative.until && this.expectNative.kind === kind;
+    const expect = this.expectNative && this.now() < this.expectNative.until && this.expectNative.key === key;
     this.pendingLearn = setTimeout(() => {
       const s = this.io.state();
-      if (s.surround !== mode || signalKind(s) !== kind) return;
+      if (s.surround !== mode || signalKey(s) !== key || groupOf(mode) !== 'surround') return;
+      const sig = this.sig(key);
       let changed = false;
-      if (groupOf(mode) === 'surround') {
-        const list = (this.store.kinds[kind] ??= []);
-        if (!list.includes(mode)) { list.push(mode); changed = true; this.io.log?.(`sound mode learned for ${kind}: ${mode}`); }
-        if (expect && this.store.native[kind] !== mode) { this.store.native[kind] = mode; changed = true; }
-      }
+      if (!sig.modes.includes(mode)) { sig.modes.push(mode); changed = true; this.io.log?.(`sound mode learned for ${key}: ${mode}`); }
+      if (expect && sig.native !== mode) { sig.native = mode; changed = true; }
       if (changed) { this.save(); this.io.changed?.(); }
     }, this.io.settleMs ?? SETTLE_MS);
   }
 
   /** Call when a command is sent (from anywhere): MSDOLBY DIGITAL / MSDTS SURROUND teach the native mode. */
   onCommand(cmd: string) {
-    const kind = signalKind(this.io.state());
-    if (kind && /^MS(DOLBY DIGITAL|DTS SURROUND)$/.test(cmd)) this.expectNative = { kind, until: this.now() + REPLY_MS };
+    const key = signalKey(this.io.state());
+    if (key && /^MS(DOLBY DIGITAL|DTS SURROUND)$/.test(cmd)) this.expectNative = { key, until: this.now() + REPLY_MS };
   }
 
   label(mode: string) {
-    return this.store.names[mode] ?? FIXED.find((f) => f.mode === mode)?.label ?? mode.replace(/\b([A-Z])([A-Z]+)\b/g, (_, a, b) => a + b.toLowerCase());
+    return this.store.names[mode] ?? HINT_NAMES[mode] ?? FIXED.find((f) => f.mode === mode)?.label
+      ?? mode.replace(/\b([A-Z])([A-Z]+)\b/g, (_, a, b) => a + b.toLowerCase());
+  }
+
+  private complete(sig: Signal | undefined) { return !!sig?.cycles && BUTTONS.every((b) => sig.cycles![b]); }
+
+  /** Surround modes for a signal: seen here, then the cycles, then the hints this receiver hasn't ruled out. */
+  private modesFor(key: string | null): string[] {
+    if (!key) return [];
+    const sig = this.store.signals[key];
+    const cycled = BUTTONS.flatMap((b) => sig?.cycles?.[b] ?? []);
+    const hints = (HINTS[key]?.modes ?? []).filter((m) => !this.complete(sig) || cycled.includes(m));
+    return [...new Set([...(sig?.modes ?? []), ...cycled, ...hints])].filter((m) => groupOf(m) === 'surround');
+  }
+  private nativeFor(key: string | null) { return key ? this.store.signals[key]?.native ?? HINTS[key]?.native : undefined; }
+
+  /** "Learn modes" is offered until this signal's cycles are learned, and again after a firmware update. */
+  canLearn(key = signalKey(this.io.state())) {
+    if (!key) return false;
+    const sig = this.store.signals[key];
+    if (!this.complete(sig)) return true;
+    const fw = this.firmware();
+    return !!fw && !!sig!.learnedFw && fw !== sig!.learnedFw;
   }
 
   /** The modes known for the signal playing now, for the panel and the editor. */
   summary() {
     const st = this.io.state();
-    const kind = signalKind(st);
-    const surround = (kind ? this.store.kinds[kind] ?? [] : []).map((mode) => ({ mode, label: this.label(mode), group: 'surround' as Group }));
+    const key = signalKey(st);
+    const available: ModeInfo[] = [...this.modesFor(key).map((mode) => ({ mode, label: this.label(mode), group: 'surround' as Group })), ...FIXED];
     const current = st.surround;
-    const available: ModeInfo[] = [...surround, ...FIXED];
     if (current && !available.some((m) => m.mode === current)) available.unshift({ mode: current, label: this.label(current), group: groupOf(current) });
-    return { kind, native: kind ? this.store.native[kind] ?? null : null, current, label: current ? this.label(current) : null, available, busy: this.busy };
+    return { signal: key, family: familyOf(key), native: this.nativeFor(key) ?? null, current, label: current ? this.label(current) : null,
+      available, canLearn: this.canLearn(key), busy: this.busy };
+  }
+
+  private async exclusive<T>(what: 'select' | 'learn', fn: () => Promise<T>, fail: (note: string) => T): Promise<T> {
+    if (this.busy) return fail('another sound mode change is in progress');
+    if (this.io.state().zoneMain !== true) return fail('main zone is off');
+    this.busy = what;
+    this.io.changed?.();
+    try { return await fn(); } finally { this.busy = false; this.io.changed?.(); }
   }
 
   /**
@@ -196,17 +251,39 @@ export class SoundModes {
    * there is one, otherwise presses MOVIE, MUSIC, GAME until it appears or the modes repeat. With `back`, a search
    * that fails returns to the mode it started from.
    */
-  async select(target: { exact?: string; text?: string }, opts: { back?: boolean } = {}): Promise<SelectResult> {
-    if (this.busy) return { ok: false, mode: this.io.state().surround, note: 'another sound mode change is in progress' };
-    if (this.io.state().zoneMain !== true) return { ok: false, mode: null, note: 'main zone is off' };
-    this.busy = true;
-    this.io.changed?.();
-    try {
-      return await this.run(target, opts);
-    } finally {
-      this.busy = false;
-      this.io.changed?.();
-    }
+  select(target: { exact?: string; text?: string }, opts: { back?: boolean } = {}): Promise<SelectResult> {
+    return this.exclusive('select', () => this.run(target, opts), (note) => ({ ok: false, mode: this.io.state().surround, note }));
+  }
+
+  /** Step through each button's full cycle for the signal playing, remember it, and return to where it was. */
+  learn(): Promise<{ ok: boolean; modes: string[]; note?: string }> {
+    return this.exclusive('learn', async () => {
+      const key = signalKey(this.io.state());
+      if (!key) return { ok: false, modes: [], note: 'no signal' };
+      const start = this.io.state().surround;
+      const sig = this.sig(key);
+      const cycles: Signal['cycles'] = {};
+      for (const b of BUTTONS) {
+        const seen: string[] = [];
+        for (let i = 0; i < MAX_PRESSES; i++) {
+          const got = await this.press(b);
+          if (signalKey(this.io.state()) !== key) return { ok: false, modes: [], note: 'the signal changed' };
+          if (!got || seen.includes(got)) break;
+          seen.push(got);
+        }
+        cycles[b] = seen;
+      }
+      sig.cycles = cycles;
+      sig.learnedFw = this.firmware() ?? undefined;
+      // A complete scan is the truth for this signal: keep what the buttons offer (and the native mode).
+      const cycled = BUTTONS.flatMap((b) => cycles[b] ?? []).filter((m) => groupOf(m) === 'surround');
+      const native = sig.native ?? (cycled.includes(HINTS[key]?.native ?? '') ? HINTS[key].native : undefined);
+      sig.modes = [...new Set([...(native ? [native] : []), ...cycled])]; // the native mode first
+      this.save();
+      this.io.log?.(`sound modes learned for ${key}: ${sig.modes.join(', ') || '(none)'}`);
+      if (start && this.io.state().surround !== start) await this.run({ exact: start }, {});
+      return { ok: true, modes: sig.modes };
+    }, (note) => ({ ok: false, modes: [], note }));
   }
 
   private matches(mode: string | null, t: { exact?: string; text?: string }) {
@@ -231,23 +308,22 @@ export class SoundModes {
   private async run(t: { exact?: string; text?: string }, opts: { back?: boolean }): Promise<SelectResult> {
     const start = this.io.state().surround;
     if (this.matches(start, t)) return { ok: true, mode: start, note: 'already set' };
-    const kind = signalKind(this.io.state());
-    const native = kind ? this.store.native[kind] : undefined;
+    const key = signalKey(this.io.state());
+    const native = this.nativeFor(key);
+    const sig = key ? this.store.signals[key] : undefined;
 
     // 1. A known mode with a direct command: one step.
-    const known = [...(kind ? this.store.kinds[kind] ?? [] : []), ...FIXED.map((f) => f.mode)];
-    const want = t.exact ?? known.find((m) => this.matches(m, t));
-    const direct = want ? directCommand(want, native, kind) : null;
+    const want = t.exact ?? [...this.modesFor(key), ...FIXED.map((f) => f.mode)].find((m) => this.matches(m, t));
+    const direct = want ? directCommand(want, native, key) : null;
     if (direct) {
       const got = await this.press(direct);
       return this.matches(got, t) ? { ok: true, mode: got } : { ok: false, mode: got, note: 'the receiver didn\'t switch to it' };
     }
 
-    // 2. Otherwise cycle MOVIE, MUSIC, GAME until it appears or the modes repeat. A button whose whole cycle is
-    //    known for this signal and doesn't have it is skipped, so a mode that isn't offered costs no switching
-    //    once it has been looked for (each switch drops the audio for a moment; many in a row upset players).
-    for (const button of ['MSMOVIE', 'MSMUSIC', 'MSGAME']) {
-      const known = kind ? this.store.cycles[kind]?.[button] : undefined;
+    // 2. Otherwise cycle MOVIE, MUSIC, GAME until it appears or the modes repeat, skipping buttons whose cycle was
+    //    learned on this receiver and doesn't have it (hints never rule a button out).
+    for (const button of BUTTONS) {
+      const known = sig?.cycles?.[button];
       if (known && !known.some((m) => this.matches(m, t))) continue;
       const seen: string[] = [];
       for (let i = 0; i < MAX_PRESSES; i++) {
@@ -255,7 +331,7 @@ export class SoundModes {
         if (this.matches(got, t)) return { ok: true, mode: got };
         if (!got) break;
         if (seen.includes(got)) { // round the whole cycle: remember it
-          if (kind) { (this.store.cycles[kind] ??= {})[button] = seen; this.save(); }
+          if (key) { (this.sig(key).cycles ??= {})[button] = seen; this.save(); }
           break;
         }
         seen.push(got);
@@ -264,7 +340,7 @@ export class SoundModes {
 
     const note = 'not available for this signal';
     if (opts.back && start && this.io.state().surround !== start) {
-      const back = directCommand(start, native, kind);
+      const back = directCommand(start, native, key);
       if (back) await this.press(back);
       else await this.run({ exact: start }, {}); // reachable by cycling, since it was playing
     }

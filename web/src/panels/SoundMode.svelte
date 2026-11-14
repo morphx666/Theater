@@ -10,7 +10,7 @@
   const on = $derived(st?.zoneMain === true);
   const azs = $derived(st?.allZoneStereo === true); // only Stereo and Multi Ch Stereo then (manual p.115)
   const busy = $derived(!!sm?.busy);
-  const dts = $derived(sm?.kind === 'dts' || sm?.kind === 'dtsx');
+  const dts = $derived(sm?.family === 'dts');
 
   const GROUPS = [
     // Hints from the owner's manual (NA edition, pp.117-122).
@@ -35,7 +35,22 @@
       menu.showPopover?.();
     });
   }
-  function closeMenu() { menu?.hidePopover?.(); openGroup = null; }
+  function closeMenu() { menu?.hidePopover?.(); openGroup = null; learnArmed = false; }
+
+  // "Learn modes": steps through the remote's three buttons once for the signal playing. Offered until this
+  // signal's modes are learned (and again after a firmware update). Tap twice: the audio drops a few times.
+  let learnArmed = $state(false);
+  async function learn() {
+    if (!learnArmed) { learnArmed = true; return; }
+    closeMenu();
+    toast('Learning the sound modes for this signal…');
+    try {
+      const r = await api('/api/sound-mode', { method: 'POST', body: { action: 'learn' } });
+      toast(`Learned ${r.modes.length} surround mode${r.modes.length === 1 ? '' : 's'}`);
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
 
   async function pick(mode) {
     closeMenu();
@@ -77,7 +92,7 @@
   </div>
 </Panel>
 
-<div class="menu" popover="auto" role="menu" bind:this={menu} ontoggle={(e) => { if (e.newState === 'closed') openGroup = null; }}>
+<div class="menu" popover="auto" role="menu" bind:this={menu} ontoggle={(e) => { if (e.newState === 'closed') { openGroup = null; learnArmed = false; } }}>
   {#if openGroup}
     {#each modes(openGroup) as m (m.mode)}
       <button role="menuitemradio" aria-checked={m.mode === st?.surround} class:sel={m.mode === st?.surround} onclick={() => pick(m.mode)}>
@@ -86,6 +101,12 @@
     {:else}
       <div class="empty faint small">Nothing learned for this signal yet</div>
     {/each}
+    {#if openGroup === 'surround' && sm?.canLearn}
+      <div class="sep"></div>
+      <button class="learn" class:armed={learnArmed} onclick={learn}>
+        <span class="check"></span>{learnArmed ? 'Tap again (audio drops a few times)' : 'Learn modes for this signal'}
+      </button>
+    {/if}
   {/if}
 </div>
 
@@ -118,4 +139,7 @@
   .menu button.sel { color: var(--accent); font-weight: 600; }
   .check { width: 14px; flex: none; }
   .empty { padding: 10px 12px; }
+  .sep { height: 1px; background: var(--line); margin: 4px 6px; }
+  .menu button.learn { color: var(--muted); font-size: 13px; }
+  .menu button.learn.armed { color: var(--warn, var(--accent)); }
 </style>
