@@ -1,4 +1,5 @@
 <script>
+  import Pick from './Pick.svelte';
   // A value field that fits the property: number with its unit, a menu for choices, on/off, or text.
   //  write:    for an action (text properties then offer only the values an action may use)
   //  optional: an "any" choice (trigger from / to); the value is undefined then
@@ -16,14 +17,7 @@
     : def?.type === 'set' ? def.param?.options ?? CHANNEL_CODES
     : null,
   );
-  const key = (v) => JSON.stringify(v);
-  function pickOne(raw) {
-    if (raw === '__any') return onchange(undefined);
-    onchange(choices.find((c) => key(c.value) === raw)?.value);
-  }
-  function pickMany(sel) {
-    onchange([...sel.selectedOptions].map((o) => choices.find((c) => key(c.value) === o.value)?.value).filter((v) => v !== undefined));
-  }
+  const ANY = '__any'; // "any" in a trigger's from / to: no value
   function num(raw) {
     if (raw === '' && optional) return onchange(undefined);
     const n = Number(raw);
@@ -35,14 +29,10 @@
 </script>
 
 {#if choices && multiple}
-  <select class="f" multiple aria-label={label} onchange={(e) => pickMany(e.currentTarget)} size={Math.min(5, choices.length)}>
-    {#each choices as c (key(c.value))}<option value={key(c.value)} selected={Array.isArray(value) && value.some((v) => key(v) === key(c.value))}>{c.label}</option>{/each}
-  </select>
+  <Pick multiple value={Array.isArray(value) ? value : []} options={choices} {label} {onchange} />
 {:else if choices}
-  <select class="f" aria-label={label} value={value === undefined ? '__any' : key(value)} onchange={(e) => pickOne(e.currentTarget.value)}>
-    {#if optional}<option value="__any">any</option>{/if}
-    {#each choices as c (key(c.value))}<option value={key(c.value)}>{c.label}</option>{/each}
-  </select>
+  <Pick value={value === undefined && optional ? ANY : value} options={optional ? [{ value: ANY, label: 'any' }, ...choices] : choices} {label}
+    onchange={(v) => onchange(v === ANY ? undefined : v)} />
 {:else if def?.type === 'number'}
   <span class="num">
     <input class="f" type="number" aria-label={label} min={def.min} max={def.max} step={def.step ?? 1}

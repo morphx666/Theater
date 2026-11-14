@@ -6,6 +6,7 @@
   import PropSelect from './PropSelect.svelte';
   import ValueInput from './ValueInput.svelte';
   import ChannelPicker from './ChannelPicker.svelte';
+  import Pick from './Pick.svelte';
   import { OPS, OP_LABELS, argKind, newCond, fitToProp, fitValue, condMissing } from './model.js';
 
   let { cond, set, adder = false } = $props(); // set(newCond | null) replaces this condition; adder: the "+" that adds one more to a list
@@ -31,14 +32,12 @@
     {#if cond.type === 'cmp'}
       <PropSelect catalog={ed.catalog} value={cond.prop} onchange={(id) => { cond.prop = id; fitToProp(cond, ed.catalog.find((p) => p.id === id), 'cmp'); ed.commit(); }} />
       {#if def?.param}
-        <select class="f" aria-label={def.param.label} value={cond.param} onchange={(e) => { cond.param = e.currentTarget.value; ed.commit(); }}>
-          {#each def.param.options as o (o.value)}<option value={o.value}>{o.value}</option>{/each}
-        </select>
+        <Pick label={def.param.label} value={cond.param} options={def.param.options.map((o) => ({ value: o.value, label: o.value }))}
+          onchange={(v) => { cond.param = v; ed.commit(); }} />
       {/if}
       {#if def}
-        <select class="f op" aria-label="Comparison" value={cond.op} onchange={(e) => { cond.op = e.currentTarget.value; fitValue(cond, def); ed.commit(); }}>
-          {#each OPS[def.type] as op (op)}<option value={op}>{OP_LABELS[op]}</option>{/each}
-        </select>
+        <Pick label="Comparison" value={cond.op} options={OPS[def.type].map((op) => ({ value: op, label: OP_LABELS[op] }))}
+          onchange={(v) => { cond.op = v; fitValue(cond, def); ed.commit(); }} />
         {#if argKind(cond.op) === 'one'}
           <ValueInput {def} value={cond.value} onchange={(v) => { cond.value = v; ed.commit(); }} />
         {:else if argKind(cond.op) === 'pair'}
@@ -50,16 +49,12 @@
         {/if}
       {/if}
     {:else if cond.type === 'channels'}
-      <select class="f" aria-label="Which channels" value={cond.of} onchange={(e) => { cond.of = e.currentTarget.value; ed.commit(); }}>
-        <option value="input">input channels</option>
-        <option value="speakers">active speakers</option>
-      </select>
+      <Pick label="Which channels" value={cond.of} options={[{ value: 'input', label: 'input channels' }, { value: 'speakers', label: 'active speakers' }]}
+        onchange={(v) => { cond.of = v; ed.commit(); }} />
       <ChannelPicker {cond} onchange={() => ed.commit()} />
     {:else if cond.type === 'all' || cond.type === 'any'}
-      <select class="f" aria-label="All or any" value={cond.type} onchange={(e) => { cond.type = e.currentTarget.value; ed.commit(); }}>
-        <option value="all">all of</option>
-        <option value="any">any of</option>
-      </select>
+      <Pick label="All or any" value={cond.type} options={[{ value: 'all', label: 'all of' }, { value: 'any', label: 'any of' }]}
+        onchange={(v) => { cond.type = v; ed.commit(); }} />
       <span class="items">
         {#each cond.items as item, i (i)}
           <span class="item"><Cond cond={item} set={(c) => { if (c) cond.items[i] = c; else cond.items.splice(i, 1); }} /></span>

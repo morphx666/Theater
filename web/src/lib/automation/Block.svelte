@@ -6,6 +6,7 @@
   import Cond from './Cond.svelte';
   import PropSelect from './PropSelect.svelte';
   import ValueInput from './ValueInput.svelte';
+  import Pick from './Pick.svelte';
   import Icon from '../Icon.svelte';
   import { CATEGORY, fitToProp } from './model.js';
 
@@ -28,15 +29,14 @@
       <PropSelect catalog={ed.catalog} filter={(p) => p.writable} value={block.prop}
         onchange={(id) => { block.prop = id; fitToProp(block, ed.catalog.find((p) => p.id === id), 'set'); ed.commit(); }} />
       {#if def?.param}
-        <select class="f" aria-label={def.param.label} value={block.param} onchange={(e) => { block.param = e.currentTarget.value; ed.commit(); }}>
-          {#each def.param.options as o (o.value)}<option value={o.value}>{o.value}</option>{/each}
-        </select>
+        <Pick label={def.param.label} value={block.param} options={def.param.options.map((o) => ({ value: o.value, label: o.value }))}
+          onchange={(v) => { block.param = v; ed.commit(); }} />
       {/if}
       <span class="w">to</span>
       <ValueInput {def} write value={block.value} onchange={(v) => { block.value = v; ed.commit(); }} />
       {#if def?.onlyLower}
-        <label class="opt" title="Skip when the volume is already at or below this"><input type="checkbox" checked={!!block.onlyLower}
-          onchange={(e) => { if (e.currentTarget.checked) block.onlyLower = true; else delete block.onlyLower; ed.commit(); }} />only lower</label>
+        <button class="chip" class:on={block.onlyLower} aria-pressed={!!block.onlyLower} title="Skip when the volume is already at or below this"
+          onclick={() => { if (block.onlyLower) delete block.onlyLower; else block.onlyLower = true; ed.commit(); }}>{block.onlyLower ? '✓ ' : ''}only lower</button>
       {/if}
 
     {:else if block.type === 'findMode'}
@@ -44,11 +44,8 @@
       <input class="f text" type="text" maxlength="40" aria-label="Text to find" value={block.text}
         class:missing={!block.text?.trim()} onchange={(e) => { block.text = e.currentTarget.value; ed.commit(); }} />
       <span class="w">if not found</span>
-      <select class="f" aria-label="If not found" value={block.onNotFound} onchange={(e) => { block.onNotFound = e.currentTarget.value; ed.commit(); }}>
-        <option value="back">go back</option>
-        <option value="stay">stay</option>
-        <option value="stop">stop the rule</option>
-      </select>
+      <Pick label="If not found" value={block.onNotFound} onchange={(v) => { block.onNotFound = v; ed.commit(); }}
+        options={[{ value: 'back', label: 'go back' }, { value: 'stay', label: 'stay' }, { value: 'stop', label: 'stop the rule' }]} />
 
     {:else if block.type === 'if'}
       <span class="w">if</span>
@@ -66,10 +63,8 @@
       <span class="w">up to</span>
       <span class="num"><input class="f" type="number" min="1" max="600" step="1" aria-label="Seconds at most" value={sec(block.timeoutMs)}
         onchange={(e) => { block.timeoutMs = Math.max(1000, toMs(e.currentTarget.value)); ed.commit(); }} /> s, then</span>
-      <select class="f" aria-label="After the time is up" value={block.onTimeout} onchange={(e) => { block.onTimeout = e.currentTarget.value; ed.commit(); }}>
-        <option value="continue">carry on</option>
-        <option value="stop">stop the rule</option>
-      </select>
+      <Pick label="After the time is up" value={block.onTimeout} onchange={(v) => { block.onTimeout = v; ed.commit(); }}
+        options={[{ value: 'continue', label: 'carry on' }, { value: 'stop', label: 'stop the rule' }]} />
 
     {:else if block.type === 'stop'}
       <span class="w">stop the rule</span>
@@ -120,7 +115,11 @@
   .num input { width: 64px; }
   .text { width: 130px; }
   .missing { outline: 2px dashed var(--bad); }
-  .opt { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; }
+  .chip {
+    border: 0; border-radius: 999px; padding: 3px 10px; min-height: 26px; font: 12.5px var(--font); cursor: pointer;
+    background: color-mix(in srgb, black 20%, transparent); color: inherit;
+  }
+  .chip.on { background: color-mix(in srgb, white 92%, transparent); color: #141821; font-weight: 600; }
   .more { position: relative; margin-left: auto; }
   .dots { border: 0; background: none; color: inherit; font-size: 18px; line-height: 1; padding: 2px 6px; cursor: pointer; opacity: 0.7; }
   .menu {

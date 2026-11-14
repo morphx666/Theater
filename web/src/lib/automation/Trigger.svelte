@@ -4,6 +4,7 @@
   import Cond from './Cond.svelte';
   import PropSelect from './PropSelect.svelte';
   import ValueInput from './ValueInput.svelte';
+  import Pick from './Pick.svelte';
   import { newTrigger, fitToProp } from './model.js';
 
   let { trigger, index, removable } = $props();
@@ -26,24 +27,19 @@
     <PropSelect catalog={ed.catalog} value={trigger.prop}
       onchange={(id) => { trigger.prop = id; fitToProp(trigger, ed.catalog.find((p) => p.id === id), 'change'); ed.commit(); }} />
     {#if def?.param}
-      <select class="f" aria-label={def.param.label} value={trigger.param} onchange={(e) => { trigger.param = e.currentTarget.value; ed.commit(); }}>
-        {#each def.param.options as o (o.value)}<option value={o.value}>{o.value}</option>{/each}
-      </select>
+      <Pick label={def.param.label} value={trigger.param} options={def.param.options.map((o) => ({ value: o.value, label: o.value }))}
+        onchange={(v) => { trigger.param = v; ed.commit(); }} />
     {/if}
-    <select class="f" aria-label="Trigger kind" value="change" onchange={(e) => kind(e.currentTarget.value)}>
-      <option value="change">changes</option>
-      <option value="becomes">(use a condition…)</option>
-    </select>
+    <Pick label="Trigger kind" value="change" onchange={kind}
+      options={[{ value: 'change', label: 'changes' }, { value: 'becomes', label: 'a condition becomes true…' }]} />
     {#if def && def.type !== 'set'}
       <span class="w">from</span><ValueInput {def} optional value={trigger.from} label="From" onchange={(v) => setEnd('from', v)} />
       <span class="w">to</span><ValueInput {def} optional value={trigger.to} label="To" onchange={(v) => setEnd('to', v)} />
     {/if}
   {:else}
     <Cond cond={trigger.cond} set={(c) => (trigger.cond = c)} />
-    <select class="f" aria-label="Trigger kind" value="becomes" onchange={(e) => kind(e.currentTarget.value)}>
-      <option value="becomes">becomes true</option>
-      <option value="change">(watch a property…)</option>
-    </select>
+    <Pick label="Trigger kind" value="becomes" onchange={kind}
+      options={[{ value: 'becomes', label: 'becomes true' }, { value: 'change', label: 'a property changes…' }]} />
   {/if}
   {#if removable}
     <button class="x" aria-label="Remove this trigger" title="Remove" onclick={() => { ed.rule.when.splice(index, 1); ed.commit(); }}>×</button>
