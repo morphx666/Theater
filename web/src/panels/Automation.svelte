@@ -5,7 +5,7 @@
   import Panel from '../lib/Panel.svelte';
   import Icon from '../lib/Icon.svelte';
   import { auto, loadCatalog, loadRules, act, openRule } from '../lib/automation/store.svelte.js';
-  import { summary } from '../lib/automation/model.js';
+  import { outline } from '../lib/automation/model.js';
 
   let error = $state('');
   // The snapshot's summary changes when a rule is added, renamed, removed or switched: reload the full rules then.
@@ -16,7 +16,7 @@
   });
 
   const live = (id) => avr.automations?.find((a) => a.id === id);
-  const rows = $derived(auto.rules.map((r) => ({ rule: r, s: live(r.id), text: summary(r, auto.catalog) })));
+  const rows = $derived(auto.rules.map((r) => ({ rule: r, s: live(r.id), lines: outline(r, auto.catalog) })));
 
   function ago(t) {
     const s = Math.round((Date.now() - t) / 1000);
@@ -55,13 +55,18 @@
       conditions and changes settings. Rules run on the server, even with no browser open.</p>
   {/if}
   <div class="rules">
-    {#each rows as { rule: r, s, text } (r.id)}
+    {#each rows as { rule: r, s, lines } (r.id)}
       {@const on = isOn(r, s)}
       <div class="rule" class:off={!on}>
         <button class="switch" class:on aria-label="{r.name} on/off" title={on ? 'Turn off' : 'Turn on'} onclick={() => toggle(r, s)}></button>
         <button class="body" onclick={() => openRule(r.id)} title="Edit">
           <span class="name">{r.name}{#if s?.running}<span class="pill run">running</span>{/if}</span>
-          <span class="sum">{text}</span>
+          <!-- The rule as pseudo code: one line per step, if / else bodies indented. -->
+          <span class="code">
+            {#each lines as ln, i (i)}
+              <span class="ln" style:--depth={ln.depth}>{#each ln.parts as p, j (j)}{#if p.kw}<b>{p.t}</b>{:else}{p.t}{/if}{/each}</span>
+            {/each}
+          </span>
           {#if s?.disabled}
             <span class="warn small">{s.disabled}</span>
           {:else if s?.lastRun}
@@ -92,7 +97,10 @@
     all: unset; cursor: pointer; display: flex; flex-direction: column; gap: 3px; min-width: 0;
   }
   .name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
-  .sum { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; } /* the whole rule, never cut */
+  /* The whole rule, never cut. A wrapped line hangs under its own text, so the indentation stays readable. */
+  .code { display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
+  .ln { padding-left: calc(var(--depth) * 12px + 10px); text-indent: -10px; }
+  .ln b { font-weight: 600; color: var(--text); }
   .warn { color: var(--bad); }
   .pill.run { font-size: 11px; padding: 1px 8px; color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
   /* Every button as wide as the widest; icons in one column, the text after them. */
