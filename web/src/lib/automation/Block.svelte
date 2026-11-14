@@ -15,6 +15,13 @@
   const def = $derived(block.type === 'set' ? ed.catalog.find((p) => p.id === block.prop) : null);
   const here = $derived([...path, index]);
   let menu = $state(false);
+  // "if" starts without its else part; the "else" chip adds it. An else that has steps always shows.
+  let elseOn = $state(false);
+  const hasElse = $derived(block.type === 'if' && (elseOn || block.else?.length > 0));
+  function toggleElse() {
+    if (hasElse) { elseOn = false; if (block.else.length) { block.else = []; ed.commit(); } } // undo brings the steps back
+    else elseOn = true;
+  }
   const sec = (ms) => Math.round(ms / 100) / 10;
   const toMs = (raw, max = 600) => Math.round(Math.min(max, Math.max(0, Number(raw) || 0)) * 10) * 100;
 </script>
@@ -68,6 +75,8 @@
       <span class="w">if</span>
       <Cond cond={block.cond} set={(c) => (block.cond = c)} />
       <span class="w">then</span>
+      <button class="chip" class:on={hasElse} aria-pressed={hasElse} onclick={toggleElse}
+        title={hasElse ? 'Remove the else part (and its steps)' : 'Add an else part: steps for when the condition is false'}>{hasElse ? '✓ ' : '+ '}else</button>
 
     {:else if block.type === 'wait'}
       <span class="w">wait</span>
@@ -102,8 +111,10 @@
 
   {#if block.type === 'if'}
     <div class="inner"><BlockList list={block.then} path={[...here, 'then']} /></div>
-    <div class="row mid"><span class="w">else</span></div>
-    <div class="inner"><BlockList list={block.else} path={[...here, 'else']} /></div>
+    {#if hasElse}
+      <div class="row mid"><span class="w">else</span></div>
+      <div class="inner"><BlockList list={block.else} path={[...here, 'else']} /></div>
+    {/if}
     <div class="foot"></div>
   {/if}
 </div>

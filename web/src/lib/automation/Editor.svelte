@@ -144,7 +144,7 @@
     for (const p of c.filter((x) => x.writable)) (groups.get(p.group) ?? groups.set(p.group, []).get(p.group)).push(p);
     return [
       { cat: 'control', title: 'Control', items: [
-        { label: 'if … then … else', make: () => newBlock('if', c) },
+        { label: 'if … then', make: () => newBlock('if', c) },
         { label: 'wait', make: () => newBlock('wait', c) },
         { label: 'wait until …', make: () => newBlock('waitUntil', c) },
         { label: 'stop the rule', make: () => newBlock('stop', c) },
