@@ -4,7 +4,7 @@
   import { avr, toast } from '../lib/avr.svelte.js';
   import Panel from '../lib/Panel.svelte';
   import Icon from '../lib/Icon.svelte';
-  import { auto, loadCatalog, loadRules, act, openRule } from '../lib/automation/store.svelte.js';
+  import { auto, loadCatalog, loadRules, act, openRule, followNames } from '../lib/automation/store.svelte.js';
   import { outline } from '../lib/automation/model.js';
 
   let error = $state('');
@@ -14,6 +14,8 @@
     shape;
     Promise.all([auto.catalog.length ? null : loadCatalog(), loadRules()]).then(() => (error = ''), (e) => (error = e.message));
   });
+
+  followNames(); // input and preset names as the user set them, even if they change while the page is open
 
   const live = (id) => avr.automations?.find((a) => a.id === id);
   const rows = $derived(auto.rules.map((r) => ({ rule: r, s: live(r.id), lines: outline(r, auto.catalog) })));

@@ -1,6 +1,6 @@
 // Automation data for the panel and the editor: the property catalog and the full rules (the snapshot only
 // carries a summary: avr.automations). The editor opens at #setup/app/rule/<id> (see App.svelte).
-import { api } from '../avr.svelte.js';
+import { avr, api } from '../avr.svelte.js';
 import { ui } from '../layout.svelte.js';
 
 export const auto = $state({ catalog: [], rules: [], loaded: false });
@@ -8,6 +8,22 @@ export const auto = $state({ catalog: [], rules: [], loaded: false });
 export async function loadCatalog() {
   auto.catalog = await api('/api/automation/catalog');
   return auto.catalog;
+}
+
+/** The names the catalog's choices show: the inputs as the user named them on the receiver, and the speaker
+ *  presets. The catalog is fetched once, so it can hold older names (the receiver's defaults while the server was
+ *  still starting, or before a rename): call this from a component to fetch it again whenever they change. */
+export function followNames() {
+  const key = $derived(JSON.stringify([
+    Object.entries(avr.state?.inputs ?? {}).map(([code, i]) => [code, i.name]),
+    (avr.speakerPresets?.list ?? []).map((p) => [p.id, p.name]),
+  ]));
+  let seen = '';
+  $effect(() => {
+    const k = key;
+    if (seen && k !== seen && auto.catalog.length) loadCatalog().catch(() => {}); // the first value is what it loaded with
+    seen = k;
+  });
 }
 
 export async function loadRules() {

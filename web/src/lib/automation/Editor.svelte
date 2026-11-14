@@ -8,7 +8,7 @@
   import Icon from '../Icon.svelte';
   import BlockList from './BlockList.svelte';
   import Trigger from './Trigger.svelte';
-  import { auto, loadCatalog, loadRules, act, closeRule } from './store.svelte.js';
+  import { auto, loadCatalog, loadRules, act, closeRule, followNames } from './store.svelte.js';
   import { blankRule, newBlock, newTrigger, listAt, moveBlock, insertBlock, problems, fmtMs } from './model.js';
 
   let { id } = $props();
@@ -29,6 +29,9 @@
   const dirty = $derived(ed.rule ? json() !== saved : false);
   const issues = $derived(ed.rule ? problems(ed.rule, ed.catalog) : []);
   let showIssues = $state(false);
+
+  followNames();
+  $effect(() => { if (ed.catalog && auto.catalog.length && ed.catalog !== auto.catalog) ed.catalog = auto.catalog; }); // fresher names
 
   onMount(async () => {
     document.body.style.overflow = 'hidden';
