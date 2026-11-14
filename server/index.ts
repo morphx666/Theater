@@ -16,6 +16,8 @@ import { pollAsTelnetLines } from './http-status.ts';
 import { fetchAudioMap, type AudioMap } from './audio-map.ts';
 import { TunerPresets, PRESET_COUNT, pad, validPreset, validName } from './tuner-presets.ts';
 import { SpeakerPresets, PresetError } from './speaker-presets.ts';
+import { Automations, AutomationError } from './automation.ts';
+import { describeCatalog } from './automation-catalog.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = process.env.AVR_HOST ?? '192.168.1.50';
@@ -224,10 +226,23 @@ setInterval(() => { if (conn.telnet && state.zoneMain && wss.clients.size) telne
 
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
+// ---------- automations (docs/AUTOMATION.md) ----------
+// Rules run here, on the server, whether or not a browser is open. Every action goes through sendCommand (the guard).
+const automations = new Automations(DATA, {
+  ctx: () => ({ state, audioMap }),
+  cmd: (c, who) => sendCommand(c, who),
+  log: (m) => log(m),
+  changed: () => scheduleBroadcast(),
+  run: (r) => broadcast({ type: 'automation-run', run: r }),
+});
+await automations.load();
+const WARMUP_MS = 8000; // the full refresh after (re)connecting fills the state; those reports aren't changes
+automations.warmup(WARMUP_MS);
+
 telnet.on('status', (up: boolean) => {
   conn.telnet = up;
   log(`telnet ${up ? 'connected' : 'disconnected'}`);
-  if (up) { telnet.sendMany(REFRESH_QUERIES); setTimeout(refreshInstalled, 2000); setTimeout(refreshSkipped, 3000); }
+  if (up) { automations.warmup(WARMUP_MS); telnet.sendMany(REFRESH_QUERIES); setTimeout(refreshInstalled, 2000); setTimeout(refreshSkipped, 3000); }
   scheduleBroadcast();
 });
 telnet.on('warn', (m) => log(m));
@@ -318,14 +333,21 @@ function snapshot() {
     conn,
     settings,
     speakerPresets: speakerPresets.summary(),
+    automations: automations.summary(),
     cap: effectiveCap(settings.volumeCapDb, state),
   };
 }
 
+// Every state change ends here, whatever its source (telnet, HTTP poll, audio map, HEOS), so this is also
+// where automations look for changes.
 let pending: NodeJS.Timeout | null = null;
 function scheduleBroadcast() {
   if (pending) return;
-  pending = setTimeout(() => { pending = null; broadcast(snapshot()); }, 40);
+  pending = setTimeout(() => {
+    pending = null;
+    try { automations.observe(); } catch (e) { log(`automation: ${(e as Error).message}`); }
+    broadcast(snapshot());
+  }, 40);
 }
 function broadcast(msg: object) {
   const s = JSON.stringify(msg);
@@ -484,6 +506,32 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
         }
       }
     }
+    if (p === '/api/automation/catalog' && req.method === 'GET') return json(res, 200, describeCatalog({ state, audioMap }));
+    if (p === '/api/automations') {
+      if (req.method === 'GET') return json(res, 200, { automations: automations.all(), runs: automations.runs() });
+      if (req.method === 'POST') {
+        const b = await readBody(req);
+        const who = req.socket.remoteAddress ?? 'http';
+        try {
+          switch (b?.action) {
+            case 'save': {
+              const a = await automations.save(b.automation);
+              log(`automation "${a.name}" saved (from ${who})`);
+              return json(res, 200, { ok: true, automation: a });
+            }
+            case 'delete': await automations.remove(String(b.id)); log(`automation ${b.id} deleted (from ${who})`); break;
+            case 'enable': await automations.setEnabled(String(b.id), b.on === true); break;
+            case 'run': return json(res, 200, { ok: true, run: automations.runNow(String(b.id)) });
+            case 'test': return json(res, 200, { ok: true, run: automations.test(b.automation ?? String(b.id)) });
+            default: throw new HttpError(400, 'unknown action');
+          }
+          return json(res, 200, { ok: true });
+        } catch (e) {
+          if (!(e instanceof AutomationError)) throw e;
+          return json(res, e.status, { error: e.message });
+        }
+      }
+    }
     if (p === '/api/setup/capabilities') return json(res, 200, { readable: READABLE, writable: WRITABLE });
     if (p === '/api/setup/backups') return json(res, 200, await setup.listBackups());
     let m = p.match(/^\/api\/setup\/backups\/([\w.\-]+\.xml)$/);
@@ -549,5 +597,5 @@ if (USE_TELNET) telnet.start();
 heos.start();
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(sig, () => { telnet.stop(); heos.stop(); server.close(); process.exit(0); });
+  process.on(sig, () => { automations.stop(); telnet.stop(); heos.stop(); server.close(); process.exit(0); });
 }

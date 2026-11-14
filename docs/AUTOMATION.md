@@ -1,6 +1,6 @@
 # Automation — implementation plan
 
-Status: **phase 1 (engine, no UI) in progress** on branch `automation`. Decisions are in §11.
+Status: **phase 1 (engine, no UI) done** on branch `automation`: tested against a fake receiver, not yet on the real one. Phase 2 (panel and editor) is next. Decisions are in §11.
 
 Goal: let the user build rules of the form **when (trigger) → if (conditions) → do (actions)** in a graphical, **Scratch-style block editor**. The rules run on the server, so they keep working when no browser is open (the Pi runs 24/7).
 
