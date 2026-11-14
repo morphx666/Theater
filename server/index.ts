@@ -18,6 +18,7 @@ import { TunerPresets, PRESET_COUNT, pad, validPreset, validName } from './tuner
 import { SpeakerPresets, PresetError } from './speaker-presets.ts';
 import { Automations, AutomationError } from './automation.ts';
 import { describeCatalog } from './automation-catalog.ts';
+import { SoundModes } from './sound-modes.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = process.env.AVR_HOST ?? '192.168.1.50';
@@ -226,6 +227,15 @@ setInterval(() => { if (conn.telnet && state.zoneMain && wss.clients.size) telne
 
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
+// ---------- sound modes (learned from the receiver; the manual promises modes this unit doesn't offer) ----------
+const soundModes = new SoundModes(DATA, {
+  state: () => state,
+  cmd: (c) => sendCommand(c, 'sound mode'),
+  log: (m) => log(m),
+  changed: () => scheduleBroadcast(),
+});
+await soundModes.load();
+
 // ---------- automations (docs/AUTOMATION.md) ----------
 // Rules run here, on the server, whether or not a browser is open. Every action goes through sendCommand (the guard).
 const automations = new Automations(DATA, {
@@ -234,6 +244,7 @@ const automations = new Automations(DATA, {
   log: (m) => log(m),
   changed: () => scheduleBroadcast(),
   run: (r) => broadcast({ type: 'automation-run', run: r }),
+  findMode: (text, back) => soundModes.select({ text }, { back }),
 });
 await automations.load();
 const WARMUP_MS = 8000; // the full refresh after (re)connecting fills the state; those reports aren't changes
@@ -258,6 +269,7 @@ telnet.on('line', (line: string) => {
   }
   const changed = applyLine(state, line);
   if (changed) scheduleBroadcast();
+  soundModes.onLine(line);
   capAfterQuickRecall(line);
   snapToStep(line, prevVolume);
   // Audyssey settings are part of the active speaker preset (auto-saved like the setup pages).
@@ -311,6 +323,7 @@ setInterval(async () => {
     for (const l of lines) {
       const prevVolume = state.volume;
       changed = applyLine(state, l) || changed;
+      soundModes.onLine(l);
       capAfterQuickRecall(l);
       snapToStep(l, prevVolume);
     }
@@ -334,6 +347,7 @@ function snapshot() {
     settings,
     speakerPresets: speakerPresets.summary(),
     automations: automations.summary(),
+    soundModes: soundModes.summary(),
     cap: effectiveCap(settings.volumeCapDb, state),
   };
 }
@@ -385,6 +399,7 @@ function sendCommand(raw: string, source = ''): { ok: boolean; cmd?: string; rea
   if (!r.cmd.endsWith('?')) log(`sent: ${r.cmd}${source ? ` (from ${source})` : ''}`); // audit trail (queries omitted)
   if (/^MSQUICK[1-4]$/.test(r.cmd)) quickRecallUntil = Date.now() + 6000;
   telnet.send(r.cmd);
+  soundModes.onCommand(r.cmd);
   if (r.cmd.startsWith('TPANMEM')) { // saving into a deleted (skipped) slot brings it back
     const n = Number(r.cmd.slice(7));
     if (state.tuner.skipped.includes(pad(n))) tunerPresets.setSkip(n, false).catch((e) => log(`could not unskip preset: ${e.message}`));
@@ -505,6 +520,13 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
           return json(res, e.status, { error: e.message, confirm: e.confirm });
         }
       }
+    }
+    if (p === '/api/sound-mode' && req.method === 'POST') {
+      const { mode } = await readBody(req);
+      if (typeof mode !== 'string' || !/^[ -~]{1,40}$/.test(mode)) throw new HttpError(400, 'bad sound mode');
+      const r = await soundModes.select({ exact: mode });
+      log(`sound mode ${mode}: ${r.ok ? 'selected' : r.note} (from ${req.socket.remoteAddress ?? 'http'})`);
+      return json(res, r.ok ? 200 : 409, r.ok ? { ok: true, mode: r.mode } : { error: r.note, mode: r.mode });
     }
     if (p === '/api/automation/catalog' && req.method === 'GET') return json(res, 200, describeCatalog({ state, audioMap }));
     if (p === '/api/automations') {

@@ -25,6 +25,7 @@ export type Block =
   | { type: 'if'; cond: Cond; then: Block[]; else: Block[] }
   | { type: 'wait'; ms: number }
   | { type: 'waitUntil'; cond: Cond; timeoutMs: number; onTimeout: 'continue' | 'stop' }
+  | { type: 'findMode'; text: string; onNotFound: 'back' | 'stay' | 'stop' }
   | { type: 'stop' };
 
 export type Automation = {
@@ -36,7 +37,7 @@ export type Automation = {
   disabled?: string; // why the server turned it off (loop protection); cleared when the user turns it on
 };
 
-export type StepResult = 'ok' | 'skipped' | 'error' | 'not-applied' | 'true' | 'false' | 'met' | 'timeout' | 'waited' | 'stop' | 'would-send';
+export type StepResult = 'ok' | 'skipped' | 'error' | 'not-applied' | 'true' | 'false' | 'met' | 'timeout' | 'waited' | 'stop' | 'would-send' | 'not-found';
 export type Step = { path: string; what: string; result: StepResult; note?: string; cmds?: string[] };
 export type Run = {
   id: string; automation: string; name: string; trigger: string; depth: number;
@@ -190,6 +191,12 @@ function checkBlocks(list: unknown, depth: number, count: { n: number }): Block[
       case 'waitUntil':
         if (b.onTimeout !== 'continue' && b.onTimeout !== 'stop') bad('wait until: continue or stop after the timeout');
         return { type: 'waitUntil', cond: checkCond(b.cond), timeoutMs: ms(b.timeoutMs, LIMITS.waitMs, 'wait until'), onTimeout: b.onTimeout };
+      case 'findMode': {
+        const text = typeof b.text === 'string' ? b.text.trim() : '';
+        if (!/^[A-Za-z0-9 :+.\-/]{1,40}$/.test(text)) bad('find sound mode: 1 to 40 letters, digits or : + . - /');
+        if (!['back', 'stay', 'stop'].includes(b.onNotFound)) bad('find sound mode: go back, stay or stop when not found');
+        return { type: 'findMode', text, onNotFound: b.onNotFound };
+      }
       case 'stop':
         return { type: 'stop' };
     }
@@ -260,6 +267,8 @@ export type AutomationIo = {
   log?: (m: string) => void;
   changed?: () => void; // the summary changed (broadcast a snapshot)
   run?: (r: Run) => void; // a run started, progressed or ended
+  /** Select the first sound mode containing `text` (server/sound-modes.ts); with `back`, return if not found. */
+  findMode?: (text: string, back: boolean) => Promise<{ ok: boolean; mode: string | null; note?: string }>;
 };
 
 const CANCEL = Symbol('cancelled');
@@ -394,6 +403,12 @@ export class Automations {
           const ok = evalCond(b.cond, ctx);
           run.steps.push({ path: p, what: 'if', result: ok ? 'true' : 'false' });
           if (!walk(ok ? b.then : b.else, `${p}.${ok ? 'then' : 'else'}`)) return false;
+        } else if (b.type === 'findMode') {
+          const what = `find sound mode containing "${b.text}"`;
+          const cur = String(ctx.state.surround ?? '');
+          run.steps.push(ctx.state.zoneMain !== true ? { path: p, what, result: 'skipped', note: 'main zone is off' }
+            : cur.toUpperCase().includes(b.text.toUpperCase()) ? { path: p, what, result: 'skipped', note: 'already set' }
+            : { path: p, what, result: 'would-send', note: 'would search the modes the receiver offers' });
         } else if (b.type === 'wait') {
           run.steps.push({ path: p, what: `wait ${b.ms / 1000} s`, result: 'waited' });
         } else if (b.type === 'waitUntil') {
@@ -579,6 +594,9 @@ export class Automations {
           if (!met && b.onTimeout === 'stop') return false;
           break;
         }
+        case 'findMode':
+          if (!(await this.findMode(run, b, p))) return false;
+          break;
         case 'stop':
           this.step(run, { path: p, what: 'stop', result: 'stop' });
           return false;
@@ -627,6 +645,24 @@ export class Automations {
         }
       }, LIMITS.verifyMs);
     }
+  }
+
+  /** Returns false when the mode wasn't found and the block says to stop. */
+  private async findMode(run: Live, b: Extract<Block, { type: 'findMode' }>, p: string): Promise<boolean> {
+    const what = `find sound mode containing "${b.text}"`;
+    if (this.io.ctx().state.zoneMain !== true) { this.step(run, { path: p, what, result: 'skipped', note: 'main zone is off' }); return true; }
+    if (!this.io.findMode) throw new Error('sound mode search is not available');
+    const r = await this.io.findMode(b.text, b.onNotFound === 'back');
+    if (run.cancelled) throw CANCEL;
+    if (r.ok) {
+      const already = r.note === 'already set';
+      if (!already) this.lastAction = { at: this.clock.now(), depth: run.depth };
+      this.step(run, { path: p, what, result: already ? 'skipped' : 'ok', note: already ? 'already set' : r.mode ?? undefined });
+      return true;
+    }
+    this.lastAction = { at: this.clock.now(), depth: run.depth };
+    this.step(run, { path: p, what, result: 'not-found', note: r.note });
+    return b.onNotFound !== 'stop';
   }
 
   private step(run: Live, s: Step) { run.steps.push(s); this.emit(run); }

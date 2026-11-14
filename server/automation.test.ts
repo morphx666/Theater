@@ -492,3 +492,39 @@ test('rules are saved to disk and load back', async () => {
   const raw = JSON.parse(await fs.readFile(path.join(r.dir, 'automations.json'), 'utf8'));
   assert.equal(raw.version, 1);
 });
+
+test('find sound mode: found, not found (stop / continue / back), dry run, validation', async () => {
+  const r = await rig();
+  on(r); // Dolby Surround
+  const calls: [string, boolean][] = [];
+  (r.io as Record<string, unknown>).findMode = async (text: string, back: boolean) => {
+    calls.push([text, back]);
+    if (/neural/i.test(text)) return { ok: false, mode: 'DOLBY AUDIO-DSUR', note: 'not available for this signal' };
+    applyLine(r.state, 'MSMCH STEREO');
+    return { ok: true, mode: 'MCH STEREO' };
+  };
+  const a = await r.eng.save(rule([{ type: 'change', prop: 'mute', settleMs: 0 }], [
+    { type: 'findMode', text: 'Neural:X', onNotFound: 'stop' }, { type: 'set', prop: 'ps.DEH', value: 'LOW' }]));
+  r.eng.observe();
+  r.line('MUON');
+  await r.clock.tick(100);
+  assert.deepEqual(calls, [['Neural:X', false]]);
+  assert.deepEqual(r.sent, []);
+  assert.deepEqual(r.last()!.steps.map((s) => [s.result, s.note]), [['not-found', 'not available for this signal']]);
+  assert.equal(r.last()!.status, 'stopped');
+
+  await r.eng.save({ ...a, script: [{ type: 'findMode', text: 'neural', onNotFound: 'back' }, { type: 'findMode', text: 'mch stereo', onNotFound: 'stay' }, { type: 'set', prop: 'ps.DEH', value: 'LOW' }] });
+  r.line('MUOFF');
+  await r.clock.tick(100);
+  assert.deepEqual(calls.slice(1), [['neural', true], ['mch stereo', false]]);
+  assert.deepEqual(r.last()!.steps.map((s) => s.result), ['not-found', 'ok', 'ok']); // "back" carries on
+  assert.deepEqual(r.sent, ['PSDEH LOW']);
+
+  // Dry run: no search, just whether it's already there.
+  const t = r.eng.test({ ...a, script: [{ type: 'findMode', text: 'stereo', onNotFound: 'stay' }, { type: 'findMode', text: 'atmos', onNotFound: 'stay' }] });
+  assert.deepEqual(t.steps.map((s) => [s.result, s.note]), [['skipped', 'already set'], ['would-send', 'would search the modes the receiver offers']]);
+  assert.equal(calls.length, 3);
+
+  assert.throws(() => validate(rule([{ type: 'change', prop: 'mute' }], [{ type: 'findMode', text: '', onNotFound: 'stay' }])), /find sound mode/);
+  assert.throws(() => validate(rule([{ type: 'change', prop: 'mute' }], [{ type: 'findMode', text: 'x', onNotFound: 'maybe' }])), /find sound mode/);
+});

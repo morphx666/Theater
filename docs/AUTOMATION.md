@@ -72,6 +72,7 @@ A rule is a **tree**, not a graph: a script is a list of blocks, and an *if* hol
 | `if` | `cond`, `then[]`, `else[]` | |
 | `wait` | `ms` (≤ 10 min) | |
 | `waitUntil` | `cond`, `timeoutMs` (≤ 10 min), `onTimeout`: `continue` \| `stop` | re-checks on every change of the state and once a second |
+| `findMode` | `text`, `onNotFound`: `back` \| `stay` \| `stop` | "find sound mode containing *Neural:X*": selects the first mode the receiver offers whose name contains the text ([sound-modes.ts](../server/sound-modes.ts)); `back` returns to the starting mode when none does |
 | `stop` | | ends the run |
 | **Conditions** | | |
 | `cmp` | `prop`, `param?`, `op`, `value?` | operators per type (§3) |
@@ -132,7 +133,7 @@ Values are always in **human units**: dB numbers, enum ids with labels, booleans
 | HEOS | Play state, source, station, artist, title, album | transport, play favorite N | 4 |
 | Time | Time of day, day of week | — | 4 |
 
-Sound mode actions are limited to modes that name one mode. *Movie*, *Music* and *Game* cycle through a category on each press, so they can't be "set" reliably.
+Sound mode `set` actions are limited to modes with a direct command (Pure Direct, Direct, Stereo, Multi Ch Stereo, Auto). Any other mode is reached with the `findMode` block, which searches what the receiver actually offers for the signal playing. This unit offers fewer modes than the manual says (probed 2026-11-14: with stereo PCM and with Atmos only the native mode, Multi Ch Stereo and Stereo; Dolby Digital 5.1 also offers "DD + Neural:X"), so the server learns them instead of trusting the manual.
 
 **Not in v1:** values that live only in the setup API (port 10443), such as Graphic EQ or Subwoofer Mode. The receiver doesn't push them, and reading them is slow and serialized (some reads hang the receiver for 30 s), so they can't be triggers. Setup-API *actions* are a phase-5 option, limited to a small allowlist and still going through `setup.set`.
 

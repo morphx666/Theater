@@ -1,34 +1,121 @@
 <script>
-  import { avr, send } from '../lib/avr.svelte.js';
+  import { avr, send, api, toast } from '../lib/avr.svelte.js';
   import Panel from '../lib/Panel.svelte';
 
+  // Sound modes as button groups: tapping a group picks its usual mode, the arrow lists the modes in it.
+  // The lists come from the server (server/sound-modes.ts), which learns what this receiver actually offers for
+  // the signal playing: the owner's manual lists modes this unit doesn't offer.
   const st = $derived(avr.state);
+  const sm = $derived(avr.soundModes);
   const on = $derived(st?.zoneMain === true);
-  const MODES = [
+  const azs = $derived(st?.allZoneStereo === true); // only Stereo and Multi Ch Stereo then (manual p.115)
+  const busy = $derived(!!sm?.busy);
+  const dts = $derived(sm?.kind === 'dts' || sm?.kind === 'dtsx');
+
+  const GROUPS = [
     // Hints from the owner's manual (NA edition, pp.117-122).
-    { cmd: 'MSMOVIE', label: 'Movie', hint: 'Press again for the next movie mode' },
-    { cmd: 'MSMUSIC', label: 'Music', hint: 'Press again for the next music mode' },
-    { cmd: 'MSGAME', label: 'Game', hint: 'Press again for the next game mode' },
-    { cmd: 'MSPURE DIRECT', label: 'Pure', match: /^PURE/, hint: 'Direct, with the display and TV menu off' },
-    { cmd: 'MSDIRECT', label: 'Direct', match: /^DIRECT/, hint: 'Unprocessed; most audio settings off' },
-    { cmd: 'MSSTEREO', label: 'Stereo', match: /^STEREO/, stereo: true, hint: 'Front speakers and subwoofer only' },
-    { cmd: 'MSMCH STEREO', label: 'Multi Ch Stereo', match: /^MCH STEREO|MULTI CH/, stereo: true, hint: 'Stereo through all speakers' },
-    { cmd: 'MSAUTO', label: 'Auto', match: /^AUTO/, hint: 'Matches the input format' },
+    { id: 'surround', label: 'Surround', hint: 'The surround mode for the signal playing', tap: () => (dts ? 'MSDTS SURROUND' : 'MSDOLBY DIGITAL') },
+    { id: 'stereo', label: 'Stereo', hint: 'Stereo, or stereo through all speakers', tap: () => 'MSSTEREO', stereo: true },
+    { id: 'direct', label: 'Direct', hint: 'Unprocessed; Pure Direct also turns off the display', tap: () => 'MSDIRECT' },
   ];
-  // In All Zone Stereo only Stereo and Multi Ch Stereo can be selected (p.115).
-  const azs = $derived(st?.allZoneStereo === true);
+  const modes = (g) => (sm?.available ?? []).filter((m) => m.group === g);
+  const current = $derived((sm?.available ?? []).find((m) => m.mode === st?.surround) ?? null);
+
+  let openGroup = $state(null);
+  let menu = $state();
+  let anchor = {};
+
+  function openMenu(id) {
+    const r = anchor[id].getBoundingClientRect();
+    openGroup = id;
+    queueMicrotask(() => {
+      menu.style.top = `${Math.min(r.bottom + 6, innerHeight - 8 - menu.offsetHeight)}px`;
+      menu.style.left = `${Math.min(r.left, innerWidth - 8 - Math.max(r.width, menu.offsetWidth))}px`;
+      menu.style.minWidth = `${r.width}px`;
+      menu.showPopover?.();
+    });
+  }
+  function closeMenu() { menu?.hidePopover?.(); openGroup = null; }
+
+  async function pick(mode) {
+    closeMenu();
+    if (mode === st?.surround) return;
+    try {
+      await api('/api/sound-mode', { method: 'POST', body: { mode } });
+    } catch (e) {
+      toast(e.message === 'not available for this signal' ? 'Not available for this signal' : e.message, 'error');
+    }
+  }
 </script>
 
 <Panel id="sound-mode" title="Sound mode">
-  {#snippet actions()}<span class="pill mono">{st.surround ?? '—'}</span>{/snippet}
-  <div class="modes">
-    {#each MODES as m (m.cmd)}
-      <button class="btn" class:on={m.match?.test(st.surround ?? '')} disabled={!on || (azs && !m.stereo)} title={azs && !m.stereo ? 'Only stereo modes during All Zone Stereo' : m.hint ?? ''}
-        onclick={() => send(m.cmd)}>{m.label}</button>
+  {#snippet actions()}<span class="pill">{current?.label ?? st.surround ?? '—'}</span>{/snippet}
+  <div class="groups">
+    {#each GROUPS as g (g.id)}
+      {@const list = modes(g.id)}
+      {@const active = current?.group === g.id}
+      {@const disabled = !on || busy || (azs && !g.stereo)}
+      <div class="grp btn" class:on={active} class:disabled bind:this={anchor[g.id]}
+        title={azs && !g.stereo ? 'Only stereo modes during All Zone Stereo' : g.hint}>
+        <button class="main" {disabled} onclick={() => send(g.tap())}>
+          <span class="name">{g.label}</span>
+          <span class="sub">{active ? current.label : list.length === 1 ? list[0].label : `${list.length} modes`}</span>
+        </button>
+        <button class="arrow" {disabled} aria-label="{g.label} modes" aria-haspopup="menu" aria-expanded={openGroup === g.id}
+          onclick={() => (openGroup === g.id ? closeMenu() : openMenu(g.id))}>
+          <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        </button>
+      </div>
+    {/each}
+    <button class="btn auto" disabled={!on || busy || azs} title="Matches the input format" onclick={() => send('MSAUTO')}>Auto</button>
+  </div>
+  <div class="remote">
+    <span class="faint small">Remote buttons</span>
+    {#each [['MSMOVIE', 'Movie'], ['MSMUSIC', 'Music'], ['MSGAME', 'Game']] as [cmd, label] (cmd)}
+      <button class="btn small" disabled={!on || busy || azs} title="Press again for the next mode" onclick={() => send(cmd)}>{label}</button>
     {/each}
   </div>
 </Panel>
 
+<div class="menu" popover="auto" role="menu" bind:this={menu} ontoggle={(e) => { if (e.newState === 'closed') openGroup = null; }}>
+  {#if openGroup}
+    {#each modes(openGroup) as m (m.mode)}
+      <button role="menuitemradio" aria-checked={m.mode === st?.surround} class:sel={m.mode === st?.surround} onclick={() => pick(m.mode)}>
+        <span class="check">{m.mode === st?.surround ? '✓' : ''}</span>{m.label}
+      </button>
+    {:else}
+      <div class="empty faint small">Nothing learned for this signal yet</div>
+    {/each}
+  {/if}
+</div>
+
 <style>
-  .modes { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+  .groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 8px; }
+  /* A group looks like one button: the main part picks the usual mode, the arrow opens the list. */
+  .grp { padding: 0; gap: 0; align-items: stretch; overflow: hidden; }
+  .grp.disabled { opacity: 0.4; }
+  .grp button { appearance: none; background: none; border: 0; color: inherit; cursor: pointer; font: inherit; }
+  .grp button:disabled { cursor: not-allowed; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding: 6px 4px 6px 12px; text-align: left; }
+  .name { font-weight: 600; }
+  .sub { font-size: 11.5px; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .arrow { flex: none; width: 30px; display: grid; place-items: center; border-left: 1px solid color-mix(in srgb, currentColor 18%, transparent) !important; }
+  .grp:active { transform: none; }
+  .main:active, .arrow:active { transform: scale(0.94); }
+  .auto { min-height: 52px; }
+  .remote { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .remote span { margin-right: 4px; }
+
+  .menu {
+    position: fixed; inset: auto; margin: 0; padding: 4px; border: 1px solid var(--line); border-radius: 12px;
+    background: var(--card); color: var(--text); box-shadow: var(--shadow); min-width: 160px;
+  }
+  .menu button {
+    display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; border: 0; border-radius: 8px;
+    background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; white-space: nowrap;
+  }
+  .menu button:hover { background: var(--card-2); }
+  .menu button.sel { color: var(--accent); font-weight: 600; }
+  .check { width: 14px; flex: none; }
+  .empty { padding: 10px 12px; }
 </style>
