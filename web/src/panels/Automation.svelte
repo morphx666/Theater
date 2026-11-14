@@ -98,7 +98,8 @@
   .body {
     all: unset; cursor: pointer; display: flex; flex-direction: column; gap: 3px; min-width: 0;
   }
-  .name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  /* A line under the name sets it off from the pseudo code. */
+  .name { font-weight: 600; display: flex; align-items: center; gap: 8px; padding-bottom: 5px; margin-bottom: 2px; border-bottom: 1px solid var(--line); }
   /* The whole rule, never cut. A wrapped line hangs under its own text, so the indentation stays readable. */
   .code { display: flex; flex-direction: column; gap: 1px; font-size: 12.5px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
   .ln { padding-left: calc(var(--depth) * 12px + 10px); text-indent: -10px; }
