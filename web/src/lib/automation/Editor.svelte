@@ -324,7 +324,8 @@
   .hattitle { font-weight: 700; font-size: 15px; }
   .or { font-weight: 600; font-size: 12.5px; opacity: 0.85; }
   .add { align-self: flex-start; border: 0; border-radius: 999px; padding: 4px 12px; background: color-mix(in srgb, black 18%, transparent); color: inherit; font: inherit; font-size: 12.5px; cursor: pointer; }
-  .stackwrap { margin-left: 10px; max-width: 900px; }
+  /* The script sits indented under the hat, and only as wide as its widest block needs. */
+  .stackwrap { margin-left: 40px; width: fit-content; min-width: min(100% - 40px, 280px); max-width: 900px; }
   .empty { margin: 4px 0 0 6px; }
 
   /* Fields inside blocks */
@@ -364,5 +365,6 @@
     .palette.open { transform: none; }
     .fab { display: inline-flex; position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 46; }
     .script { padding: 14px 12px 120px; }
+    .stackwrap { margin-left: 14px; min-width: min(100% - 14px, 280px); }
   }
 </style>

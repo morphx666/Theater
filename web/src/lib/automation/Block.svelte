@@ -135,11 +135,13 @@
     display: grid; place-items: center;
   }
   .grip:active { cursor: grabbing; }
-  /* C-shaped blocks (if / else): the inner stacks sit in an indent. */
+  /* C-shaped blocks (if / else): the inner stacks sit in an indented well, rounded on every corner, with the
+     same 8px around its blocks on all sides (top and bottom come from the stack's own 8px gaps). */
   .block.c { padding-bottom: 0; }
-  .inner { margin: 4px 0 0 18px; padding: 2px 0 2px 8px; border-radius: 0 8px 8px 0; background: var(--b-bg); }
-  .row.mid { padding: 6px 0 2px; }
-  .foot { height: 12px; }
+  .inner { margin: 6px 0 0 28px; padding: 0 8px; border-radius: 8px; background: var(--b-bg); }
+  .row.mid { padding: 6px 0 0; }
+  .foot { height: 11px; } /* 8px like the right side, plus the 3px shade along the block's bottom edge */
+  @media (max-width: 760px) { .inner { margin-left: 14px; } }
   .num { display: inline-flex; align-items: center; gap: 4px; }
   .num input { width: 64px; }
   .text { width: 130px; }
@@ -149,7 +151,7 @@
     background: color-mix(in srgb, black 20%, transparent); color: inherit;
   }
   .chip.on { background: color-mix(in srgb, white 92%, transparent); color: #141821; font-weight: 600; }
-  .more { position: relative; margin-left: auto; }
+  .more { position: relative; margin-left: auto; padding-left: 12px; }
   .dots { border: 0; background: none; color: inherit; font-size: 18px; line-height: 1; padding: 2px 6px; cursor: pointer; opacity: 0.7; }
   .menu {
     position: absolute; right: 0; top: 100%; z-index: 5; display: flex; flex-direction: column; min-width: 130px; padding: 4px;
