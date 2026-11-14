@@ -82,7 +82,7 @@
 </Panel>
 
 <style>
-  .rules { display: flex; flex-direction: column; gap: 8px; }
+  .rules { display: flex; flex-direction: column; gap: 8px; container: rules / inline-size; }
   .rule {
     display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px;
     padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card-2);
@@ -96,8 +96,10 @@
   .warn { color: var(--bad); }
   .pill.run { font-size: 11px; padding: 1px 8px; color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
   .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-  @media (max-width: 640px) {
-    .rule { grid-template-columns: auto 1fr; }
-    .acts { grid-column: 1 / -1; justify-content: flex-start; }
+  /* A one-column card: the buttons one over the other on the right, all as wide as the widest. */
+  @container rules (max-width: 560px) {
+    .rule { align-items: start; }
+    .switch { margin-top: 2px; }
+    .acts { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
   }
 </style>
