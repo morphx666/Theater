@@ -21,21 +21,19 @@
   const modes = (g) => (sm?.available ?? []).filter((m) => m.group === g);
   const current = $derived((sm?.available ?? []).find((m) => m.mode === st?.surround) ?? null);
 
+  // One menu for the three groups, tied to the open group's button with CSS anchor positioning (the browser keeps
+  // it there while the page scrolls, and opens it upward when there's no room below).
+  const uid = $props.id();
   let openGroup = $state(null);
   let menu = $state();
-  let anchor = {};
 
   function openMenu(id) {
-    const r = anchor[id].getBoundingClientRect();
     openGroup = id;
-    queueMicrotask(() => {
-      menu.style.top = `${Math.min(r.bottom + 6, innerHeight - 8 - menu.offsetHeight)}px`;
-      menu.style.left = `${Math.min(r.left, innerWidth - 8 - Math.max(r.width, menu.offsetWidth))}px`;
-      menu.style.minWidth = `${r.width}px`;
-      menu.showPopover?.();
-    });
+    menu.style.positionAnchor = `--sound-mode-${uid}-${id}`;
+    menu.showPopover?.();
   }
-  function closeMenu() { menu?.hidePopover?.(); openGroup = null; learnArmed = false; }
+  function closed() { openGroup = null; learnArmed = false; }
+  function closeMenu() { menu?.hidePopover?.(); closed(); }
 
   // "Learn modes": steps through the remote's three buttons once for the signal playing. Offered until this
   // signal's modes are learned (and again after a firmware update). Tap twice: the audio drops a few times.
@@ -70,7 +68,7 @@
       {@const list = modes(g.id)}
       {@const active = current?.group === g.id}
       {@const disabled = !on || busy || (azs && !g.stereo)}
-      <div class="grp btn" class:on={active} class:disabled bind:this={anchor[g.id]}
+      <div class="grp btn" class:on={active} class:disabled style:anchor-name="--sound-mode-{uid}-{g.id}"
         title={azs && !g.stereo ? 'Only stereo modes during All Zone Stereo' : g.hint}>
         <button class="main" {disabled} onclick={() => send(g.tap())}>
           <span class="name">{g.label}</span>
@@ -91,7 +89,7 @@
   </div>
 </Panel>
 
-<div class="menu" popover="auto" role="menu" bind:this={menu} ontoggle={(e) => { if (e.newState === 'closed') { openGroup = null; learnArmed = false; } }}>
+<div class="menu" popover="auto" role="menu" bind:this={menu} ontoggle={(e) => { if (e.newState === 'closed') closed(); }}>
   {#if openGroup}
     {#each modes(openGroup) as m (m.mode)}
       <button role="menuitemradio" aria-checked={m.mode === st?.surround} class:sel={m.mode === st?.surround} onclick={() => pick(m.mode)}>
@@ -125,9 +123,12 @@
   .auto { min-height: 52px; }
   .remote { display: flex; justify-content: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
 
+  /* Under its group's button (above when there's more room there), as wide as it at least; long lists scroll. */
   .menu {
-    position: fixed; inset: auto; margin: 0; padding: 4px; border: 1px solid var(--line); border-radius: 12px;
-    background: var(--card); color: var(--text); box-shadow: var(--shadow); min-width: 160px;
+    position: fixed; inset: auto; margin: 6px 0; padding: 4px; overflow-y: auto;
+    position-area: block-end span-inline-end; position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+    position-try-order: most-height; max-height: min(100%, 420px); min-width: max(anchor-size(width), 160px);
+    border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); box-shadow: var(--shadow);
   }
   .menu button {
     display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; border: 0; border-radius: 8px;

@@ -16,23 +16,20 @@
   let open = $state(false), q = $state(''), active = $state(0);
   const shown = $derived(options.filter((o) => !q.trim() || `${o.label} ${o.group ?? ''}`.toLowerCase().includes(q.trim().toLowerCase())));
 
+  // The list is tied to the pill with CSS anchor positioning: the browser keeps it there while the editor scrolls.
+  const uid = $props.id();
+  const anchorName = `--pick-${uid}`;
   function show() {
-    const r = anchor.getBoundingClientRect();
     open = true; q = '';
     active = Math.max(0, options.findIndex((o) => chosen.has(key(o.value))));
     queueMicrotask(() => {
       menu.showPopover?.();
-      const below = innerHeight - r.bottom - 12, above = r.top - 12;
-      const up = below < 220 && above > below;
-      menu.style.maxHeight = `${Math.min(340, up ? above : below)}px`;
-      menu.style.minWidth = `${Math.max(r.width, 160)}px`;
-      menu.style.left = `${Math.max(8, Math.min(r.left, innerWidth - 8 - menu.offsetWidth))}px`;
-      menu.style.top = up ? `${r.top - 6 - menu.offsetHeight}px` : `${r.bottom + 6}px`;
       (search ? input : menu.querySelector('.opt.on') ?? menu.querySelector('.opt'))?.focus();
       menu.querySelector('.opt.on')?.scrollIntoView({ block: 'nearest' });
     });
   }
-  function hide() { menu?.hidePopover?.(); open = false; anchor?.focus(); }
+  function closed() { open = false; }
+  function hide() { menu?.hidePopover?.(); closed(); anchor?.focus(); }
 
   function choose(o) {
     if (!multiple) { onchange(o.value); hide(); return; }
@@ -49,14 +46,14 @@
   }
 </script>
 
-<button class="pick" class:open bind:this={anchor} type="button" aria-label={label} aria-haspopup="listbox" aria-expanded={open}
+<button class="pick" class:open bind:this={anchor} style:anchor-name={anchorName} type="button" aria-label={label} aria-haspopup="listbox" aria-expanded={open}
   title={text} onclick={() => (open ? hide() : show())}>
   <span class="txt">{text}</span>
   <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
 </button>
 
-<div class="list" popover="auto" bind:this={menu} role="listbox" aria-label={label} aria-multiselectable={multiple}
-  tabindex="-1" onkeydown={onKey} ontoggle={(e) => { if (e.newState === 'closed') open = false; }}>
+<div class="list" popover="auto" bind:this={menu} style:position-anchor={anchorName} role="listbox" aria-label={label} aria-multiselectable={multiple}
+  tabindex="-1" onkeydown={onKey} ontoggle={(e) => { if (e.newState === 'closed') closed(); }}>
   {#if open}
     {#if search}
       <input class="q" type="search" placeholder="Search" aria-label="Search {label}" bind:this={input} bind:value={q} oninput={() => (active = 0)} />
@@ -86,7 +83,9 @@
 
   /* The list: the app's menu style (see the Sound mode panel). */
   .list {
-    position: fixed; inset: auto; margin: 0; padding: 4px; overflow-y: auto; max-width: min(360px, calc(100vw - 16px));
+    position: fixed; inset: auto; margin: 6px 0; padding: 4px; overflow-y: auto; max-width: min(360px, calc(100vw - 16px));
+    position-area: block-end span-inline-end; position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+    position-try-order: most-height; max-height: min(100%, 340px); min-width: max(anchor-size(width), 160px);
     border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); box-shadow: var(--shadow);
   }
   .q { margin: 2px 2px 6px; width: calc(100% - 4px); min-height: 34px; padding: 6px 10px; }

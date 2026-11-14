@@ -4,27 +4,37 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { applyLine, emptyState, type AvrState } from './parse.ts';
-import { SoundModes, signalKey, familyOf, groupOf, directCommand } from './sound-modes.ts';
+import { SoundModes, signalKey, familyOf, groupOf, fixedCommand, nativeCommand, decoderMode } from './sound-modes.ts';
 
 /**
  * A receiver that behaves like the X1700H (tested 2026-11-14), on a fake clock. Each button cycles through
  * `cycle`. A press within WINDOW of that button's last press moves on; otherwise it only shows the mode when the
  * current mode is the one the button remembers, or jumps to the remembered one. Direct commands for stereo /
- * direct, and `native` for MSDOLBY DIGITAL / MSDTS SURROUND ('' = ignored, as with DTS-HD).
+ * direct, and `native` for MSDOLBY DIGITAL / MSDTS SURROUND ('' = ignored; 'recall' = the DTS / Dolby mode used
+ * last, as the real unit does). `extra.codes`: modes selected by MS<code>; `extra.auto`: what MSAUTO selects.
  */
 const WINDOW = 1500;
-function receiver(lines: string[], cycle: string[], native: string, memory: Record<string, string> = {}) {
+type Extra = { codes?: string[]; auto?: string; onLine?: (l: string) => void };
+function receiver(lines: string[], cycle: string[], native: string, memory: Record<string, string> = {}, extra: Extra = {}) {
   const st: AvrState = emptyState();
   for (const l of ['ZMON', 'SSINFFRMAVR D400-9123-9071-9031', ...lines]) applyLine(st, l);
   const clock = { now: 0 };
   const sent: string[] = [];
   const moves: string[] = [];
   const lastPress: Record<string, number> = {};
-  const set = (m: string) => { if (st.surround !== m) moves.push(m); applyLine(st, `MS${m}`); };
+  let lastDecoder = /^(DTS|DOLBY)/.test(st.surround ?? '') ? st.surround! : '';
+  const set = (m: string) => {
+    if (st.surround !== m) moves.push(m);
+    if (/^(DTS|DOLBY)/.test(m)) lastDecoder = m;
+    applyLine(st, `MS${m}`);
+    extra.onLine?.(`MS${m}`);
+  };
   const cmd = (c: string) => {
     sent.push(c);
-    if (c === 'MSDOLBY DIGITAL' || c === 'MSDTS SURROUND') { if (native) set(native); }
+    if (c === 'MSDOLBY DIGITAL' || c === 'MSDTS SURROUND') { const n = native === 'recall' ? lastDecoder : native; if (n) set(n); }
     else if (['MSSTEREO', 'MSMCH STEREO', 'MSDIRECT', 'MSPURE DIRECT'].includes(c)) set(c.slice(2));
+    else if (c === 'MSAUTO') { if (extra.auto) set(extra.auto); }
+    else if (extra.codes?.includes(c.slice(2))) set(c.slice(2));
     else if (/^MS(MOVIE|MUSIC|GAME)$/.test(c)) {
       const cur = st.surround ?? '';
       const open = lastPress[c] !== undefined && clock.now - lastPress[c] < WINDOW;
@@ -38,13 +48,14 @@ function receiver(lines: string[], cycle: string[], native: string, memory: Reco
   return { st, sent, moves, cmd, clock };
 }
 
-async function rig(lines: string[], cycle: string[], native: string, dir?: string, memory?: Record<string, string>) {
+async function rig(lines: string[], cycle: string[], native: string, dir?: string, memory?: Record<string, string>, extra: Extra = {}) {
   dir ??= await fs.mkdtemp(path.join(os.tmpdir(), 'sound-modes-'));
-  const r = receiver(lines, cycle, native, memory);
+  const r = receiver(lines, cycle, native, memory, extra);
   const sm = new SoundModes(dir, {
-    state: () => r.st, cmd: r.cmd, settleMs: 5,
+    state: () => r.st, cmd: (c) => { sm.onCommand(c); return r.cmd(c); }, settleMs: 5,
     now: () => r.clock.now, sleep: async (ms) => { r.clock.now += ms; },
   });
+  extra.onLine ??= (l) => sm.onLine(l);
   await sm.load();
   return { ...r, sm, dir };
 }
@@ -66,9 +77,68 @@ test('one list per decoder; PCM split by channels', () => {
   assert.equal(familyOf('DOLBYAUDIO-DD'), 'dolby');
   assert.equal(groupOf('PURE DIRECT'), 'direct');
   assert.equal(groupOf('MCH STEREO'), 'stereo');
-  assert.equal(directCommand('DOLBY ATMOS', 'DOLBY ATMOS', 'DOLBYATMOS'), 'MSDOLBY DIGITAL');
-  assert.equal(directCommand('DTS HD+NEURAL:X', 'DTS HD+NEURAL:X', 'DTS-HDMSTR'), 'MSDTS SURROUND');
-  assert.equal(directCommand('MONO MOVIE', 'DTS HD+NEURAL:X', 'DTS-HDMSTR'), null); // only by cycling
+  assert.equal(fixedCommand('MCH STEREO'), 'MSMCH STEREO');
+  assert.equal(fixedCommand('MONO MOVIE'), null);
+  assert.equal(nativeCommand('DOLBYATMOS'), 'MSDOLBY DIGITAL');
+  assert.equal(nativeCommand('DTS-HDMSTR'), 'MSDTS SURROUND');
+  assert.equal(decoderMode('DTS-HDMSTR', 'DTS HD+DSUR'), true);
+  assert.equal(decoderMode('DTS-HDMSTR', 'VIRTUAL'), false);
+});
+
+test('effect modes by their code: tried once, remembered, and not tried again when ignored', async () => {
+  // The real unit with DTS-HD MSTR (2026-11-14): MSVIRTUAL, MSVIDEO GAME, MSMONO MOVIE work.
+  const cycle = ['DTS HD+DSUR', 'DTS HD+NEURAL:X', 'MCH STEREO', 'VIDEO GAME', 'VIRTUAL', 'JAZZ CLUB', 'STEREO', 'DTS HD MSTR'];
+  const codes = ['VIRTUAL', 'VIDEO GAME', 'MONO MOVIE', 'ROCK ARENA'];
+  const r = await rig([...DTS_HD, 'MSDTS HD MSTR'], [...cycle, 'ROCK ARENA'], 'recall', undefined, undefined, { codes });
+  assert.deepEqual(await r.sm.select({ exact: 'VIRTUAL' }), { ok: true, mode: 'VIRTUAL' });
+  assert.deepEqual(r.sent, ['MSVIRTUAL']);
+  r.sent.length = 0; // a code no one tried yet: tried, works
+  assert.deepEqual(await r.sm.select({ exact: 'ROCK ARENA' }), { ok: true, mode: 'ROCK ARENA' });
+  assert.deepEqual(r.sent, ['MSROCK ARENA']);
+  r.sent.length = 0; // ignored: found by cycling, and not tried the next time
+  assert.equal((await r.sm.select({ exact: 'JAZZ CLUB' })).ok, true);
+  assert.equal(r.sent[0], 'MSJAZZ CLUB');
+  await r.sm.select({ exact: 'STEREO' });
+  r.sent.length = 0;
+  assert.equal((await r.sm.select({ exact: 'JAZZ CLUB' })).ok, true);
+  assert.ok(!r.sent.includes('MSJAZZ CLUB'));
+  r.sent.length = 0; // decoder modes are never tried by code
+  await r.sm.select({ exact: 'DTS HD+DSUR' });
+  assert.ok(!r.sent.some((c) => /^MSDTS HD/.test(c)), r.sent.join());
+});
+
+test('decoder modes: Auto, and the native-mode command returns to the one used last', async () => {
+  const cycle = ['DTS HD+DSUR', 'DTS HD+NEURAL:X', 'MCH STEREO', 'VIDEO GAME', 'VIRTUAL', 'STEREO', 'DTS HD MSTR'];
+  const r = await rig([...DTS_HD, 'MSDTS HD MSTR'], cycle, 'recall', undefined, { MSGAME: 'DTS HD MSTR' }, { auto: 'DTS HD+NEURAL:X', codes: ['VIRTUAL'] });
+  assert.deepEqual(await r.sm.select({ exact: 'DTS HD+NEURAL:X' }), { ok: true, mode: 'DTS HD+NEURAL:X' });
+  assert.deepEqual(r.sent, ['MSAUTO']); // one switch
+  await wait(30);
+  assert.equal(r.sm.summary().native, 'DTS HD+NEURAL:X'); // the one MSDTS SURROUND leads to now
+  await r.sm.select({ exact: 'VIRTUAL' });
+  r.sent.length = 0;
+  assert.deepEqual(await r.sm.select({ exact: 'DTS HD+NEURAL:X' }), { ok: true, mode: 'DTS HD+NEURAL:X' });
+  assert.deepEqual(r.sent, ['MSDTS SURROUND']);
+  // MSTR isn't the one used last: by the buttons, and from then on MSDTS SURROUND leads to it.
+  assert.equal((await r.sm.select({ exact: 'DTS HD MSTR' })).ok, true);
+  await wait(30);
+  await r.sm.select({ exact: 'VIRTUAL' });
+  r.sent.length = 0;
+  assert.deepEqual(await r.sm.select({ exact: 'DTS HD MSTR' }), { ok: true, mode: 'DTS HD MSTR' });
+  assert.deepEqual(r.sent, ['MSDTS SURROUND']);
+});
+
+test('cycling starts with the button that remembers the mode: one switch', async () => {
+  // The real unit's DTS-HD MSTR cycles (2026-11-14). Only GAME has MSTR, and GAME last went to it.
+  const game = ['DTS HD+DSUR', 'DTS HD+NEURAL:X', 'MCH STEREO', 'VIDEO GAME', 'VIRTUAL', 'STEREO', 'DTS HD MSTR'];
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sound-modes-'));
+  await fs.writeFile(path.join(dir, 'sound-modes.json'), JSON.stringify({ version: 2, names: {}, signals: { 'DTS-HDMSTR': {
+    modes: [], native: 'DTS HD+NEURAL:X', remembers: { MSGAME: 'DTS HD MSTR' },
+    cycles: { MSMOVIE: ['MONO MOVIE', 'STEREO', 'DTS HD+DSUR', 'MCH STEREO'], MSGAME: game,
+      MSMUSIC: ['JAZZ CLUB', 'VIRTUAL', 'STEREO', 'DTS HD+DSUR', 'DTS HD+NEURAL:X', 'ROCK ARENA', 'MATRIX'] } } } }));
+  const r = await rig([...DTS_HD, 'MSDTS HD+NEURAL:X'], game, 'recall', dir, { MSGAME: 'DTS HD MSTR', MSMOVIE: 'MONO MOVIE', MSMUSIC: 'JAZZ CLUB' });
+  assert.deepEqual(await r.sm.select({ exact: 'DTS HD MSTR' }), { ok: true, mode: 'DTS HD MSTR' });
+  assert.deepEqual(r.sent, ['MSGAME']);
+  assert.deepEqual(r.moves, ['DTS HD MSTR']);
 });
 
 test('hints fill the lists before anything is learned', async () => {

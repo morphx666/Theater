@@ -27,6 +27,12 @@ MVUP / MVDOWN / MV40 / MV405       MUON / MUOFF / MU?
 SI? -> SISAT/CBL ; SI<src>  src ∈ SAT/CBL DVD BD GAME MPLAY TV AUX1 AUX2 CD PHONO TUNER NET BT
 MS? -> MSDOLBY AUDIO-DSUR ; MSMOVIE / MSMUSIC / MSGAME (cycle in category), MSDIRECT, MSPURE DIRECT,
        MSSTEREO, MSAUTO, MSMCH STEREO, MSVIRTUAL, MSDOLBY DIGITAL, MSDTS SURROUND, MSNEURAL:X
+       Probed 2026-11-14 with DTS-HD MA (DTS-HD MSTR): MSVIRTUAL, MSVIDEO GAME, MSMONO MOVIE select those modes.
+       MSDTS SURROUND (and MSDOLBY DIGITAL) return to the DTS mode used last: DTS HD MSTR, DTS HD+NEURAL:X...
+       (nothing happens when already on it). MSAUTO -> DTS HD+NEURAL:X. Ignored: MSDTS HD MSTR, MSDTS HD+DSUR,
+       MSDTS HD+NEURAL:X, MSNEURAL:X, MSDTS+NEURAL:X, MSDOLBY SURROUND, MSDOLBY AUDIO-DSUR; PSNEURAL ON/OFF.
+       MOVIE / MUSIC / GAME: the first press goes to the mode that button last moved to, even right after a
+       direct command. The MUSIC cycle here also has Rock Arena, Matrix and Jazz Club.
 MSQUICK1..4 (recall) ; MSQUICK1 MEMORY (save) ; MSQUICK ? -> MSQUICK0
 ```
 
