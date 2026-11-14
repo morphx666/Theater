@@ -2,7 +2,8 @@
 //
 // The owner's manual promises modes this unit doesn't offer (probed 2026-11-14, firmware D400-9123-9071-9031:
 // with stereo PCM and with Dolby Atmos, MOVIE / MUSIC / GAME all cycle through just three modes: the signal's
-// native mode, Multi Ch Stereo and Stereo; Neural:X and the effect modes never appear). So the app goes by what
+// native mode, Multi Ch Stereo and Stereo; Neural:X and the effect modes never appear). Dolby Digital 5.1 and
+// DTS-HD MA 7.1 sources were seen playing in "+ Neural:X" modes, as the manual (p.261-262) says. So the app goes by what
 // the receiver reports, not by the manual: every mode seen while a signal kind is playing is remembered.
 //
 // Selecting a mode uses a direct command when one is known (Stereo, Multi Ch Stereo, Direct, Pure Direct, and
@@ -64,8 +65,15 @@ type Store = {
 
 // What the probe found (see the header), so the panel is right before anything is learned.
 const SEED: Store = {
-  names: { 'DOLBY AUDIO-DSUR': 'Dolby Surround', 'DOLBY ATMOS': 'Dolby Atmos', 'MCH STEREO': 'Multi Ch Stereo' },
-  kinds: { pcm2: ['DOLBY AUDIO-DSUR'], 'pcm-multi': ['DOLBY AUDIO-DSUR'], atmos: ['DOLBY ATMOS'] },
+  names: {
+    'DOLBY AUDIO-DSUR': 'Dolby Surround', 'DOLBY ATMOS': 'Dolby Atmos', 'MCH STEREO': 'Multi Ch Stereo',
+    'DOLBY AUDIO-DD+NEURAL:X': 'DD + Neural:X', 'DTS HD+NEURAL:X': 'DTS-HD + Neural:X',
+  },
+  // Also seen playing (not probed): Dolby Digital 5.1 in "DD + Neural:X", DTS-HD MA 7.1 in "DTS-HD + Neural:X".
+  kinds: {
+    pcm2: ['DOLBY AUDIO-DSUR'], 'pcm-multi': ['DOLBY AUDIO-DSUR'], atmos: ['DOLBY ATMOS'],
+    dolby: ['DOLBY AUDIO-DD+NEURAL:X'], dts: ['DTS HD+NEURAL:X'],
+  },
   native: { pcm2: 'DOLBY AUDIO-DSUR', 'pcm-multi': 'DOLBY AUDIO-DSUR', atmos: 'DOLBY ATMOS' },
   cycles: {
     pcm2: Object.fromEntries(['MSMOVIE', 'MSMUSIC', 'MSGAME'].map((b) => [b, ['DOLBY AUDIO-DSUR', 'MCH STEREO', 'STEREO']])),
