@@ -154,7 +154,7 @@ Source, in order of preference:
 1. The audio map's input grid (`AppCommand0300.xml`, [audio-map.ts](../server/audio-map.ts)): cells with `on: true` are the channels in the signal, height channels included.
 2. Before the grid arrives (zone just turned on, or the HTTP read failed): `audioFormat` (`SSINFAISFOR`, "front/surround/LFE", `3/2/.1` → 6). It gives the count and layout (no heights) but not the individual channels, so the per-channel properties are *unknown* until the grid arrives, and conditions on them are false.
 
-Still to check on the receiver: the grid and `SSINFAISFOR` agree for stereo PCM, 5.1 Dolby Digital and an Atmos source.
+**Pinned (on hold, 2026-11-14):** check on the receiver that the grid and `SSINFAISFOR` agree for stereo PCM, 5.1 Dolby Digital and an Atmos source.
 
 ### Comparison operators by type
 
