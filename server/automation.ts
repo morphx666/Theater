@@ -6,7 +6,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { PROPS, type Ctx, type PropDef, type AppAction } from './automation-catalog.ts';
-import { OPS, argKind, compare, sameValue, type Value } from './automation-ops.ts';
+import { OPS, argKind, compare, sameValue, RELATIVE_MAX_DB, type Value } from './automation-ops.ts';
 
 // ---------- model ----------
 
@@ -21,7 +21,7 @@ export type Trigger =
   | { type: 'becomes'; cond: Cond; settleMs?: number };
 
 export type Block =
-  | { type: 'set'; prop: string; param?: string; value: Value; onlyLower?: boolean; confirmAmp?: boolean }
+  | { type: 'set'; prop: string; param?: string; value: Value; onlyLower?: boolean; confirmAmp?: boolean; relative?: boolean } // relative: value is a change in dB
   | { type: 'if'; cond: Cond; then: Block[]; else: Block[] }
   | { type: 'wait'; ms: number }
   | { type: 'waitUntil'; cond: Cond; timeoutMs: number; onTimeout: 'continue' | 'stop' }
@@ -80,6 +80,28 @@ function checkParam(def: PropDef, param: unknown): string | undefined {
 }
 
 /** One value of the property's type (for comparisons, trigger from / to, and actions). */
+/** A "change by" amount: volume only, not zero, at most RELATIVE_MAX_DB either way, in the property's steps. */
+function checkChange(def: PropDef, v: unknown): number {
+  const what = `${def.label}: `;
+  if (!def.relative) bad(what + '"change by" is for volume');
+  if (typeof v !== 'number' || !Number.isFinite(v)) return bad(what + 'needs a number');
+  if (v === 0 || Math.abs(v) > RELATIVE_MAX_DB) bad(what + `change by -${RELATIVE_MAX_DB} to +${RELATIVE_MAX_DB} dB (not 0)`);
+  if (def.step && Math.abs(Math.round(v / def.step) * def.step - v) > 1e-9) bad(what + `must be in steps of ${def.step}`);
+  return v;
+}
+
+/** The value a set-action sends: its value, or for "change by" the current value plus the change, kept within the
+ *  property's range and steps (null while the current value is unknown). */
+function targetOf(b: Extract<Block, { type: 'set' }>, ctx: Ctx): Value {
+  if (!b.relative) return b.value;
+  const def = PROPS[b.prop];
+  const cur = def.read(ctx, b.param);
+  if (typeof cur !== 'number') return null;
+  const step = def.step ?? 1;
+  const t = Math.round((cur + (b.value as number)) / step) * step;
+  return Math.min(def.max ?? Infinity, Math.max(def.min ?? -Infinity, Number(t.toFixed(3))));
+}
+
 function checkValue(def: PropDef, v: unknown, forWrite: boolean): Value {
   const what = `${def.label}: `;
   switch (def.type) {
@@ -183,10 +205,11 @@ function checkBlocks(list: unknown, depth: number, count: { n: number }): Block[
         const def = propOf(b.prop);
         if (!def.write && !def.app) bad(`${def.label} can't be set`);
         const param = checkParam(def, b.param);
-        const value = checkValue(def, b.value, true);
+        const value = b.relative ? checkChange(def, b.value) : checkValue(def, b.value, true);
+        if (b.relative && b.onlyLower) bad(`${def.label}: "only lower" is for "set to", not "change by"`);
         if (b.onlyLower && !def.onlyLower) bad(`${def.label}: "only lower" is for volume`);
         if (b.confirmAmp && !def.confirmAmp) bad(`${def.label}: the Amp Assign confirmation is for speaker presets`);
-        return { type: 'set', prop: def.id, ...(param ? { param } : {}), value, ...(b.onlyLower ? { onlyLower: true } : {}),
+        return { type: 'set', prop: def.id, ...(param ? { param } : {}), value, ...(b.relative ? { relative: true } : {}), ...(b.onlyLower ? { onlyLower: true } : {}),
           ...(b.confirmAmp ? { confirmAmp: true } : {}) };
       }
       case 'if':
@@ -258,6 +281,7 @@ function describeTrigger(t: Trigger): string {
 const describeSet = (b: Extract<Block, { type: 'set' }>, ctx?: Ctx) => {
   const def = PROPS[b.prop];
   const v = (ctx && def?.options?.(ctx).find((o) => o.value === b.value)?.label) ?? show(b.value); // preset names, not ids
+  if (b.relative) return `change ${def?.label ?? b.prop} by ${(b.value as number) > 0 ? '+' : ''}${b.value} ${def?.unit ?? ''}`.trimEnd();
   return `set ${def?.label ?? b.prop}${b.param ? ` ${b.param}` : ''} to ${v}${b.onlyLower ? ' (only lower)' : ''}`;
 };
 const describeAction = (x: AppAction, ctx?: Ctx) =>
@@ -413,7 +437,7 @@ export class Automations {
         if (b.type === 'set') {
           const why = this.skipReason(b, ctx);
           const def = PROPS[b.prop];
-          const cmds = def.app ? [describeAction(def.app(b.value, b.param, b), ctx)] : def.write!(b.value, b.param);
+          const cmds = why ? [] : def.app ? [describeAction(def.app(b.value, b.param, b), ctx)] : def.write!(targetOf(b, ctx), b.param);
           run.steps.push(why ? { path: p, what: describeSet(b, ctx), result: 'skipped', note: why }
             : { path: p, what: describeSet(b, ctx), result: 'would-send', cmds });
         } else if (b.type === 'if') {
@@ -629,6 +653,11 @@ export class Automations {
     if (def.needsZone2 && ctx.state.zone2.power !== true) return 'zone 2 is off';
     if (def.needsInput && ctx.state.source !== def.needsInput) return `the input isn't ${def.needsInput === 'TUNER' ? 'Tuner' : def.needsInput}`;
     const cur = def.read(ctx, b.param);
+    if (b.relative) {
+      const to = targetOf(b, ctx);
+      if (to === null) return `${def.label.toLowerCase()} unknown`;
+      return sameValue(cur, to) ? ((b.value as number) > 0 ? 'already at the top' : 'already at the bottom') : null;
+    }
     if (b.onlyLower && typeof cur === 'number' && cur <= (b.value as number)) return 'already at or below';
     if (!def.alwaysSend && cur !== null && (def.same ?? sameValue)(cur, b.value)) return 'already set';
     return null;
@@ -652,8 +681,10 @@ export class Automations {
       this.step(run, { path: p, what, result: 'ok', cmds: [describeAction(action, this.io.ctx())], ...(r.note ? { note: r.note } : {}) });
       return;
     }
+    const value = targetOf(b, this.io.ctx()); // "change by": the current value plus the change, worked out now
+    const wanted = def.write!(value, b.param);
     const sent: string[] = [];
-    for (const c of def.write!(b.value, b.param)) {
+    for (const c of wanted) {
       const r = this.io.cmd(c, `automation: ${a.name}`);
       if (!r.ok) {
         this.step(run, { path: p, what, result: 'error', note: r.reason, cmds: sent });
@@ -662,14 +693,15 @@ export class Automations {
       sent.push(r.cmd ?? c);
     }
     this.lastAction = { at: this.clock.now(), depth: run.depth };
-    const clamped = sent.some((c, i) => c !== def.write!(b.value, b.param)[i]);
-    const step: Step = { path: p, what, result: 'ok', cmds: sent, ...(clamped ? { note: 'limited by the volume cap' } : {}) };
+    const clamped = sent.some((c, i) => c !== wanted[i]);
+    const step: Step = { path: p, what, result: 'ok', cmds: sent,
+      ...(clamped ? { note: 'limited by the volume cap' } : b.relative ? { note: `to ${value} ${def.unit ?? ''}`.trimEnd() } : {}) };
     this.step(run, step);
     // The receiver silently ignores some settings in some states (e.g. LFE with PCM): check it took.
     if (!def.alwaysSend && !clamped) {
       this.clock.setTimeout(() => {
         const v = def.read(this.io.ctx(), b.param);
-        if (v === null || !(def.same ?? sameValue)(v, b.value)) {
+        if (v === null || !(def.same ?? sameValue)(v, value)) {
           step.result = 'not-applied';
           step.note = 'not applied by the receiver';
           this.log(`"${a.name}": ${what} was not applied by the receiver`);

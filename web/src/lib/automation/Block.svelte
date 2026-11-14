@@ -8,7 +8,7 @@
   import ValueInput from './ValueInput.svelte';
   import Pick from './Pick.svelte';
   import Icon from '../Icon.svelte';
-  import { CATEGORY, fitToProp } from './model.js';
+  import { CATEGORY, fitToProp, setRelative, changeDef, RELATIVE_MAX_DB } from './model.js';
 
   let { block, path, index } = $props();
   const ed = getContext('editor');
@@ -25,21 +25,33 @@
       onpointerdown={(e) => ed.startDrag(e, { kind: 'move', list: path, index }, block.type)}><Icon name="grip" size={14} /></button>
 
     {#if block.type === 'set'}
-      <span class="w">set</span>
+      <span class="w">{block.relative ? 'change' : 'set'}</span>
       <PropSelect catalog={ed.catalog} filter={(p) => p.writable} value={block.prop}
         onchange={(id) => { block.prop = id; fitToProp(block, ed.catalog.find((p) => p.id === id), 'set'); ed.commit(); }} />
       {#if def?.param}
         <Pick label={def.param.label} value={block.param} options={def.param.options.map((o) => ({ value: o.value, label: o.value }))}
           onchange={(v) => { block.param = v; ed.commit(); }} />
       {/if}
-      <span class="w">to</span>
-      <ValueInput {def} write value={block.value} onchange={(v) => { block.value = v; ed.commit(); }} />
+      {#if def?.relative}
+        <!-- Volume: set it to a value, or change it by up to ±RELATIVE_MAX_DB from where it is when the rule runs. -->
+        <Pick label="Set to, or change by" value={!!block.relative} onchange={(v) => { setRelative(block, def, v); ed.commit(); }}
+          options={[{ value: false, label: 'to' }, { value: true, label: 'by' }]} />
+        {#if block.relative}
+          <ValueInput def={changeDef(def)} write label="Change in dB" value={block.value} onchange={(v) => { block.value = v || block.value; ed.commit(); }} />
+          <span class="hint">max ±{RELATIVE_MAX_DB}</span>
+        {:else}
+          <ValueInput {def} write value={block.value} onchange={(v) => { block.value = v; ed.commit(); }} />
+        {/if}
+      {:else}
+        <span class="w">to</span>
+        <ValueInput {def} write value={block.value} onchange={(v) => { block.value = v; ed.commit(); }} />
+      {/if}
       {#if def?.confirmAmp}
         <button class="chip" class:on={block.confirmAmp} aria-pressed={!!block.confirmAmp}
           title="Let this rule apply a preset that changes Amp Assign (check the speaker wiring first)"
           onclick={() => { if (block.confirmAmp) delete block.confirmAmp; else block.confirmAmp = true; ed.commit(); }}>{block.confirmAmp ? '✓ ' : ''}allow Amp Assign change</button>
       {/if}
-      {#if def?.onlyLower}
+      {#if def?.onlyLower && !block.relative}
         <button class="chip" class:on={block.onlyLower} aria-pressed={!!block.onlyLower} title="Skip when the volume is already at or below this"
           onclick={() => { if (block.onlyLower) delete block.onlyLower; else block.onlyLower = true; ed.commit(); }}>{block.onlyLower ? '✓ ' : ''}only lower</button>
       {/if}
@@ -97,6 +109,7 @@
 </div>
 
 <style>
+  .hint { font-size: 12px; opacity: 0.7; }
   .block {
     --bg: var(--b-action);
     background: var(--bg); color: var(--b-ink); border-radius: 10px; padding: 6px 8px;

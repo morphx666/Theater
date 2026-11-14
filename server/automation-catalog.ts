@@ -56,6 +56,7 @@ export type PropDef = {
   settleMs?: number; // default time a trigger on this property waits for things to settle
   needsZone?: boolean; // actions are skipped while the main zone is off
   onlyLower?: boolean; // actions may use "only lower, never raise"
+  relative?: boolean; // actions may "change by" a number of dB (at most RELATIVE_MAX_DB) instead of "set to"
 };
 
 // ---------- helpers ----------
@@ -145,7 +146,7 @@ export const CATALOG: PropDef[] = [
 
   // Volume
   { id: 'volume', label: 'Volume', group: 'Volume', type: 'number', unit: 'dB', min: -80, max: 18, step: 0.5,
-    needsZone: true, onlyLower: true,
+    needsZone: true, onlyLower: true, relative: true,
     read: (c) => c.state.volume, write: (v) => [`MV${dbToVol(v as number)}`] },
   { id: 'mute', label: 'Mute', group: 'Volume', type: 'bool', needsZone: true,
     read: (c) => c.state.mute, write: (v) => [v ? 'MUON' : 'MUOFF'] },
@@ -229,7 +230,7 @@ export const CATALOG: PropDef[] = [
       ...SOURCE_ORDER.map((s) => ({ value: s, label: c?.state.inputs[s]?.name || SOURCE_DEFAULT_NAMES[s] || s }))],
     read: (c) => c.state.zone2.source, write: (v) => [`Z2${v}`] },
   { id: 'zone2.volume', label: 'Zone 2 volume', group: 'Zone 2', type: 'number', unit: 'dB', min: -80, max: 18, step: 1,
-    needsZone2: true, onlyLower: true,
+    needsZone2: true, onlyLower: true, relative: true,
     read: (c) => c.state.zone2.volume, write: (v) => [`Z2${dbToVol(v as number)}`] },
   { id: 'zone2.mute', label: 'Zone 2 mute', group: 'Zone 2', type: 'bool', needsZone2: true,
     read: (c) => c.state.zone2.mute, write: (v) => [v ? 'Z2MUON' : 'Z2MUOFF'] },
@@ -311,6 +312,6 @@ export function describeCatalog(ctx: Ctx) {
     options: p.options?.(ctx), writeOptions: p.writeChoices?.(ctx),
     param: p.param && { label: p.param.label, options: p.param.options(ctx) },
     writable: !!(p.write || p.app), writeOnly: !!p.writeOnly, needsZone: !!p.needsZone, needsInput: p.needsInput ?? null,
-    onlyLower: !!p.onlyLower, confirmAmp: !!p.confirmAmp, settleMs: p.settleMs ?? null,
+    onlyLower: !!p.onlyLower, relative: !!p.relative, confirmAmp: !!p.confirmAmp, settleMs: p.settleMs ?? null,
   }));
 }

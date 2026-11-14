@@ -422,6 +422,47 @@ test('volume: only lower, the cap, and nothing while the main zone is off', asyn
   assert.equal(r.last()!.steps[0].note, 'main zone is off');
 });
 
+test('volume: change by up to 6 dB, from the volume when it runs, sent as a fixed value', async () => {
+  const fails = (script: unknown[], msg: RegExp) => assert.throws(() => validate(rule([{ type: 'change', prop: 'input' }], script)), msg);
+  const by = (value: unknown, extra: Record<string, unknown> = {}) => [{ type: 'set', prop: 'volume', value, relative: true, ...extra }];
+  assert.deepEqual(validate(rule([{ type: 'change', prop: 'input' }], by(-3))).script, by(-3));
+  fails(by(6.5), /-6 to \+6/);
+  fails(by(0), /not 0/);
+  fails(by(2.25), /steps/);
+  fails(by(-3, { onlyLower: true }), /only lower/);
+  fails([{ type: 'set', prop: 'zone2.volume', value: 1.5, relative: true }], /steps of 1/);
+  fails([{ type: 'set', prop: 'ps.DEH', value: 'OFF', relative: true }], /change by/);
+
+  const r = await rig({ cap: -36 });
+  on(r); // volume -40
+  const down = await r.eng.save(rule([{ type: 'change', prop: 'mute', settleMs: 0 }], by(-3)));
+  r.eng.observe();
+  r.line('MUON');
+  await r.clock.tick(100);
+  assert.deepEqual(r.sent, ['MV37']); // -43 dB: an absolute value, never MVDOWN
+  assert.equal(r.last()!.steps[0].what, 'change Volume by -3 dB');
+  assert.equal(r.last()!.steps[0].note, 'to -43 dB');
+
+  // Up: still within the cap (the guard clamps it like any command).
+  const up = r.eng.test(rule([{ type: 'change', prop: 'mute' }], by(6)));
+  assert.deepEqual(up.steps[0].cmds, ['MV43']); // -43 + 6 = -37
+  await r.eng.remove(down.id);
+  applyLine(r.state, 'MV42'); // -38
+  r.sent.length = 0;
+  const b = await r.eng.save(rule([{ type: 'change', prop: 'mute', to: false, settleMs: 0 }], by(6)));
+  r.line('MUOFF');
+  await r.clock.tick(100);
+  assert.deepEqual(r.sent, ['MV44']); // -36, the cap
+  assert.equal(r.last()!.steps[0].note, 'limited by the volume cap');
+  await r.eng.remove(b.id);
+
+  // At the bottom of the range, or with the volume unknown: nothing to do.
+  applyLine(r.state, 'MV00');
+  assert.equal(r.eng.test(rule([{ type: 'change', prop: 'mute' }], by(-3))).steps[0].note, 'already at the bottom');
+  r.state.volume = null;
+  assert.equal(r.eng.test(rule([{ type: 'change', prop: 'mute' }], by(-3))).steps[0].note, 'volume unknown');
+});
+
 test('an action the receiver ignores is reported as not applied', async () => {
   const r = await rig({ echo: (c) => !c.startsWith('PSLFE') }); // like LFE with a PCM source
   on(r);

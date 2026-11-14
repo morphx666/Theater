@@ -2,6 +2,9 @@
 // live ✔ / ✘ (see docs/AUTOMATION.md §3).
 
 export type PropType = 'number' | 'enum' | 'bool' | 'text' | 'set';
+
+/** A volume action "change by" moves the volume at most this many dB, up or down (fixed for now). */
+export const RELATIVE_MAX_DB = 6;
 export type Value = number | string | boolean | string[] | null;
 
 /** Operators allowed for each property type. `known` / `unknown` work for every type. */

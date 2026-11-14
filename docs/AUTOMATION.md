@@ -22,7 +22,7 @@ Example rules:
 | **Automation** | One named rule that can be turned on and off: a *when* block with a script under it. | one script |
 | **Trigger** | The *when* block: "when P changes", narrowed with *from* / *to*, or "when ⟨condition⟩ becomes true". Several triggers can share one script ("when A … or when B …"). | hat block |
 | **Condition** | A true/false block: a comparison ("Volume ≥ −20 dB", "Dialog Enhancer is not Off"), a channel check ("C and FHL present"), or **all of** / **any of** / **not** around other conditions. | boolean reporter (hexagon) |
-| **Action** | "Set P to value": always a fixed value, never relative ("Volume −3 dB" would stack on every re-run). Phase 4 adds app actions (apply a speaker preset, play a HEOS favorite). | "set … to …" |
+| **Action** | "Set P to value": a fixed value. Volume can also be *changed by* up to ±6 dB from where it is when the rule runs (`RELATIVE_MAX_DB`; it stacks on every re-run, so the limit is small, and loop protection still applies). Phase 4 adds app actions (apply a speaker preset, play a HEOS favorite). | "set … to …" |
 | **Control** | *if / else*, *wait N seconds*, *wait until ⟨condition⟩ (up to N s)*, *stop*. | control blocks |
 | **Run** | One pass through the script after a trigger fires. | |
 
@@ -68,7 +68,7 @@ A rule is a **tree**, not a graph: a script is a list of blocks, and an *if* hol
 | `becomes` | `cond`, `settleMs?` | "when ⟨Volume > −20 dB⟩ becomes true", "when ⟨C and FHL present⟩ becomes true" |
 | `schedule` | `at` (HH:MM), `days` | phase 4 |
 | **Script** | | |
-| `set` | `prop`, `param?`, `value`, `onlyLower?` (volume) | fixed values only |
+| `set` | `prop`, `param?`, `value`, `onlyLower?` (volume), `relative?` (volume: `value` is a change of at most ±6 dB, not 0) | fixed values, or a volume change |
 | `if` | `cond`, `then[]`, `else[]` | |
 | `wait` | `ms` (≤ 10 min) | |
 | `waitUntil` | `cond`, `timeoutMs` (≤ 10 min), `onTimeout`: `continue` \| `stop` | re-checks on every change of the state and once a second |
@@ -113,6 +113,7 @@ type PropDef = {
   settleMs?: number;
   needsZone?: boolean;                            // the action is skipped while the main zone is off
   onlyLower?: boolean;                            // the action supports "only lower, never raise"
+  relative?: boolean;                             // the action supports "change by" (volume, up to RELATIVE_MAX_DB)
 };
 ```
 
@@ -121,13 +122,13 @@ Values are always in **human units**: dB numbers, enum ids with labels, booleans
 | Group | Properties (trigger + condition) | Writable (action) | Phase |
 |---|---|---|---|
 | Power | Receiver power, Main zone power | both | 1 |
-| Volume | Master volume (dB), Mute | volume (fixed value, capped, optional *only lower*), mute | 1 |
+| Volume | Master volume (dB), Mute | volume (fixed value with optional *only lower*, or change by ±6 dB; capped), mute | 1 |
 | Input & signal | Input; Sound mode (text); Quick Select; Decoder; Sample rate; Audio format (`3/2/.1`); Input channels (count, layout, each channel, list); Active speakers (count, each speaker, list) | input; sound mode (Pure Direct, Direct, Stereo, Multi Ch Stereo, Auto); Quick Select recall | 1 |
 | Audio | MultEQ, Dynamic EQ, Ref. level, Dynamic Volume; Dialog Enhancer; Subwoofer on/off and level; LFE; Cinema EQ; Tone control, bass, treble; Loudness management; Dynamic compression; Restorer; Audio delay; Neural:X; Center spread | all | 1 |
 | Speakers | Channel level (per channel) | channel level | 1 |
 | Speakers | Speaker preset (app preset) | apply speaker preset (app action; optional *allow Amp Assign change*) | done |
 | Video | Resolution, HDR, color, depth (in / out) | — | done |
-| Zone 2 | Power, source, volume, mute | all (volume capped, *only lower*; skipped while Zone 2 is off) | done |
+| Zone 2 | Power, source, volume, mute | all (volume capped, *only lower* or change by ±6 dB; skipped while Zone 2 is off) | done |
 | General | Sleep timer, ECO, Dimmer, Auto standby, All Zone Stereo, Bluetooth transmitter and output | all | done |
 | Tuner | Band, frequency, preset | band, preset (skipped unless the input is Tuner; the guard enforces it too) | done |
 | HEOS | Play state, title, artist, album, station | play / pause / stop, next / previous, play favorite N (app actions) | done |
@@ -224,7 +225,7 @@ Server-side validation on save (never trust the client): known block types, know
 
 - **Every action goes through `sendCommand` → `guard()`.** Same allowlist, same `BLOCKED` list, same volume cap (`effectiveCap`), same tuner rule. The log line names the automation.
 - The catalog's `write` only builds commands for listed properties; there is no raw-command action.
-- **Volume:** fixed values only (`MV<n>`); automations never send `MVUP` / `MVDOWN`. The guard clamps to the cap. **Only lower, never raise** skips the action when the volume is already at or below the value, so a rule can act as a ceiling.
+- **Volume:** always sent as a fixed value (`MV<n>`); automations never send `MVUP` / `MVDOWN`. *Change by* (at most ±6 dB, `RELATIVE_MAX_DB` in automation-ops.ts) works out current + change when the action runs, within the range and steps, and sends that; it is skipped while the volume is unknown or already at the end of the range. The guard clamps to the cap. **Only lower, never raise** skips the action when the volume is already at or below the value, so a rule can act as a ceiling.
 - **Loops** (A sets X, which triggers B, which sets Y, which triggers A…):
   - Needless actions are skipped (§5), so a second pass usually finds nothing to change.
   - A rule that runs more than 10 times in 60 s **turns itself off**, with a log line and a reason the UI shows.
@@ -324,7 +325,7 @@ Made on 2026-11-13:
 
 1. **Editor:** Scratch-style blocks, built by hand in Svelte (no dependency). This replaces the first choice, a Node-RED-style node editor with Svelte Flow: the rules work like Scratch scripts (events, if / else, wait, wait until, set), not like Node-RED's data flows, and a vertical block stack works better on a phone than a canvas with wires.
 2. **Placement:** one **Automation** panel in Setup › App & Info that lists every rule, with buttons to edit and delete them and to create a new one; the editor opens full screen from there. No new Setup tab, no new page.
-3. **Volume:** actions set fixed values only, never relative steps; still capped by the guard, with an optional *Only lower, never raise* switch.
+3. **Volume:** actions set a fixed value (with an optional *Only lower, never raise* switch) or change it by at most ±6 dB, always sent as a fixed value and capped by the guard.
 4. **"Channel number"** means the number of channels in the input stream (2 = stereo, 3 = stereo + LFE, 6 = 5.1, …), and rules can also test **individual channels** ("if C and FHL then…") with the channel picker.
 5. **Date / time:** schedule triggers and time conditions in phase 4.
 6. **Waiting:** *wait* and *wait until* (with a timeout) instead of a general loop block; every run ends.

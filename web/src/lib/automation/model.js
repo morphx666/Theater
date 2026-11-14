@@ -1,9 +1,20 @@
 // Pure helpers for the automation editor: new blocks, moving blocks around the tree, labels, the one-line
 // summary, and a light completeness check. The server validates every save (server/automation.ts); the
 // operator lists come from the same module the server uses, so the two can't drift apart.
-import { OPS, argKind } from '../../../../server/automation-ops.ts';
+import { OPS, argKind, RELATIVE_MAX_DB } from '../../../../server/automation-ops.ts';
 
-export { OPS, argKind };
+export { OPS, argKind, RELATIVE_MAX_DB };
+
+/** A volume action's "to" (a fixed value) or "by" (a change of at most RELATIVE_MAX_DB): switch it, with safe
+ *  starting values (to: -40 dB, only lower; by: -3 dB). */
+export const RELATIVE_START = -3;
+export function setRelative(node, def, on) {
+  if (on) { node.relative = true; node.value = RELATIVE_START; delete node.onlyLower; }
+  else { delete node.relative; node.value = defaultValue(def, true); if (def.onlyLower) node.onlyLower = true; }
+}
+/** The field for a "change by" amount: the property, limited to ±RELATIVE_MAX_DB. */
+export const changeDef = (def) => def && { ...def, min: -RELATIVE_MAX_DB, max: RELATIVE_MAX_DB };
+const signed = (v) => (typeof v === 'number' && v > 0 ? `+${v}` : v);
 
 export const OP_LABELS = {
   eq: '=', ne: '≠', lt: '<', le: '≤', gt: '>', ge: '≥', between: 'between',
@@ -76,6 +87,7 @@ export function fitToProp(node, def, kind) {
     if (!OPS[def.type].includes(node.op)) node.op = OPS[def.type][0];
     fitValue(node, def);
   } else if (kind === 'set') {
+    delete node.relative;
     node.value = defaultValue(def, true);
     if (def.onlyLower) node.onlyLower = true; else delete node.onlyLower;
   } else if (kind === 'change') {
@@ -164,7 +176,7 @@ function blocksText(list, catalog, out) {
     if (out.length > 4) return;
     const def = catalog.find((p) => p.id === b.prop);
     switch (b.type) {
-      case 'set': out.push(`set ${propText(def, b.param)} to ${valueText(def, b.value)}`); break;
+      case 'set': out.push(b.relative ? `change ${propText(def, b.param)} by ${valueText(def, signed(b.value))}` : `set ${propText(def, b.param)} to ${valueText(def, b.value)}`); break;
       case 'findMode': out.push(`find sound mode "${b.text}"`); break;
       case 'if': out.push(`if ${condText(b.cond, catalog)}`); blocksText(b.then, catalog, out); break;
       case 'wait': out.push(`wait ${fmtMs(b.ms)}`); break;
