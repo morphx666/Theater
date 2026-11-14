@@ -35,7 +35,8 @@ import type { AvrState } from './parse.ts';
 
 export type Family = 'pcm' | 'dolby' | 'dts' | 'other';
 export type Group = 'surround' | 'stereo' | 'direct';
-export type ModeInfo = { mode: string; label: string; group: Group };
+export type Kind = 'source' | 'upmix' | 'effect';
+export type ModeInfo = { mode: string; label: string; group: Group; kind?: Kind };
 
 export const BUTTONS = ['MSMOVIE', 'MSMUSIC', 'MSGAME'] as const;
 
@@ -58,6 +59,16 @@ export function familyOf(key: string | null): Family {
   if (/DOLBY|TRUEHD|^DD/.test(key)) return 'dolby';
   return 'other';
 }
+
+/** What a surround mode does with the signal: plays it as it is ("DTS HD MSTR" for DTS-HD MSTR, "DOLBY ATMOS"), upmixes
+ *  it ("+ Neural:X", "+ DSur", Dolby Surround with PCM), or adds an effect (Virtual, Rock Arena…). */
+export function kindOf(mode: string, decoder: string | null | undefined): Kind {
+  const norm = (x: string) => x.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (decoder && norm(mode) === norm(decoder)) return 'source';
+  if (/\+|NEURAL|DSUR|DOLBY SURROUND|AURO/.test(mode)) return 'upmix';
+  return /^(DTS|DOLBY|MULTI CH IN)/.test(mode) ? 'source' : 'effect';
+}
+const KIND_ORDER: Kind[] = ['source', 'upmix', 'effect'];
 
 export function groupOf(mode: string): Group {
   if (/^(PURE DIRECT|DIRECT)/.test(mode)) return 'direct';
@@ -340,8 +351,13 @@ export class SoundModes {
   summary() {
     const st = this.io.state();
     const key = signalKey(st);
-    const available: ModeInfo[] = [...this.modesFor(key).map((mode) => ({ mode, label: this.label(mode), group: 'surround' as Group })), ...FIXED];
     const current = st.surround;
+    // Surround modes: the one that plays the source as it is first, then upmixes, then effects, each by name.
+    const modes = this.modesFor(key);
+    if (current && groupOf(current) === 'surround' && !modes.includes(current)) modes.push(current); // not learned yet
+    const surround: ModeInfo[] = modes.map((mode) => ({ mode, label: this.label(mode), group: 'surround' as Group, kind: kindOf(mode, st.decoder) }))
+      .sort((a, b) => KIND_ORDER.indexOf(a.kind!) - KIND_ORDER.indexOf(b.kind!) || a.label.localeCompare(b.label));
+    const available: ModeInfo[] = [...surround, ...FIXED];
     if (current && !available.some((m) => m.mode === current)) available.unshift({ mode: current, label: this.label(current), group: groupOf(current) });
     return { signal: key, signalName: st.decoder?.trim() || null, family: familyOf(key), native: this.nativeFor(key) ?? null,
       current, label: current ? this.label(current) : null,

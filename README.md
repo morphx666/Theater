@@ -22,6 +22,12 @@ Theater is a fast web remote for the **Denon AVR-X1700H** receiver. You run it o
 
 Every page has a **Customize** button. Tap it, then drag panels where you want them and make the important ones wider, up to three columns. Some panels have extra options in Customize mode too. You can lock the volume dial so a stray swipe doesn't change the volume, or give the tuner a green, amber or blue display. Your layout and options are saved on the server, so your phone, tablet and laptop all show the same setup.
 
+### Sound modes
+
+The Sound mode panel groups the modes as Surround, Stereo and Direct. The arrow on each group lists the modes the receiver offers for the signal playing. In the Surround list, the mode that plays the source as it is comes first, then the upmixed versions (+ Neural:X, + DSur), then the effects.
+
+The receiver offers fewer modes than its manual lists, so the app learns from it which ones it really has. Most modes switch with one command. A few have no command of their own: the receiver only reaches them through the remote's Movie, Music and Game buttons, which step through the modes one at a time. For those, the app presses the button that gets there in the fewest steps and remembers where each button left off, so the next time is usually a single step. You may hear the audio drop a few times while it steps. With DTS-HD, for example, DTS-HD MSTR and DTS-HD + DSur sometimes need this; other modes never do.
+
 ## Requirements
 
 - A Denon AVR-X1700H connected to your network by Ethernet or Wi-Fi.

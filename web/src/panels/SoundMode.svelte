@@ -19,6 +19,8 @@
     { id: 'direct', label: 'Direct', hint: 'Unprocessed; Pure Direct also turns off the display', tap: () => 'MSDIRECT' },
   ];
   const modes = (g) => (sm?.available ?? []).filter((m) => m.group === g);
+  // Headings in the Surround list (the server sorts it: the mode that plays the source as it is first).
+  const KINDS = { source: 'As the source', upmix: 'Upmixed', effect: 'Effects' };
   const current = $derived((sm?.available ?? []).find((m) => m.mode === st?.surround) ?? null);
 
   // One menu for the three groups, tied to the open group's button with CSS anchor positioning (the browser keeps
@@ -91,7 +93,11 @@
 
 <div class="menu" popover="auto" role="menu" bind:this={menu} ontoggle={(e) => { if (e.newState === 'closed') closed(); }}>
   {#if openGroup}
-    {#each modes(openGroup) as m (m.mode)}
+    {@const list = modes(openGroup)}
+    {#each list as m, i (m.mode)}
+      {#if m.kind && m.kind !== list[i - 1]?.kind && new Set(list.map((x) => x.kind)).size > 1}
+        <div class="head">{KINDS[m.kind]}</div>
+      {/if}
       <button role="menuitemradio" aria-checked={m.mode === st?.surround} class:sel={m.mode === st?.surround} onclick={() => pick(m.mode)}>
         <span class="check">{m.mode === st?.surround ? '✓' : ''}</span>{m.label}
       </button>
@@ -139,6 +145,8 @@
   .check { width: 14px; flex: none; }
   .empty { padding: 10px 12px; }
   .sep { height: 1px; background: var(--line); margin: 4px 6px; }
+  .head { padding: 8px 12px 2px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .head:not(:first-child) { margin-top: 4px; border-top: 1px solid var(--line); padding-top: 10px; }
   .menu button.learn { color: var(--muted); font-size: 13px; }
   .menu button.learn.armed { color: var(--warn, var(--accent)); }
 </style>

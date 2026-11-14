@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { applyLine, emptyState, type AvrState } from './parse.ts';
-import { SoundModes, signalKey, familyOf, groupOf, fixedCommand, nativeCommand, decoderMode } from './sound-modes.ts';
+import { SoundModes, signalKey, familyOf, groupOf, fixedCommand, nativeCommand, decoderMode, kindOf } from './sound-modes.ts';
 
 /**
  * A receiver that behaves like the X1700H (tested 2026-11-14), on a fake clock. Each button cycles through
@@ -141,6 +141,20 @@ test('cycling starts with the button that remembers the mode: one switch', async
   assert.deepEqual(r.moves, ['DTS HD MSTR']);
 });
 
+test('surround list: the mode that plays the source as it is first, then upmixes, then effects, by name', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sound-modes-'));
+  await fs.writeFile(path.join(dir, 'sound-modes.json'), JSON.stringify({ version: 2, names: {}, signals: { 'DTS-HDMSTR': {
+    modes: ['DTS HD+NEURAL:X', 'MONO MOVIE', 'DTS HD MSTR', 'VIRTUAL', 'VIDEO GAME', 'ROCK ARENA', 'MATRIX', 'DTS HD+DSUR', 'JAZZ CLUB'] } } }));
+  const r = await rig([...DTS_HD, 'MSDTS HD+NEURAL:X'], [], '', dir);
+  assert.deepEqual(r.sm.summary().available.filter((m) => m.group === 'surround').map((m) => `${m.kind}:${m.label}`), [
+    'source:DTS-HD MSTR', 'upmix:DTS-HD + DSur', 'upmix:DTS-HD + Neural:X',
+    'effect:Jazz Club', 'effect:Matrix', 'effect:Mono Movie', 'effect:Rock Arena', 'effect:Video Game', 'effect:Virtual']);
+  assert.equal(kindOf('DOLBY ATMOS', 'Dolby Atmos'), 'source');
+  assert.equal(kindOf('DOLBY AUDIO-DD', 'Dolby Audio - DD'), 'source');
+  assert.equal(kindOf('DOLBY AUDIO-DSUR', 'PCM'), 'upmix');
+  assert.equal(kindOf('DTS SURROUND', 'DTS'), 'source');
+});
+
 test('hints fill the lists before anything is learned', async () => {
   const r = await rig(['SYSDA PCM', 'SSINFAISFOR 2/0/.0', 'MSSTEREO'], ['DOLBY AUDIO-DSUR', 'MCH STEREO', 'STEREO'], 'DOLBY AUDIO-DSUR');
   assert.deepEqual(r.sm.summary().available.map((m) => `${m.group}:${m.label}`),
@@ -209,7 +223,7 @@ test('learns modes, names and the native mode from what the receiver reports', a
   await wait(30);
   const s = r.sm.summary();
   assert.equal(s.native, 'DTS SURROUND');
-  assert.deepEqual(s.available.find((m) => m.mode === 'DTS SURROUND'), { mode: 'DTS SURROUND', label: 'DTS Surround', group: 'surround' });
+  assert.deepEqual(s.available.find((m) => m.mode === 'DTS SURROUND'), { mode: 'DTS SURROUND', label: 'DTS Surround', group: 'surround', kind: 'source' });
 
   // A mode reported while the signal is changing is not learned for the old signal.
   applyLine(r.st, 'MSDOLBY AUDIO-DSUR');
@@ -239,7 +253,7 @@ test('the first file format is migrated: lists per decoder, probed cycles count 
   const pcm = await rig(['SYSDA PCM', 'SSINFAISFOR 2/0/.0', 'MSSTEREO'], [], '', dir);
   assert.equal(pcm.sm.summary().canLearn, false); // probed
   const dts = await rig([...DTS_HD, 'MSSTEREO'], [], '', dir);
-  assert.deepEqual(surround(dts.sm).slice(0, 3), ['DTS HD+NEURAL:X', 'DTS HD MSTR', 'MONO MOVIE']);
+  for (const m of ['DTS HD+NEURAL:X', 'DTS HD MSTR', 'MONO MOVIE']) assert.ok(surround(dts.sm).includes(m), m);
   assert.equal(dts.sm.summary().native, 'DTS HD+NEURAL:X');
   assert.equal(dts.sm.summary().canLearn, true); // cycled with the remote, but no full cycles recorded
 });
