@@ -9,7 +9,9 @@
   import BlockList from './BlockList.svelte';
   import Trigger from './Trigger.svelte';
   import { auto, loadCatalog, loadRules, act, closeRule, followNames } from './store.svelte.js';
-  import { blankRule, newBlock, newTrigger, listAt, moveBlock, insertBlock, problems, fmtMs } from './model.js';
+  import RuleCode from './RuleCode.svelte';
+  import { loadOpen, saveOpen } from '../remember.js';
+  import { blankRule, newBlock, newTrigger, listAt, moveBlock, insertBlock, problems, outline, fmtMs } from './model.js';
 
   let { id } = $props();
 
@@ -29,6 +31,12 @@
   const dirty = $derived(ed.rule ? json() !== saved : false);
   const issues = $derived(ed.rule ? problems(ed.rule, ed.catalog) : []);
   let showIssues = $state(false);
+
+  // The rule as pseudo code, in a panel on the right that follows every edit. Open or closed is remembered per
+  // device; it starts closed on phones, where it opens over the script.
+  const code = $derived(ed.rule ? outline(ed.rule, ed.catalog) : []);
+  let codeOpen = $state(loadOpen('rulecode', matchMedia('(min-width: 761px)').matches));
+  function toggleCode() { codeOpen = !codeOpen; saveOpen('rulecode', codeOpen); }
 
   followNames();
   $effect(() => { if (ed.catalog && auto.catalog.length && ed.catalog !== auto.catalog) ed.catalog = auto.catalog; }); // fresher names
@@ -257,6 +265,13 @@
           {#if !ed.rule.script.length}<p class="faint small empty">Add blocks from the palette: they run top to bottom when a trigger fires.</p>{/if}
         </div>
       </main>
+
+      <aside class="pseudo" class:open={codeOpen} aria-label="Pseudo code">
+        <button class="ptoggle" aria-expanded={codeOpen} title={codeOpen ? 'Hide pseudo code' : 'Show pseudo code'} onclick={toggleCode}>
+          <Icon name={codeOpen ? 'right' : 'left'} size={16} /><span>Pseudo code</span>
+        </button>
+        {#if codeOpen}<div class="pcode"><RuleCode lines={code} /></div>{/if}
+      </aside>
     </div>
     <button class="btn primary fab" onclick={() => (sheet = !sheet)}>{sheet ? 'Close' : '+ Blocks'}</button>
   {/if}
@@ -302,7 +317,22 @@
   .bar.warn { color: var(--b-event); }
   .pad { padding: 20px; }
 
-  .body { flex: 1; display: grid; grid-template-columns: 240px 1fr; min-height: 0; }
+  .body { flex: 1; display: grid; grid-template-columns: 240px 1fr auto; min-height: 0; position: relative; }
+
+  /* Pseudo code, on the right: a narrow rail when closed (its title reads top to bottom), a column when open. */
+  .pseudo {
+    width: 38px; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+    border-left: 1px solid var(--line); background: var(--bg-2); transition: width 0.2s;
+  }
+  .pseudo.open { width: 300px; }
+  .ptoggle {
+    display: flex; align-items: center; gap: 8px; flex: none; padding: 12px 10px; border: 0; background: transparent; cursor: pointer;
+    font: 11.5px var(--font); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap;
+  }
+  .ptoggle:hover { color: var(--text); }
+  .pseudo:not(.open) .ptoggle { flex: 1; flex-direction: column; }
+  .pseudo:not(.open) .ptoggle span { writing-mode: vertical-rl; }
+  .pcode { flex: 1; width: 300px; overflow-y: auto; padding: 2px 14px 16px; --code-size: 13px; }
   .palette { overflow-y: auto; padding: 12px; border-right: 1px solid var(--line); background: var(--bg-2); display: flex; flex-direction: column; gap: 10px; }
   .search { width: 100%; }
   .hint { margin: -4px 0 0; }
@@ -363,6 +393,12 @@
       padding-bottom: calc(70px + env(safe-area-inset-bottom));
     }
     .palette.open { transform: none; }
+    /* Phones: a small tab at the top right; open, it lies over the script. */
+    .pseudo { position: absolute; top: 8px; right: 0; z-index: 43; width: auto; border: 1px solid var(--line); border-right: 0; border-radius: 10px 0 0 10px; transition: none; }
+    .pseudo.open { top: 0; bottom: 0; width: min(300px, 85%); border-width: 0 0 0 1px; border-radius: 0; box-shadow: var(--shadow); }
+    .pseudo:not(.open) .ptoggle { flex-direction: row; padding: 8px; }
+    .pseudo:not(.open) .ptoggle span { display: none; }
+    .pcode { width: auto; }
     .fab { display: inline-flex; position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 46; }
     .script { padding: 14px 12px 120px; }
     .stackwrap { margin-left: 14px; min-width: min(100% - 14px, 280px); }
