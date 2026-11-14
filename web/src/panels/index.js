@@ -40,6 +40,7 @@ import HeosAccount from './HeosAccount.svelte';
 import Language from './Language.svelte';
 import SpeakerPresets from './SpeakerPresets.svelte';
 import SpeakerPresetManager from './SpeakerPresetManager.svelte';
+import Automation from './Automation.svelte';
 
 /** section = page it lives on; tab = Setup sub-tab; wide = spans the full row. */
 export const PANEL_LIST = [
@@ -91,6 +92,7 @@ export const PANEL_LIST = [
   { id: 'display-privacy', title: 'Display & privacy', section: 'setup', tab: 'general', comp: DisplayPrivacy },
   { id: 'language', title: 'Language', section: 'setup', tab: 'general', comp: Language },
   { id: 'app-settings', title: 'This app', section: 'setup', tab: 'app', comp: AppSettings },
+  { id: 'automation', title: 'Automation', section: 'setup', tab: 'app', comp: Automation, wide: true },
   { id: 'receiver-info', title: 'Receiver', section: 'setup', tab: 'app', comp: ReceiverInfo },
   { id: 'backups', title: 'Setup backups', section: 'setup', tab: 'app', comp: Backups },
 ];

@@ -21,15 +21,20 @@
     { id: 'setup', label: 'Setup', icon: 'gear', comp: Setup },
   ];
 
-  // #<page>, or #setup/<tab> to open a Setup tab (used by the links on Home panels).
+  // #<page>, or #setup/<tab> to open a Setup tab (used by the links on Home panels),
+  // or #setup/app/rule/<id> to open the automation editor over the page (id "new" for a new rule).
   function fromHash() {
-    const [p, sub] = (location.hash.slice(1) || 'home').split('/');
+    const [p, sub, kind, id] = (location.hash.slice(1) || 'home').split('/');
     if (p === 'setup' && sub) ui.setupTab = sub;
+    ui.rule = p === 'setup' && kind === 'rule' ? decodeURIComponent(id || 'new') : null;
     return p;
   }
   let page = $state(fromHash());
   const Current = $derived(PAGES.find((p) => p.id === page)?.comp ?? Home);
-  $effect(() => { history.replaceState(null, '', '#' + page); if (page !== 'home') ui.editing = false; });
+  $effect(() => {
+    history.replaceState(history.state, '', '#' + page + (ui.rule ? `/app/rule/${encodeURIComponent(ui.rule)}` : ''));
+    if (page !== 'home') ui.editing = false;
+  });
   window.addEventListener('hashchange', () => (page = fromHash()));
 
   connect();
@@ -123,6 +128,10 @@
 
 <IdleDimmer />
 <PresetConfirm />
+{#if ui.rule && st}
+  <!-- The automation editor is loaded only when it's opened. -->
+  {#await import('./lib/automation/Editor.svelte') then { default: Editor }}<Editor id={ui.rule} />{/await}
+{/if}
 
 <style>
   .shell { display: flex; min-height: 100dvh; }

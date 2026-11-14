@@ -1,6 +1,6 @@
 # Automation — implementation plan
 
-Status: **phase 1 (engine, no UI) done** on branch `automation`: tested against a fake receiver, not yet on the real one. Phase 2 (panel and editor) is next. Decisions are in §11.
+Status: **phases 1 (engine) and 2 (panel and editor) done** on branch `automation`. Phase 3 (live feedback) is next. Decisions are in §11.
 
 Goal: let the user build rules of the form **when (trigger) → if (conditions) → do (actions)** in a graphical, **Scratch-style block editor**. The rules run on the server, so they keep working when no browser is open (the Pi runs 24/7).
 
@@ -310,7 +310,7 @@ Live testing on the receiver follows the standing rule: **automations may lower 
 Each phase ends with a commit that works on its own.
 
 1. **Engine without UI.** Operators, catalog (Power, Volume, Input & signal with the channel properties, Audio, channel levels), change detection, engine (triggers, if/else, wait, wait until, stop, set), storage, REST, safety limits, tests. Usable by posting JSON.
-2. **Panel and editor.** Automation panel (list, on/off, run, edit, duplicate, delete, new); full-screen block editor with palette, drag-and-drop, field editors, the channel picker, undo / redo, save and validation.
+2. **Panel and editor.** *(done)* Automation panel (list, on/off, run, edit, duplicate, delete, new); full-screen block editor with palette, drag-and-drop, field editors, the channel picker, undo / redo, save and validation, and Test (dry run) as a list of steps. New volume actions start at -40 dB with *only lower* on.
 3. **Live feedback.** ✔ / ✘ and current values in the blocks, run highlighting, Test (dry run), run history.
 4. **Rest of the catalog, and time.** Zone 2, Tuner, HEOS, speaker presets (with the Amp Assign confirmation), General, video properties. **Schedule trigger** ("at 23:00 on weekdays") and **time conditions** ("time is between 22:00 and 07:00", "day is Sat or Sun"), in the Pi's local time zone (shown in the editor); a missed time (server down) is not run later. Block comments.
 5. **Later, if wanted.** `restore` block, a small allowlist of setup-API actions, templates ("Night mode", "Movie with Atmos"), import / export as JSON.
