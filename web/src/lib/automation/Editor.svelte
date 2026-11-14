@@ -324,6 +324,7 @@
   .editor :global(.f) {
     background: color-mix(in srgb, white 92%, transparent); color: #141821; border: 0; border-radius: 6px;
     padding: 3px 6px; font: 13px var(--font); min-height: 26px; width: auto; max-width: 100%;
+    color-scheme: light; /* the fields are light: their open lists must use light colors too (the app is dark) */
   }
   .editor :global(select.f[multiple]) { min-height: 60px; }
 
