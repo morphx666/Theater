@@ -112,7 +112,7 @@ test('learns modes per signal, names from SYSMI, and the native mode', async () 
   await wait(30);
   const s = r.sm.summary();
   assert.equal(s.native, 'DTS SURROUND');
-  assert.deepEqual(s.available[0], { mode: 'DTS SURROUND', label: 'DTS Surround', group: 'surround' });
+  assert.deepEqual(s.available.find((m) => m.mode === 'DTS SURROUND'), { mode: 'DTS SURROUND', label: 'DTS Surround', group: 'surround' });
 
   // A mode reported while the signal is changing is not learned for the old signal.
   applyLine(r.st, 'MSDOLBY AUDIO-DSUR');
@@ -121,7 +121,7 @@ test('learns modes per signal, names from SYSMI, and the native mode', async () 
   await wait(30);
   applyLine(r.st, 'SYSDA DTS');
   applyLine(r.st, 'MSSTEREO');
-  assert.deepEqual(r.sm.summary().available.filter((m) => m.group === 'surround').map((m) => m.mode), ['DTS SURROUND']);
+  assert.deepEqual(r.sm.summary().available.filter((m) => m.group === 'surround').map((m) => m.mode), ['DTS HD+NEURAL:X', 'DTS SURROUND']); // seed + learned
 
   // Saved and loaded back.
   await wait(1100);
