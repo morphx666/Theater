@@ -220,11 +220,11 @@ function stepPieces(b, catalog) {
   const def = catalog.find((p) => p.id === b.prop);
   switch (b.type) {
     case 'set': return b.relative
-      ? [verb('change '), ...propPieces(def, b.param), op(' by '), ...valPieces(def, signed(b.value))]
-      : [verb('set '), ...propPieces(def, b.param), op(' to '), ...valPieces(def, b.value), ...(b.onlyLower ? [op(' (only lower)')] : [])];
-    case 'findMode': return [verb('find sound mode '), val(`"${b.text}"`)];
-    case 'wait': return [verb('wait '), val(fmtMs(b.ms))];
-    case 'waitUntil': return [verb('wait until '), ...condPieces(b.cond, catalog)];
+      ? [verb('change'), plain(' '), ...propPieces(def, b.param), op(' by '), ...valPieces(def, signed(b.value))]
+      : [verb('set'), plain(' '), ...propPieces(def, b.param), op(' to '), ...valPieces(def, b.value), ...(b.onlyLower ? [op(' (only lower)')] : [])];
+    case 'findMode': return [verb('find sound mode'), plain(' '), val(`"${b.text}"`)];
+    case 'wait': return [verb('wait'), plain(' '), val(fmtMs(b.ms))];
+    case 'waitUntil': return [verb('wait until'), plain(' '), ...condPieces(b.cond, catalog)];
     case 'stop': return [verb('stop')];
   }
   return [plain('?')];

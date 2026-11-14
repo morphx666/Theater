@@ -108,6 +108,9 @@
   .ln .prop { color: var(--syn-prop); }
   .ln .op { color: var(--muted); }
   .ln .val { color: var(--syn-val); }
+  /* Names stay in one piece ("Fire TV Stick", "Speaker preset", "-3 dB"): a name that doesn't fit moves to the
+     next line whole; only one longer than a whole line wraps inside. */
+  .ln .prop, .ln .val, .ln .verb { display: inline-block; max-width: 100%; text-indent: 0; }
   .warn { color: var(--bad); }
   .pill.run { font-size: 11px; padding: 1px 8px; color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
   /* Every button as wide as the widest; icons in one column, the text after them. */
