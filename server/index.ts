@@ -245,6 +245,7 @@ async function refreshFavorites() {
 }
 const automationCtx = () => ({
   state, audioMap, nowPlaying: heos.now, presets: speakerPresets.summary(), favorites: heosFavorites, conn,
+  soundModeChoices: soundModes.allModes(),
   videoInfo: decodeVideo(state.video, signalCodes),
 });
 const automations = new Automations(DATA, {
@@ -253,10 +254,15 @@ const automations = new Automations(DATA, {
   log: (m) => log(m),
   changed: () => scheduleBroadcast(),
   run: (r) => broadcast({ type: 'automation-run', run: r }),
-  findMode: (text, back) => soundModes.select({ text }, { back }),
+  findMode: (text, back) => soundModes.select({ text }, { back, waitSignalMs: 6000 }),
   // App actions: the same code paths as the panels (speaker presets serialize and mute; HEOS goes to the player).
   app: async (a) => {
     try {
+      if (a.kind === 'soundMode') {
+        if (a.mode === 'AUTO') { const r = sendCommand('MSAUTO', 'automation'); return { ok: r.ok, note: r.reason }; }
+        const r = await soundModes.select({ exact: a.mode }, { waitSignalMs: 6000 });
+        return { ok: r.ok, note: r.ok ? undefined : r.note };
+      }
       if (a.kind === 'speakerPreset') await speakerPresets.apply(a.id, { confirmAmp: a.confirmAmp });
       else if (a.kind === 'heos') await heos.transport(a.action);
       else await heos.playFavorite(a.index);

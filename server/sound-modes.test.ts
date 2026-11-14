@@ -235,3 +235,26 @@ test('data saved by the earlier bugs is cleaned up on load', async () => {
   assert.equal(r.sm.label('VIDEO GAME'), 'Video Game');
   assert.equal(r.sm.summary().canLearn, true); // the one-mode "cycles" were dropped
 });
+
+test('every known mode for the editor, grouped by the signals it was seen with', async () => {
+  const r = await rig([...DTS_HD, 'MSDTS HD MSTR'], [], '');
+  const all = r.sm.allModes();
+  const find = (m: string) => all.find((x) => x.value === m);
+  assert.equal(find('DOLBY AUDIO-DSUR')?.group, 'With Stereo PCM / Multi-channel PCM');
+  assert.deepEqual(find('DTS HD+NEURAL:X'), { value: 'DTS HD+NEURAL:X', label: 'DTS-HD + Neural:X', group: 'With DTS-HD MSTR' });
+  assert.deepEqual(all.slice(-5).map((x) => x.value), ['STEREO', 'MCH STEREO', 'DIRECT', 'PURE DIRECT', 'AUTO']);
+  assert.equal(new Set(all.map((x) => x.value)).size, all.length); // each mode once
+});
+
+test('after an input change, a selection waits a little for the new signal', async () => {
+  const cycle = ['DTS HD+DSUR', 'DTS HD+NEURAL:X', 'MCH STEREO', 'STEREO', 'DTS HD MSTR'];
+  const r = await rig(['MSSTEREO'], cycle, ''); // no decoder yet
+  const sm = new SoundModes(r.dir, {
+    state: () => r.st, cmd: r.cmd, settleMs: 5, now: () => r.clock.now,
+    sleep: async (ms) => { r.clock.now += ms; if (r.clock.now >= 1500 && !r.st.decoder) for (const l of DTS_HD) applyLine(r.st, l); },
+  });
+  await sm.load();
+  const res = await sm.select({ text: 'neural' }, { waitSignalMs: 6000 });
+  assert.equal(res.ok, true);
+  assert.equal(r.st.surround, 'DTS HD+NEURAL:X');
+});

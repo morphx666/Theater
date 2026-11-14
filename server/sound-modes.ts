@@ -77,6 +77,7 @@ const FIXED: ModeInfo[] = [
 ];
 
 type Signal = {
+  name?: string; // the decoder as the receiver shows it ("DTS-HD MSTR"), for the editor's lists
   modes: string[]; // surround modes seen on this receiver with this signal
   native?: string | null; // what MSDOLBY DIGITAL / MSDTS SURROUND selected; null = they're ignored with this signal
   cycles?: Partial<Record<(typeof BUTTONS)[number], string[]>>; // each button's full cycle
@@ -97,6 +98,10 @@ const HINTS: Record<string, { modes: string[]; native?: string | null }> = {
   'DOLBYAUDIO-DD': { modes: ['DOLBY AUDIO-DD+NEURAL:X'] },
   // MSDTS SURROUND and MSDOLBY DIGITAL are both ignored with DTS-HD MSTR: no native mode.
   'DTS-HDMSTR': { modes: ['DTS HD+NEURAL:X', 'DTS HD MSTR', 'DTS HD+DSUR', 'VIDEO GAME', 'VIRTUAL'], native: null },
+};
+
+const HINT_SIGNAL_NAMES: Record<string, string> = {
+  'PCM:2CH': 'Stereo PCM', 'PCM:MULTI': 'Multi-channel PCM', DOLBYATMOS: 'Dolby Atmos', 'DOLBYAUDIO-DD': 'Dolby Audio - DD', 'DTS-HDMSTR': 'DTS-HD MSTR',
 };
 
 /** The first file format (one list per family) -> per decoder. Only the families whose decoder is known. */
@@ -159,6 +164,7 @@ export class SoundModes {
       for (const [key, s] of Object.entries(raw.signals ?? {}) as [string, any][]) {
         if (!okText(key) || !s || typeof s !== 'object') continue;
         const sig = this.sig(key);
+        if (okText(s.name)) sig.name = s.name;
         sig.modes = (Array.isArray(s.modes) ? s.modes : []).filter(okText);
         if (okText(s.native) || s.native === null) sig.native = s.native;
         // A real cycle has at least two modes; shorter ones were recorded by an earlier bug (a press that only
@@ -219,6 +225,8 @@ export class SoundModes {
       if (s.surround !== mode || signalKey(s) !== key || groupOf(mode) !== 'surround') return;
       const sig = this.sig(key);
       let changed = false;
+      const name = s.decoder?.trim();
+      if (key.startsWith('PCM') ? !sig.name : name && sig.name !== name) { sig.name = key.startsWith('PCM') ? HINT_SIGNAL_NAMES[key] : name; changed = true; }
       if (!sig.modes.includes(mode)) { sig.modes.push(mode); changed = true; this.io.log?.(`sound mode learned for ${key}: ${mode}`); }
       if (expect && sig.native !== mode) { sig.native = mode; changed = true; }
       if (changed) { this.save(); this.io.changed?.(); }
@@ -269,6 +277,22 @@ export class SoundModes {
     return !!fw && !!sig!.learnedFw && fw !== sig!.learnedFw;
   }
 
+  /** Every mode known or learned, for the editor's "set Sound mode" list: surround modes grouped by the signals
+   *  they were seen with, then the ones every signal has. Auto is last (it lets the receiver choose). */
+  allModes(): { value: string; label: string; group: string }[] {
+    const seen = new Map<string, string[]>(); // mode -> signal names
+    for (const key of new Set([...Object.keys(HINTS), ...Object.keys(this.store.signals)])) {
+      const name = this.store.signals[key]?.name ?? HINT_SIGNAL_NAMES[key] ?? key;
+      for (const m of this.modesFor(key)) { const l = seen.get(m) ?? []; if (!l.includes(name)) l.push(name); seen.set(m, l); }
+    }
+    return [
+      ...[...seen].map(([mode, sigs]) => ({ value: mode, label: this.label(mode), group: `With ${sigs.join(' / ')}` }))
+        .sort((a, b) => a.group.localeCompare(b.group) || a.label.localeCompare(b.label)),
+      ...FIXED.map((f) => ({ value: f.mode, label: f.label, group: 'Any signal' })),
+      { value: 'AUTO', label: 'Auto (the receiver picks)', group: 'Any signal' },
+    ];
+  }
+
   /** The modes known for the signal playing now, for the panel and the editor. */
   summary() {
     const st = this.io.state();
@@ -294,8 +318,12 @@ export class SoundModes {
    * there is one, otherwise presses MOVIE, MUSIC, GAME until it appears or the modes repeat. With `back`, a search
    * that fails returns to the mode it started from.
    */
-  select(target: { exact?: string; text?: string }, opts: { back?: boolean } = {}): Promise<SelectResult> {
-    return this.exclusive('select', () => this.run(target, opts), (note) => ({ ok: false, mode: this.io.state().surround, note }));
+  select(target: { exact?: string; text?: string }, opts: { back?: boolean; waitSignalMs?: number } = {}): Promise<SelectResult> {
+    return this.exclusive('select', async () => {
+      // Right after an input change the new signal may not be there yet: wait a little for it.
+      for (let t = 0; t < (opts.waitSignalMs ?? 0) && !signalKey(this.io.state()); t += 250) await this.sleep(250);
+      return this.run(target, opts);
+    }, (note) => ({ ok: false, mode: this.io.state().surround, note }));
   }
 
   /** Step through each button's full cycle for the signal playing, remember it, and return to where it was. */

@@ -134,7 +134,7 @@ Values are always in **human units**: dB numbers, enum ids with labels, booleans
 | App | Receiver connection | — | done |
 | Time | Time of day, day of week | — | 4 |
 
-Sound mode `set` actions are limited to modes with a direct command (Pure Direct, Direct, Stereo, Multi Ch Stereo, Auto). Any other mode is reached with the `findMode` block, which searches what the receiver actually offers for the signal playing. This unit offers fewer modes than the manual says (probed 2026-11-14: with stereo PCM and with Atmos only the native mode, Multi Ch Stereo and Stereo; Dolby Digital 5.1 also offers "DD + Neural:X"), so the server learns them instead of trusting the manual.
+Sound mode `set` actions offer every mode known or learned (grouped by the signals it was seen with, [sound-modes.ts](../server/sound-modes.ts) `allModes()`), plus Stereo, Multi Ch Stereo, Direct, Pure Direct and Auto; the server selects it the way the Sound mode panel does (one step when there's a command, otherwise through MOVIE / MUSIC / GAME) and waits up to 6 s for a signal after an input change. If the signal playing doesn't offer the mode, the step fails with "not available for this signal". The `findMode` block ("containing *text*") is for rules whose sources play different signals (e.g. "Neural:X" matches DD + Neural:X and DTS-HD + Neural:X). MOVIE / MUSIC / GAME can't be set: each press steps through a list.
 
 **Not in v1:** values that live only in the setup API (port 10443), such as Graphic EQ or Subwoofer Mode. The receiver doesn't push them, and reading them is slow and serialized (some reads hang the receiver for 30 s), so they can't be triggers. Setup-API *actions* are a phase-5 option, limited to a small allowlist and still going through `setup.set`.
 

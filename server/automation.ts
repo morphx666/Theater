@@ -98,7 +98,7 @@ function checkValue(def: PropDef, v: unknown, forWrite: boolean): Value {
       return v as boolean;
     case 'text':
       if (typeof v !== 'string' || v.length > 60) bad(what + 'needs text (up to 60 characters)');
-      if (forWrite && !def.writeOptions?.some((o) => o.value === v)) bad(what + 'not one of its choices');
+      if (forWrite && !(def.validValue ? def.validValue(v) : def.writeChoices?.().some((o) => o.value === v))) bad(what + 'not one of its choices');
       return v as string;
     case 'set':
       if (typeof v !== 'string' || !CODE.test(v)) bad(what + 'needs a channel');
@@ -262,6 +262,7 @@ const describeSet = (b: Extract<Block, { type: 'set' }>, ctx?: Ctx) => {
 };
 const describeAction = (x: AppAction, ctx?: Ctx) =>
   x.kind === 'speakerPreset' ? `apply speaker preset "${ctx?.presets?.list.find((p) => p.id === x.id)?.name ?? x.id}"`
+  : x.kind === 'soundMode' ? `select sound mode "${ctx?.soundModeChoices?.find((m) => m.value === x.mode)?.label ?? x.mode}"`
   : x.kind === 'heos' ? `HEOS ${x.action}`
   : `play HEOS favorite ${x.index}${ctx?.favorites?.[x.index - 1] ? ` (${ctx.favorites[x.index - 1].name})` : ''}`;
 

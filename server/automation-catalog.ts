@@ -13,14 +13,16 @@ export type Ctx = {
   nowPlaying?: { state: string | null; song: string; artist: string; album: string; station: string; source: string | null } | null;
   presets?: { list: { id: string; name: string }[]; active: string | null } | null; // speaker presets (summary)
   favorites?: { name: string }[]; // HEOS favorites, in order (1-based when played)
+  soundModeChoices?: { value: string; label: string; group: string }[]; // every known / learned sound mode
   conn?: { telnet: boolean; http: boolean; heos: boolean };
   videoInfo?: { in: Record<string, string | null>; out: Record<string, string | null> } | null;
 };
-export type Option = { value: string; label: string };
+export type Option = { value: string; label: string; group?: string };
 
 /** An action the app performs itself (not a telnet command). */
 export type AppAction =
   | { kind: 'speakerPreset'; id: string; confirmAmp: boolean }
+  | { kind: 'soundMode'; mode: string }
   | { kind: 'heos'; action: 'play' | 'pause' | 'stop' | 'next' | 'previous' }
   | { kind: 'heosFavorite'; index: number };
 
@@ -33,8 +35,8 @@ export type PropDef = {
   min?: number; max?: number; step?: number;
   /** Enum options. Called without a context for validation (static list), with one for the editor (live names). */
   options?: (ctx?: Ctx) => Option[];
-  /** For a text property that can be set: the values an action may use (e.g. sound modes). */
-  writeOptions?: Option[];
+  /** For a text property that can be set: the values an action may use, from the live context (e.g. sound modes). */
+  writeChoices?: (ctx?: Ctx) => Option[];
   /** A parameter that picks one of several values, e.g. the channel for a channel level. */
   param?: { label: string; options: (ctx?: Ctx) => Option[] };
   read: (ctx: Ctx, param?: string) => Value;
@@ -152,10 +154,15 @@ export const CATALOG: PropDef[] = [
   { id: 'input', label: 'Input', group: 'Input & signal', type: 'enum', settleMs: 1500, needsZone: true,
     options: (c) => SOURCE_ORDER.map((s) => ({ value: s, label: c?.state.inputs[s]?.name || SOURCE_DEFAULT_NAMES[s] || s })),
     read: (c) => c.state.source, write: (v) => [`SI${v}`] },
+  // Any mode the receiver offers (learned per signal, server/sound-modes.ts), selected the way the Sound mode panel
+  // does it: one step when there's a command for it, otherwise through MOVIE / MUSIC / GAME.
   { id: 'soundMode', label: 'Sound mode', group: 'Input & signal', type: 'text', settleMs: 1000, needsZone: true,
-    writeOptions: SOUND_MODES.map(({ value, label }) => ({ value, label })),
-    read: (c) => c.state.surround, write: (v) => [`MS${v}`],
-    same: (cur, v) => !!SOUND_MODES.find((m) => m.value === v)?.match.test(String(cur ?? '')) },
+    writeChoices: (c) => c?.soundModeChoices ?? SOUND_MODES.map(({ value, label }) => ({ value, label })),
+    // MOVIE / MUSIC / GAME aren't modes (each press steps through a list), so they can't be "set".
+    validValue: (v) => typeof v === 'string' && /^[\x20-\x7E]{1,40}$/.test(v) && !/^(MOVIE|MUSIC|GAME)$/.test(v),
+    read: (c) => c.state.surround,
+    app: (v) => ({ kind: 'soundMode', mode: String(v) }),
+    same: (cur, v) => v !== 'AUTO' && (cur === v || !!SOUND_MODES.find((m) => m.value === v)?.match.test(String(cur ?? ''))) },
   { id: 'quick', label: 'Quick Select', group: 'Input & signal', type: 'enum', needsZone: true, alwaysSend: true,
     options: (c) => [1, 2, 3, 4].map((n) => ({ value: String(n), label: c?.state.quickNames[n - 1] || `Quick Select ${n}` })),
     read: (c) => (c.state.quick ? String(c.state.quick) : null), write: (v) => [`MSQUICK${v}`] },
@@ -301,7 +308,7 @@ export const PROPS: Record<string, PropDef> = Object.fromEntries(CATALOG.map((p)
 export function describeCatalog(ctx: Ctx) {
   return CATALOG.map((p) => ({
     id: p.id, label: p.label, group: p.group, type: p.type, unit: p.unit, min: p.min, max: p.max, step: p.step,
-    options: p.options?.(ctx), writeOptions: p.writeOptions,
+    options: p.options?.(ctx), writeOptions: p.writeChoices?.(ctx),
     param: p.param && { label: p.param.label, options: p.param.options(ctx) },
     writable: !!(p.write || p.app), writeOnly: !!p.writeOnly, needsZone: !!p.needsZone, needsInput: p.needsInput ?? null,
     onlyLower: !!p.onlyLower, confirmAmp: !!p.confirmAmp, settleMs: p.settleMs ?? null,

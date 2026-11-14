@@ -70,6 +70,8 @@ async function rig(opts: { cap?: number; echo?: (cmd: string) => boolean } = {})
       return r;
     },
     clock, log: (m: string) => logs.push(m), run: (r: Run) => runs.set(r.id, r),
+    // Sound modes: the real server selects them through sound-modes.ts; here a direct command is enough.
+    app: async (a: { kind: string; mode?: string }) => (a.kind === 'soundMode' ? { ok: io.cmd(`MS${a.mode}`).ok } : { ok: true }),
   };
   eng = new Automations(dir, io);
   /** The receiver reports something (from its remote, a new signal…). */
@@ -167,7 +169,7 @@ test('every writable property produces commands the guard accepts', () => {
       case 'number': return [p.min, p.max, p.min! + p.step!];
       case 'enum': return p.options!().map((o) => o.value);
       case 'bool': return [true, false];
-      case 'text': return p.writeOptions!.map((o) => o.value);
+      case 'text': return (p.writeChoices?.() ?? []).map((o) => o.value);
       default: return [];
     }
   };
@@ -583,4 +585,14 @@ test('validation: set-only properties can\'t be watched or tested; presets are c
   assert.throws(() => validate(rule([{ type: 'change', prop: 'mute' }], [{ type: 'set', prop: 'speakerPreset', value: 'no such thing!' }])), /choices/);
   assert.throws(() => validate(rule([{ type: 'change', prop: 'mute' }], [{ type: 'set', prop: 'ps.DEH', value: 'OFF', confirmAmp: true }])), /Amp Assign/);
   assert.doesNotThrow(() => validate(rule([{ type: 'change', prop: 'mute' }], [{ type: 'set', prop: 'heos.favorite', value: '3' }])));
+});
+
+test('set Sound mode: any known or learned mode (not MOVIE / MUSIC / GAME); the run names it', async () => {
+  assert.doesNotThrow(() => validate(rule([{ type: 'change', prop: 'mute' }], [{ type: 'set', prop: 'soundMode', value: 'DTS HD+NEURAL:X' }])));
+  assert.throws(() => validate(rule([{ type: 'change', prop: 'mute' }], [{ type: 'set', prop: 'soundMode', value: 'MUSIC' }])), /choices/);
+  const r = await rig();
+  on(r);
+  r.ctx.soundModeChoices = [{ value: 'DOLBY AUDIO-DSUR', label: 'Dolby Surround', group: 'With Stereo PCM' }];
+  const t = r.eng.test(rule([{ type: 'change', prop: 'mute' }], [{ type: 'set', prop: 'soundMode', value: 'MCH STEREO' }, { type: 'set', prop: 'soundMode', value: 'DOLBY AUDIO-DSUR' }]));
+  assert.deepEqual(t.steps.map((s) => s.cmds?.join() ?? s.note), ['select sound mode "MCH STEREO"', 'already set']);
 });
