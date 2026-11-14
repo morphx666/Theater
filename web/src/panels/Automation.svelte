@@ -114,13 +114,14 @@
   .ln .prop, .ln .val, .ln .verb { display: inline-block; max-width: 100%; text-indent: 0; }
   .warn { color: var(--bad); }
   .pill.run { font-size: 11px; padding: 1px 8px; color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
-  /* Every button as wide as the widest; icons in one column, the text after them. */
-  .acts { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+  /* Two by two (Edit | Run over Duplicate | Delete), which leaves the pseudo code more room. Every button as wide
+     as the widest; icons in one column, the text after them. */
+  .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .acts .btn { justify-content: flex-start; }
   /* A one-column card: the buttons one over the other on the right. */
   @container rules (max-width: 560px) {
     .rule { align-items: start; }
     .switch { margin-top: 2px; }
-    .acts { grid-auto-flow: row; }
+    .acts { grid-template-columns: 1fr; }
   }
 </style>
