@@ -42,7 +42,6 @@ A rule is a **tree**, not a graph: a script is a list of blocks, and an *if* hol
     "id": "k3x9f2a1",              // stable id, never reused
     "name": "Blu-ray dialog",
     "enabled": true,
-    "concurrency": "restart",     // a new trigger cancels a running script | "ignore" (drop new triggers while running)
     "when": [                     // any of these starts the script
       { "type": "change", "prop": "input", "to": "BD" }
     ],
@@ -88,7 +87,9 @@ Later (phase 5): `restore` (put back the values the script replaced).
 2. The script runs top to bottom. **Conditions read the live state when they're evaluated**, not the state at trigger time.
 3. Actions are sent one at a time, in order, through the guarded command path (§6).
 4. `wait until` is the safe kind of loop: it re-checks its condition whenever the state changes and once a second, until it's true or the timeout ends. `onTimeout: continue` carries on (an *if* below can then branch on the same condition); `stop` ends the run.
-5. `concurrency: restart` (default): a new trigger cancels a running script (for example one that is waiting) and starts again. `ignore`: new triggers are dropped while the script runs.
+5. **One rule at a time.** While a rule runs, no other rule starts, and neither does the same one again: triggers are ignored until it ends, and what changed meanwhile becomes the new baseline (nothing fires late). This keeps the changes a rule makes (stepping through sound modes, for example) from setting off other rules half-way. *Run now* is refused while another rule runs. The cost: a rule that waits holds up every other rule, so keep waits short.
+
+> **Footnote (not planned):** a block that calls another rule. Possible later, if rules ever need to share steps; not needed now.
 
 ---
 
@@ -295,7 +296,7 @@ Unit tests (`node --test`, no receiver), with a fake clock:
 - Operators: every operator × type, including unknown values.
 - Catalog: `read` from sample states; every `write` produces commands the guard accepts; enum options round-trip; input channels (count, layout, each channel) from sample grids (2.0, 2.1, 5.1, 5.1.4) and from the `audioFormat` fallback with per-channel values unknown.
 - Change detection: one event per property per batch; nothing from unknown; warm-up.
-- Runs: `from` / `to` triggers, `becomes`, settle restart and re-check, if / else, all / any / not, channels, wait, wait until (met later, timeout + continue / stop, cancelled by a new trigger), `restart` / `ignore`, needless-action skip, *only lower*, zone-off skip, verify ("not applied").
+- Runs: `from` / `to` triggers, `becomes`, settle restart and re-check, if / else, all / any / not, channels, wait, wait until (met later, timeout + continue / stop), one rule at a time, needless-action skip, *only lower*, zone-off skip, verify ("not applied").
 - Safety: volume above the cap is clamped by the guard; rate limit turns a rule off; chain depth stops.
 - Validation: unknown types and props, wrong operators, out-of-range values, read-only props in `set`, limits.
 
@@ -325,3 +326,4 @@ Made on 2026-11-13:
 4. **"Channel number"** means the number of channels in the input stream (2 = stereo, 3 = stereo + LFE, 6 = 5.1, …), and rules can also test **individual channels** ("if C and FHL then…") with the channel picker.
 5. **Date / time:** schedule triggers and time conditions in phase 4.
 6. **Waiting:** *wait* and *wait until* (with a timeout) instead of a general loop block; every run ends.
+7. **One rule at a time** (2026-11-14): no rule starts while another runs (§2). A "call another rule" block stays a footnote.

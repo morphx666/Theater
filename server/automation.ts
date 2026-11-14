@@ -31,7 +31,6 @@ export type Automation = {
   id: string;
   name: string;
   enabled: boolean;
-  concurrency: 'restart' | 'ignore';
   when: Trigger[];
   script: Block[];
   disabled?: string; // why the server turned it off (loop protection); cleared when the user turns it on
@@ -209,7 +208,6 @@ export function validate(a: unknown): Automation {
     id: a.id ?? '',
     name,
     enabled: a.enabled !== false,
-    concurrency: a.concurrency === 'ignore' ? 'ignore' : 'restart',
     when: a.when.map(checkTrigger),
     script: checkBlocks(a.script, 0, { n: 0 }),
   };
@@ -275,7 +273,7 @@ export class Automations {
   private values = new Map<string, Value>(); // last known (non-null) value per watched property
   private becomesPrev = new Map<string, boolean>();
   private armed = new Map<string, unknown>(); // settle timers per trigger
-  private running = new Map<string, Live>();
+  private current: Live | null = null; // only one rule runs at a time
   private waiters = new Set<() => void>();
   private starts = new Map<string, number[]>(); // run start times, for the rate limit
   private recent: Run[] = [];
@@ -331,7 +329,7 @@ export class Automations {
       const last = this.recent.findLast((r) => r.automation === a.id);
       return {
         id: a.id, name: a.name, enabled: a.enabled, disabled: a.disabled ?? null,
-        running: this.running.has(a.id), lastRun: last ? { at: last.at, status: last.status, error: last.error ?? null } : null,
+        running: this.current?.automation === a.id, lastRun: last ? { at: last.at, status: last.status, error: last.error ?? null } : null,
       };
     });
   }
@@ -356,7 +354,7 @@ export class Automations {
   async remove(id: string) {
     const i = this.list.findIndex((a) => a.id === id);
     if (i < 0) throw new AutomationError(404, 'no such rule');
-    this.running.get(id)?.cancel();
+    if (this.current?.automation === id) this.current.cancel();
     this.list.splice(i, 1);
     this.reset(id);
     await this.persist();
@@ -367,16 +365,17 @@ export class Automations {
     const a = this.get(id) ?? bad('no such rule');
     a.enabled = on;
     if (on) delete a.disabled;
-    else this.running.get(id)?.cancel();
+    else if (this.current?.automation === id) this.current.cancel();
     this.reset(id);
     await this.persist();
     this.io.changed?.();
   }
 
-  /** Run now, from the UI: ignores the trigger, on/off and cooldowns (still guarded, still rate-limited). */
+  /** Run now, from the UI: ignores the trigger and on/off (still guarded, still rate-limited). */
   runNow(id: string): Run {
     const a = this.get(id) ?? bad('no such rule');
-    return publicRun(this.start(a, 'run now', 0, true) ?? bad('could not start'));
+    if (this.current) throw new AutomationError(409, `Wait for "${this.current.name}" to finish`);
+    return publicRun(this.start(a, 'run now', 0) ?? bad('could not start'));
   }
 
   /** Dry run against the current state: what would happen, sending nothing. Accepts an id or an unsaved rule. */
@@ -419,7 +418,7 @@ export class Automations {
   stop() {
     for (const t of this.armed.values()) this.clock.clearTimeout(t);
     this.armed.clear();
-    for (const r of this.running.values()) r.cancel();
+    this.current?.cancel();
   }
 
   // ----- change detection -----
@@ -428,7 +427,9 @@ export class Automations {
   observe() {
     const ctx = this.io.ctx();
     const now = this.clock.now();
-    const quiet = now < this.warmUntil;
+    // While a rule runs, nothing else starts: the changes it makes (e.g. stepping through sound modes) would
+    // otherwise trigger other rules mid-way. The values are still read, so they become the new baseline.
+    const quiet = now < this.warmUntil || !!this.current;
     // Changes shortly after one of our own actions were probably caused by it (chain depth, §6).
     const depth = now - this.lastAction.at <= LIMITS.chainWindowMs ? this.lastAction.depth + 1 : 0;
 
@@ -494,25 +495,22 @@ export class Automations {
       this.armed.delete(tk);
       const cur = this.get(a.id);
       if (!cur || !cur.enabled || cur.disabled || cur.when[i] !== t) return;
+      if (this.current) return; // another rule started while this one was settling
       const ctx = this.io.ctx();
       if (t.type === 'change' && t.to !== undefined && !sameValue(PROPS[t.prop].read(ctx, t.param), t.to)) return; // changed again meanwhile
       if (t.type === 'becomes' && !evalCond(t.cond, ctx)) return;
-      this.start(cur, describeTrigger(t), depth, false);
+      this.start(cur, describeTrigger(t), depth);
     }, settle));
   }
 
   // ----- runs -----
 
-  private start(a: Automation, trigger: string, depth: number, manual: boolean): Live | null {
+  private start(a: Automation, trigger: string, depth: number): Live | null {
     if (depth > LIMITS.chainDepth) {
       this.log(`"${a.name}" not run: started by a chain of ${depth} rules (limit ${LIMITS.chainDepth})`);
       return null;
     }
-    const prev = this.running.get(a.id);
-    if (prev) {
-      if (a.concurrency === 'ignore' && !manual) return null;
-      prev.cancel();
-    }
+    if (this.current) return null; // one rule at a time
     // Rate limit: a rule that keeps firing is probably in a loop with another rule (or with the receiver).
     const now = this.clock.now();
     const starts = (this.starts.get(a.id) ?? []).filter((t) => now - t < 60_000);
@@ -532,7 +530,7 @@ export class Automations {
       cancelled: false, pending: new Set(),
       cancel: () => { run.cancelled = true; for (const p of [...run.pending]) p(); },
     };
-    this.running.set(a.id, run);
+    this.current = run;
     this.recent.push(run);
     if (this.recent.length > LIMITS.runsKept) this.recent.splice(0, this.recent.length - LIMITS.runsKept);
     this.log(`"${a.name}" started (${trigger})`);
@@ -550,7 +548,7 @@ export class Automations {
       else { run.status = 'error'; run.error = (e as Error).message; this.log(`"${a.name}" failed: ${run.error}`); }
     } finally {
       run.endedAt = this.clock.now();
-      if (this.running.get(a.id) === run) this.running.delete(a.id);
+      if (this.current === run) this.current = null;
       this.emit(run);
       this.io.changed?.();
     }

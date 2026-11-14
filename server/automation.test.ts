@@ -201,7 +201,6 @@ test('validation rejects bad rules and normalizes good ones', () => {
   const ok = validate(rule([{ type: 'change', prop: 'input', to: 'GAME', junk: 1 }], [{ type: 'set', prop: 'ps.DEH', value: 'OFF' }]));
   assert.deepEqual(ok.when, [{ type: 'change', prop: 'input', to: 'GAME' }]);
   assert.equal(ok.enabled, true);
-  assert.equal(ok.concurrency, 'restart');
 
   const fails = (r: unknown, msg: RegExp) => assert.throws(() => validate(r), msg);
   const set = [{ type: 'set', prop: 'ps.DEH', value: 'OFF' }];
@@ -321,7 +320,7 @@ test('becomes trigger with the channel picker', async () => {
   assert.equal(r.runs.size, 1);
 });
 
-test('wait until: met by a later change, timeout with stop or continue, cancelled by a new trigger', async () => {
+test('wait until: met by a later change, timeout with stop or continue, cancelled by turning the rule off', async () => {
   const r = await rig();
   on(r);
   r.ctx.audioMap = map(['FL', 'FR']);
@@ -354,34 +353,42 @@ test('wait until: met by a later change, timeout with stop or continue, cancelle
   await r.clock.tick(11_000);
   assert.deepEqual(r.sent, ['PSDEH HIGH', 'PSDEH LOW']);
 
-  // A new trigger cancels a waiting run (concurrency "restart").
+  // Turning the rule off cancels a waiting run.
   r.line('SIBD');
   await r.clock.tick(100);
   r.line('SIGAME');
   await r.clock.tick(3000);
-  const first = r.last()!;
-  r.line('SIBD');
-  await r.clock.tick(100);
-  r.line('SIGAME');
-  await r.clock.tick(100);
-  assert.equal(r.runs.get(first.id)!.status, 'cancelled');
   assert.equal(r.last()!.status, 'running');
+  await r.eng.setEnabled(a.id, false);
+  await r.clock.tick(100);
+  assert.equal(r.last()!.status, 'cancelled');
 });
 
-test('wait, concurrency "ignore", and stop', async () => {
+test('one rule at a time: triggers during a run are ignored, by itself and by other rules', async () => {
   const r = await rig();
   on(r);
-  await r.eng.save(rule([{ type: 'change', prop: 'mute', settleMs: 0 }], [
+  const a = await r.eng.save(rule([{ type: 'change', prop: 'mute', settleMs: 0 }], [
     { type: 'wait', ms: 5000 }, { type: 'set', prop: 'ps.DEH', value: 'LOW' }, { type: 'stop' }, { type: 'set', prop: 'ps.DEH', value: 'HIGH' },
-  ], { concurrency: 'ignore' }));
+  ]));
+  await r.eng.save(rule([{ type: 'change', prop: 'input', settleMs: 0 }], [{ type: 'set', prop: 'ps.CINEMA EQ', value: true }]));
   r.eng.observe();
   r.line('MUON');
   await r.clock.tick(1000);
-  r.line('MUOFF'); // ignored: still running
+  r.line('MUOFF'); // the same rule: ignored, it's running
+  r.line('SIGAME'); // another rule: ignored too
+  await r.clock.tick(500);
+  assert.throws(() => r.eng.runNow(a.id), /Wait for/);
   await r.clock.tick(5000);
   assert.deepEqual(r.sent, ['PSDEH LOW']);
   assert.equal(r.runs.size, 1);
   assert.equal(r.last()!.status, 'stopped');
+  assert.equal(r.eng.summary()[0].running, false);
+  // What changed during the run is the new baseline: nothing fires late. The next change runs normally.
+  await r.clock.tick(5000);
+  assert.equal(r.runs.size, 1);
+  r.line('SITV');
+  await r.clock.tick(100);
+  assert.deepEqual(r.sent, ['PSDEH LOW', 'PSCINEMA EQ.ON']);
 });
 
 test('volume: only lower, the cap, and nothing while the main zone is off', async () => {
