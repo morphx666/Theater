@@ -92,7 +92,7 @@
     all: unset; cursor: pointer; display: flex; flex-direction: column; gap: 3px; min-width: 0;
   }
   .name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
-  .sum { font-size: 12.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+  .sum { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; } /* the whole rule, never cut */
   .warn { color: var(--bad); }
   .pill.run { font-size: 11px; padding: 1px 8px; color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
   /* Every button as wide as the widest; icons in one column, the text after them. */

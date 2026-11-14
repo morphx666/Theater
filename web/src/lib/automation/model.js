@@ -173,12 +173,14 @@ export function triggerText(t, catalog) {
 
 function blocksText(list, catalog, out) {
   for (const b of list) {
-    if (out.length > 4) return;
     const def = catalog.find((p) => p.id === b.prop);
     switch (b.type) {
-      case 'set': out.push(b.relative ? `change ${propText(def, b.param)} by ${valueText(def, signed(b.value))}` : `set ${propText(def, b.param)} to ${valueText(def, b.value)}`); break;
+      case 'set': out.push(b.relative ? `change ${propText(def, b.param)} by ${valueText(def, signed(b.value))}` : `set ${propText(def, b.param)} to ${valueText(def, b.value)}${b.onlyLower ? ' (only lower)' : ''}`); break;
       case 'findMode': out.push(`find sound mode "${b.text}"`); break;
-      case 'if': out.push(`if ${condText(b.cond, catalog)}`); blocksText(b.then, catalog, out); break;
+      case 'if':
+        out.push(`if ${condText(b.cond, catalog)}`); blocksText(b.then, catalog, out);
+        if (b.else?.length) { out.push('otherwise'); blocksText(b.else, catalog, out); }
+        break;
       case 'wait': out.push(`wait ${fmtMs(b.ms)}`); break;
       case 'waitUntil': out.push(`wait until ${condText(b.cond, catalog)}`); break;
       case 'stop': out.push('stop'); break;
@@ -186,13 +188,13 @@ function blocksText(list, catalog, out) {
   }
 }
 
-/** "When Input changes to Blu-ray · wait until … · set Dialog Enhancer to Medium" */
+/** The whole rule in one line: "When Input changes to Blu-ray · wait until … · set Dialog Enhancer to Medium". */
 export function summary(rule, catalog) {
   if (!catalog?.length) return '';
   const when = rule.when.map((t) => triggerText(t, catalog)).join(' or ');
   const steps = [];
   blocksText(rule.script, catalog, steps);
-  return [`When ${when}`, ...steps.slice(0, 4)].join(' · ') + (steps.length > 4 ? ' …' : '');
+  return [`When ${when}`, ...steps].join(' · ');
 }
 
 // ---------- completeness (the server has the final word) ----------
