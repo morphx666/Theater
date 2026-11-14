@@ -44,10 +44,22 @@ Flow-based, like Node-RED: wires carry *execution*, not data. A trigger fires, a
 | `schedule` (trigger) | — | `out` | `at` (HH:MM) and `days` (Mon–Sun), or `every` N minutes; phase 4 |
 | `condition` | `in` | `true`, `false` | `mode`: `all` \| `any`; `rows`: `[{ prop, param?, op, value }]` |
 | `action` | `in` | `out` (after it was sent) | `prop` + `value` (fixed values only), or `app` action + args; volume actions also have `onlyLower` |
-| `delay` | `in` | `out` | `ms` (max e.g. 10 min) |
+| `delay` | `in` | `out` | `ms` (max e.g. 10 min); can go anywhere in the graph |
+| `wait-until` | `in` | `met`, `timeout` | condition rows (same editor as `condition`, channel picker included), `timeoutMs` (max e.g. 10 min), optional `checks` + `everyMs` |
 | `comment` | — | — | text (documentation on the canvas) |
 
-Later (phase 5): `wait-until` (a condition with a timeout; `met` / `timeout` outputs) and `restore` (put back the values an earlier action replaced).
+Later (phase 5): `restore` (put back the values an earlier action replaced).
+
+### Delay and Wait until (instead of loops)
+
+Values sometimes arrive late: the channel grid after an HDMI handshake, settings the receiver restores after an input change. Two nodes handle that:
+
+- **Delay** pauses the run for a fixed time.
+- **Wait until** is the safe form of a loop: it checks its condition when the run reaches it and **again on every change of the properties it uses**, until the condition is true (→ `met`) or the timeout ends (→ `timeout`). In the editor it reads as "check up to *N* times, every *S* seconds" or "wait up to *T* seconds", and both are stored as a timeout. Event-driven checking reacts at once and costs nothing while waiting. The "*N* times every *S* seconds" form also re-checks on that schedule, for values that change without an event.
+
+  Example: "When Input changes to Blu-ray → **wait until** input channels C and FHL are present (up to 10 s) → `met`: Dialog Enhancer Medium · `timeout`: Dialog Enhancer Off".
+
+There is no general loop node and no wire back to an earlier node. The graph stays acyclic, so every run ends: a wait always has a timeout, and the `concurrency` setting (`restart` by default) cancels a waiting run when its trigger fires again. Repeating something on a schedule is the job of the schedule trigger (phase 4).
 
 ### Stored format
 
@@ -328,7 +340,7 @@ Unit tests (`node --test`, no receiver), in the style of `speaker-presets.test.t
 - Schedules (phase 4): fires once per matching minute, not on missed minutes after a restart, across a DST change.
 - Operators: every operator × type, including `null`.
 - Change detection: one event per property per batch; no events from `null`; the reconnect baseline.
-- Runs: trigger narrowing (`to`, `from-to`, `above`), settle restart, AND / OR / false branch, fan-out order, delay with `restart` / `ignore`, needless-action skip, verify ("not applied").
+- Runs: trigger narrowing (`to`, `from-to`, `above`), settle restart, AND / OR / false branch, fan-out order, delay with `restart` / `ignore`, wait-until (met on a later change, met on a timed re-check, timeout, cancelled by a new trigger), needless-action skip, verify ("not applied").
 - Safety: volume above the cap is clamped; tuner action rejected unless input is TUNER; loop detection disables an automation; chain depth stops.
 - Validation: cycles, bad ports, unknown props, out-of-range values, limits.
 
@@ -341,10 +353,10 @@ Live testing on the receiver follows the standing rule: **automations may lower 
 Each phase ends with a commit that works on its own.
 
 1. **Engine without UI.** Catalog (Power, Volume, Input & signal including the input-channel properties, Audio groups first), change detection hook, engine, storage, REST, tests. Usable by posting JSON, which proves the model.
-2. **Panel and editor basics.** Automation panel in Setup › App & Info (list, enable, run, edit, delete, new), full-screen Svelte Flow editor, trigger / condition / action nodes, the channel picker, palette, save and validation.
+2. **Panel and editor basics.** Automation panel in Setup › App & Info (list, enable, run, edit, delete, new), full-screen Svelte Flow editor, trigger / condition / action / **delay / wait-until** nodes, the channel picker, palette, save and validation. (The engine side of delay and wait-until is built in phase 1.)
 3. **Live feedback.** Current values and ✔/✘ on nodes, run highlighting, Test (dry run), run history.
-4. **Rest of the catalog, and time.** Zone 2, Tuner, HEOS, speaker presets (with the Amp Assign confirmation), General, video properties; Delay and Comment nodes; duplicate, copy/paste, undo/redo. **Schedule trigger** ("at 23:00 on weekdays", "every 15 minutes") and **time conditions** ("time is between 22:00 and 07:00", "day is Sat or Sun"). These come after the rest of the engine is proven because they need only a 1-minute timer in the engine and no new receiver interface. Times use the server's local time zone (the Pi's), shown in the editor so it's never a surprise; a missed minute (server down) is not run later.
-5. **Later, if wanted.** `wait-until` and `restore` nodes, a small allowlist of setup-API actions, templates ("Night mode", "Movie with Atmos"), import/export as JSON.
+4. **Rest of the catalog, and time.** Zone 2, Tuner, HEOS, speaker presets (with the Amp Assign confirmation), General, video properties; Comment node; duplicate, copy/paste, undo/redo. **Schedule trigger** ("at 23:00 on weekdays", "every 15 minutes") and **time conditions** ("time is between 22:00 and 07:00", "day is Sat or Sun"). These come after the rest of the engine is proven because they need only a 1-minute timer in the engine and no new receiver interface. Times use the server's local time zone (the Pi's), shown in the editor so it's never a surprise; a missed minute (server down) is not run later.
+5. **Later, if wanted.** `restore` node, a small allowlist of setup-API actions, templates ("Night mode", "Movie with Atmos"), import/export as JSON.
 
 ---
 
