@@ -8,8 +8,8 @@ Example rules:
 
 - When **Input** changes to *Game*: if **Volume** ≥ −20 dB → set **Dialog Enhancer** to *Off* and **Sound mode** to *Stereo*.
 - When **Input channels (count)** changes: if it is ≤ 3 (stereo, or stereo + LFE) → set **Sound mode** to *Multi Ch Stereo*.
-- When **Decoder** changes: if input channels **C** and **FHL** are present → set **Dialog Enhancer** to *Medium*, else *Off*.
-- When **Input** changes to *Blu-ray*: **wait until** input channels C and FHL are present (up to 10 s) → set **Dialog Enhancer** to *Medium*.
+- When **Decoder** changes: if the input has channels **C** and **FHL** → set **Dialog Enhancer** to *Medium*, else *Off*.
+- When **Input** changes to *Blu-ray*: **wait until** the input has C and FHL (up to 10 s) → set **Dialog Enhancer** to *Medium*.
 - At **23:00 every day** (phase 4): if the **Main zone** is on → set **Volume** to −35 dB (*only lower*) and **Dynamic Volume** to *Heavy*.
 
 ---
@@ -20,8 +20,8 @@ Example rules:
 |---|---|---|
 | **Property** | Anything the app knows and can name: input, volume, mute, sound mode, decoder, input channels, Dialog Enhancer, tuner preset, Zone 2 volume, HEOS play state… Each is defined once in a shared **catalog** (§3). | variables / sensing |
 | **Automation** | One named rule that can be turned on and off: a *when* block with a script under it. | one script |
-| **Trigger** | The *when* block: "when P changes", narrowed with *from* / *to*, or "when ⟨condition⟩ becomes true". Several triggers can share one script ("when A … or when B …"). | hat block |
-| **Condition** | A true/false block: a comparison ("Volume ≥ −20 dB", "Dialog Enhancer is not Off"), a channel check ("C and FHL present"), or **all of** / **any of** / **not** around other conditions. In an *if*, a comparison can use a property's value **before** the trigger ("Input (before) = Kodi": the input switched away from). | boolean reporter (hexagon) |
+| **Trigger** | The *when* block: "when P changes", narrowed with *from* / *to*, or "when ⟨condition⟩ becomes true" (the pseudo code shows just the condition: "When Volume > −20 dB"). Several triggers can share one script ("when A … or when B …"). | hat block |
+| **Condition** | A true/false block: a comparison ("Volume ≥ −20 dB", "Dialog Enhancer is not Off"), a channel check ("input has C and FHL, no SB"), or **all of** / **any of** / **not** around other conditions. In an *if*, a comparison can use a property's value **before** the trigger ("Input (before) = Kodi": the input switched away from). | boolean reporter (hexagon) |
 | **Action** | "Set P to value": a fixed value. Volume can also be *changed by* up to ±6 dB from where it is when the rule runs (`RELATIVE_MAX_DB`; it stacks on every re-run, so the limit is small, and loop protection still applies). Phase 4 adds app actions (apply a speaker preset, play a HEOS favorite). | "set … to …" |
 | **Control** | *if / else*, *wait N seconds*, *wait until ⟨condition⟩ (up to N s)*, *stop*. | control blocks |
 | **Run** | One pass through the script after a trigger fires. | |
@@ -65,7 +65,7 @@ A rule is a **tree**, not a graph: a script is a list of blocks, and an *if* hol
 |---|---|---|
 | **Triggers** (`when`) | | |
 | `change` | `prop`, `param?` (e.g. channel `C`), `from?`, `to?`, `settleMs?` | "when Input changes", "… to Game", "… from Game to Blu-ray" |
-| `becomes` | `cond`, `settleMs?` | "when ⟨Volume > −20 dB⟩ becomes true", "when ⟨C and FHL present⟩ becomes true" |
+| `becomes` | `cond`, `settleMs?` | "When Volume > −20 dB", "When input has C and FHL" (fires when the condition turns true) |
 | `schedule` | `at` (HH:MM), `days` | phase 4 |
 | **Script** | | |
 | `set` | `prop`, `param?`, `value`, `onlyLower?` (volume), `relative?` (volume: `value` is a change of at most ±6 dB, not 0) | fixed values, or a volume change |
@@ -151,7 +151,9 @@ Rules can test the number of channels in the input stream **and any single chann
 | **Input channels** | set of channel codes | used by triggers ("when the input channels change") |
 | **Active speaker** *X*, **Active speakers (count)**, **Active speakers** | as above, from the output grid | "Speaker SW is playing" |
 
-**Channel picker.** The `channels` condition is edited as a small speaker-layout grid of chips (the layout of the Status panel's signal view). Tapping a chip cycles *don't care* → *present* (green) → *absent* (red), so "C and FHL present" is two taps. It is true when every marked chip matches.
+**Channel picker.** The `channels` condition is edited as a small speaker-layout grid of chips (the layout of the Status panel's signal view). Tapping a chip cycles *don't care* → *required* (green, stored in `present`) → *excluded* (red, stored in `absent`), so "input has C and FHL" is two taps. Each chip's tooltip gives the channel's full name ("LFE (Low Frequency Effects)") on one line and its state and what a tap does on the next. The condition is true when every marked chip matches.
+
+In the pseudo code it reads "input has C and FHL, no SB, no SBR" (required channels joined with *and*, each excluded one with its own *no*), or for the speakers grid "active speakers include SW, not SB" and "active speakers exclude SB and SBR". It never uses *or*, which only joins a rule's triggers.
 
 Source, in order of preference:
 
@@ -241,7 +243,7 @@ Server-side validation on save (never trust the client): known block types, know
 ### Where it lives
 
 - One panel, **Automation** (`id: 'automation'`, `section: 'setup'`, `tab: 'app'` in [panels/index.js](../web/src/panels/index.js)), in the existing **App & Info** tab. No new Setup tab, no new page. Like any panel it can be pinned to Home.
-- The panel lists every rule: name, on/off switch, a one-line summary ("When Input changes to Blu-ray · wait until C, FHL · if … set Dialog Enhancer Medium"), last run and result, and **Edit**, **Run now**, **Duplicate**, **Delete**. **New automation** starts an empty rule. A rule the server turned off (loop protection) shows why.
+- The panel lists every rule: name, on/off switch, the rule as pseudo code (`outline()` in model.js, the same text as the editor's pseudo code panel: "When Input changes to Blu-ray", then "wait until input has C and FHL", "set Dialog Enhancer to Medium" indented under it), last run and result, and **Edit**, **Run now**, **Duplicate**, **Delete**. **New automation** starts an empty rule. A rule the server turned off (loop protection) shows why.
 - The editor opens full screen over the app at `#setup/app/rule/<id>` (`/rule/new`), so the browser's back button closes it.
 
 ### Editor
