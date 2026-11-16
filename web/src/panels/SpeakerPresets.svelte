@@ -30,7 +30,7 @@
           aria-pressed={active} onclick={() => { if (!active || sp.incomplete === p.id) applyPreset(p.id); }}>
           <span class="top"><Icon name="speaker" size={20} />{#if active}<span class="badge">Active</span>{/if}</span>
           <span class="name">{p.name}</span>
-          <span class="sub" class:bad={sp.incomplete === p.id}>{sub(p)}</span>
+          <span class="sub" class:bad={sp.incomplete === p.id && sp.busy?.id !== p.id}>{sub(p)}</span>
         </button>
       {/each}
     </div>
