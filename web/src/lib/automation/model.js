@@ -163,7 +163,7 @@ export function condText(c, catalog) {
 }
 
 export function triggerText(t, catalog) {
-  if (t.type === 'becomes') return `(${condText(t.cond, catalog)}) becomes true`;
+  if (t.type === 'becomes') return condText(t.cond, catalog);
   const def = catalog.find((p) => p.id === t.prop);
   return `${propText(def, t.param)} changes${t.from !== undefined ? ` from ${valueText(def, t.from)}` : ''}${t.to !== undefined ? ` to ${valueText(def, t.to)}` : ''}`;
 }
@@ -213,7 +213,7 @@ function channelPieces(c) {
 }
 
 function triggerPieces(t, catalog) {
-  if (t.type === 'becomes') return [plain('('), ...condPieces(t.cond, catalog), plain(')'), op(' becomes true')];
+  if (t.type === 'becomes') return condPieces(t.cond, catalog);
   const def = catalog.find((p) => p.id === t.prop);
   return [...propPieces(def, t.param), op(' changes'),
     ...(t.from !== undefined ? [op(' from '), ...valPieces(def, t.from)] : []),
