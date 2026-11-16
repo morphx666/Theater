@@ -199,16 +199,22 @@ function condPieces(c, catalog) {
   return [plain('?')];
 }
 
-/** A channels condition as a sentence: "input has C and LFE, no SB", "active speakers include SW, not SB",
- *  "input has no SB or SBR". Required channels must all be there, excluded ones all missing. */
+/** A channels condition as a sentence: "input has C and LFE, no SB, no SBR", "input has no SB",
+ *  "active speakers include SW, not SB", "active speakers exclude SB and SBR". Required channels must all be
+ *  there, excluded ones all missing. Never "or" here: rules join their triggers with "or". */
 function channelPieces(c) {
-  const list = (chs, joiner) => chs.flatMap((ch, i) => [...(i ? [op(i === chs.length - 1 ? joiner : ', ')] : []), val(ch)]);
+  const list = (chs) => chs.flatMap((ch, i) => [...(i ? [op(i === chs.length - 1 ? ' and ' : ', ')] : []), val(ch)]);
+  const each = (word, chs) => chs.flatMap((ch, i) => [op(`${i ? ', ' : ''}${word} `), val(ch)]);
   const input = c.of === 'input';
   const out = [prop(input ? 'input' : 'active speakers')];
   const has = c.present.length, lacks = c.absent.length;
   if (!has && !lacks) return [...out, plain(' …')];
-  if (has) out.push(op(input ? ' has ' : ' include '), ...list(c.present, ' and '));
-  if (lacks) out.push(op(has ? (input ? ', no ' : ', not ') : input ? ' has no ' : ' exclude '), ...list(c.absent, input || has ? ' or ' : ' and '));
+  if (has) out.push(op(input ? ' has ' : ' include '), ...list(c.present));
+  if (lacks) {
+    if (input) out.push(op(has ? ', ' : ' has '), ...each('no', c.absent));
+    else if (has) out.push(op(', '), ...each('not', c.absent));
+    else out.push(op(' exclude '), ...list(c.absent));
+  }
   return out;
 }
 
