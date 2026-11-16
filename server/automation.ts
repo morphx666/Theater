@@ -56,7 +56,7 @@ export const LIMITS = {
   automations: 100, triggers: 8, blocks: 100, nesting: 8, condItems: 20, condNesting: 6, listItems: 40,
   waitMs: 10 * 60_000, settleMs: 60_000, name: 40,
   runsKept: 100, runsPerMinute: 10, chainDepth: 3, chainWindowMs: 3000, verifyMs: 2500, recheckMs: 1000,
-  defaultSettleMs: 300,
+  defaultSettleMs: 300, presetWaitMs: 500,
 };
 
 // ---------- validation (never trust the client) ----------
@@ -580,7 +580,9 @@ export class Automations {
     if (!this.armed.has(tk)) this.armedBefore.set(tk, before);
     const settle = t.settleMs ?? (t.type === 'change' ? PROPS[t.prop].settleMs : settleOf(t.cond)) ?? LIMITS.defaultSettleMs;
     this.clock.clearTimeout(this.armed.get(tk));
-    this.armed.set(tk, this.clock.setTimeout(() => {
+    const fire = () => {
+      // A speaker preset is being written: actions now (a sound mode change…) make the receiver reject its writes.
+      if (this.io.ctx().presets?.busy) { this.armed.set(tk, this.clock.setTimeout(fire, LIMITS.presetWaitMs)); return; }
       this.armed.delete(tk);
       const was = this.armedBefore.get(tk) ?? new Map();
       this.armedBefore.delete(tk);
@@ -591,7 +593,8 @@ export class Automations {
       if (t.type === 'change' && t.to !== undefined && !sameValue(PROPS[t.prop].read(ctx, t.param), t.to)) return; // changed again meanwhile
       if (t.type === 'becomes' && !evalCond(t.cond, ctx)) return;
       this.start(cur, describeTrigger(t), depth, was);
-    }, settle));
+    };
+    this.armed.set(tk, this.clock.setTimeout(fire, settle));
   }
 
   // ----- runs -----

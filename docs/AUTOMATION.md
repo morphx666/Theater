@@ -233,7 +233,7 @@ Server-side validation on save (never trust the client): known block types, know
   - A rule that runs more than 10 times in 60 s **turns itself off**, with a log line and a reason the UI shows.
   - Chain depth: changes within 3 s of an automation's action count as caused by it; a run caused by a run caused by a run… stops at depth 3.
 - **Power:** actions that need the main zone are skipped (with a note in the run) while it's off. Power actions themselves are allowed.
-- **Speaker presets** (phase 4): `apply()` is serialized. The Amp Assign confirmation is asked when the action is created (stored as `confirmAmp`), or the server refuses the rule.
+- **Speaker presets** (phase 4): `apply()` is serialized. The Amp Assign confirmation is asked when the action is created (stored as `confirmAmp`), or the server refuses the rule. While a preset is being applied, *Speaker preset* reads as unknown (`active` already names the new preset, but its values are still being written), and a rule whose trigger settles meanwhile waits until the apply ends: a sound mode change during the setup writes makes the receiver reject them (HTTP 500, "Not fully applied").
 - Runs never call the setup API in v1.
 
 ---

@@ -656,6 +656,29 @@ test('app actions: speaker preset (by id, name in the run), HEOS; tuner and Zone
   assert.match(r.last()!.steps[0].note!, /Amp Assign/);
 });
 
+test('rules wait while a speaker preset is being applied', async () => {
+  const r = await rig();
+  on(r);
+  const presets: NonNullable<Ctx['presets']> = { list: [{ id: 'aaaa-1111', name: 'Movie' }, { id: 'bbbb-2222', name: 'Music' }], active: 'aaaa-1111', busy: null };
+  r.ctx.presets = presets;
+  await r.eng.save(rule([{ type: 'change', prop: 'speakerPreset', to: 'bbbb-2222' }], [{ type: 'set', prop: 'soundMode', value: 'MCH STEREO' }]));
+  await r.eng.save(rule([{ type: 'change', prop: 'input', settleMs: 0 }], [{ type: 'set', prop: 'ps.DEH', value: 'HIGH' }]));
+  r.eng.observe();
+
+  // Applying Music: `active` switches before its values are written. No trigger, no action until it's done.
+  presets.busy = { id: 'bbbb-2222', step: 'Levels' };
+  presets.active = 'bbbb-2222';
+  r.eng.observe();
+  r.line('SIGAME'); // another rule's trigger during the apply waits too
+  await r.clock.tick(3000);
+  assert.deepEqual(r.sent, []);
+
+  presets.busy = null;
+  r.eng.observe();
+  await r.clock.tick(3000);
+  assert.deepEqual(r.sent.sort(), ['MSMCH STEREO', 'PSDEH HIGH']);
+});
+
 test('validation: set-only properties can\'t be watched or tested; presets are checked by form', () => {
   const set = [{ type: 'set', prop: 'ps.DEH', value: 'OFF' }];
   assert.throws(() => validate(rule([{ type: 'change', prop: 'heos.favorite' }], set)), /only be set/);

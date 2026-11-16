@@ -11,7 +11,7 @@ export type Ctx = {
   state: AvrState;
   audioMap: AudioMap;
   nowPlaying?: { state: string | null; song: string; artist: string; album: string; station: string; source: string | null } | null;
-  presets?: { list: { id: string; name: string }[]; active: string | null } | null; // speaker presets (summary)
+  presets?: { list: { id: string; name: string }[]; active: string | null; busy?: unknown } | null; // speaker presets (summary); busy while one is applied
   favorites?: { name: string }[]; // HEOS favorites, in order (1-based when played)
   soundModeChoices?: { value: string; label: string; group: string }[]; // every known / learned sound mode
   conn?: { telnet: boolean; http: boolean; heos: boolean };
@@ -216,7 +216,8 @@ export const CATALOG: PropDef[] = [
   { id: 'speakerPreset', label: 'Speaker preset', group: 'Speakers', type: 'enum', needsZone: true, confirmAmp: true,
     options: (c) => (c?.presets?.list ?? []).map((p) => ({ value: p.id, label: p.name })),
     validValue: (v) => typeof v === 'string' && /^[A-Za-z0-9-]{1,64}$/.test(v),
-    read: (c) => c.presets?.active ?? null,
+    // While a preset is applied, `active` already names it but its values are still being written: unknown until done.
+    read: (c) => (c.presets?.busy ? null : c.presets?.active ?? null),
     app: (v, _p, o) => ({ kind: 'speakerPreset', id: String(v), confirmAmp: !!o?.confirmAmp }) },
   { id: 'channel.level', label: 'Channel level', group: 'Speakers', type: 'number', unit: 'dB', min: -12, max: 12, step: 0.5, needsZone: true,
     param: { label: 'Channel', options: (c) => (c?.state.installed.length ? LEVEL_CHANNELS.filter((o) => c.state.installed.includes(o.value)) : LEVEL_CHANNELS) },
