@@ -118,10 +118,14 @@ export const SOURCE_ICONS = {
   CD: 'disc', PHONO: 'vinyl', TUNER: 'radio', NET: 'cloud', BT: 'bt', USB: 'usb',
 };
 
-/** Readable labels for speaker channel codes. */
+/** Full names for speaker / input channel codes. */
 export const CHANNELS = {
-  FL: 'Front L', FR: 'Front R', C: 'Center', SW: 'Subwoofer', SW2: 'Sub 2', SL: 'Surround L', SR: 'Surround R',
-  SBL: 'Surr. Back L', SBR: 'Surr. Back R', SB: 'Surr. Back', FHL: 'Front Height L', FHR: 'Front Height R',
-  TFL: 'Top Front L', TFR: 'Top Front R', TML: 'Top Middle L', TMR: 'Top Middle R', TRL: 'Top Rear L', TRR: 'Top Rear R',
-  FDL: 'Front Dolby L', FDR: 'Front Dolby R', SDL: 'Surr. Dolby L', SDR: 'Surr. Dolby R', BDL: 'Back Dolby L', BDR: 'Back Dolby R',
+  FL: 'Front Left', FR: 'Front Right', C: 'Center', LFE: 'Low Frequency Effects',
+  SW: 'Subwoofer', SW2: 'Subwoofer 2', SW3: 'Subwoofer 3', SW4: 'Subwoofer 4', SL: 'Surround Left', SR: 'Surround Right',
+  SBL: 'Surround Back Left', SBR: 'Surround Back Right', SB: 'Surround Back', FWL: 'Front Wide Left', FWR: 'Front Wide Right',
+  FHL: 'Front Height Left', FHR: 'Front Height Right', TFL: 'Top Front Left', TFR: 'Top Front Right',
+  TML: 'Top Middle Left', TMR: 'Top Middle Right', TRL: 'Top Rear Left', TRR: 'Top Rear Right',
+  RHL: 'Rear Height Left', RHR: 'Rear Height Right', FDL: 'Front Dolby Left', FDR: 'Front Dolby Right',
+  SDL: 'Surround Dolby Left', SDR: 'Surround Dolby Right', BDL: 'Back Dolby Left', BDR: 'Back Dolby Right',
+  SHL: 'Surround Height Left', SHR: 'Surround Height Right', TS: 'Top Surround', CH: 'Center Height',
 };

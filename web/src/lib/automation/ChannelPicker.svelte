@@ -1,8 +1,8 @@
 <script>
   // Channel picker for a "channels" condition: the receiver's speaker-layout grid as chips. Tap to cycle
-  // don't care -> present -> absent. The layout comes from the receiver's own grid (the Status panel's signal
+  // don't care -> required (present) -> excluded (absent). The layout comes from the receiver's own grid (the Status panel's signal
   // view) when it's known, otherwise a standard one.
-  import { avr } from '../avr.svelte.js';
+  import { avr, CHANNELS } from '../avr.svelte.js';
 
   let { cond, onchange } = $props();
 
@@ -19,6 +19,10 @@
     return extra.length ? [...rows, extra] : rows;
   });
   const stateOf = (ch) => (cond.present.includes(ch) ? 'present' : cond.absent.includes(ch) ? 'absent' : 'any');
+  // Tooltip: the channel's full name, then its state and what a tap does.
+  const STATE_TEXT = { any: "Don't care · tap to require", present: 'Required · tap to exclude', absent: "Excluded · tap for don't care" };
+  const STATE_ARIA = { any: "don't care", present: 'required', absent: 'excluded' };
+  const name = (ch) => (CHANNELS[ch] ? `${ch} (${CHANNELS[ch]})` : ch);
 
   function cycle(ch) {
     const s = stateOf(ch);
@@ -36,7 +40,7 @@
       {#each row as ch, i (i)}
         {#if ch}
           {@const s = stateOf(ch)}
-          <button class="chip {s}" title="{ch}: {s === 'any' ? "don't care" : s} (tap to change)" aria-label="{ch} {s}" onclick={() => cycle(ch)}>{ch}</button>
+          <button class="chip {s}" title={`${name(ch)}\n${STATE_TEXT[s]}`} aria-label="{CHANNELS[ch] ?? ch}: {STATE_ARIA[s]}" onclick={() => cycle(ch)}>{ch}</button>
         {:else}
           <span class="chip empty"></span>
         {/if}

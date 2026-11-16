@@ -155,10 +155,7 @@ export function condText(c, catalog) {
       const v = argKind(c.op) === 'pair' ? `${valueText(def, c.value?.[0])} and ${valueText(def, c.value?.[1])}` : argKind(c.op) === 'none' ? '' : ` ${valueText(def, c.value)}`;
       return `${propText(def, c.param)}${c.before ? ' (before)' : ''} ${OP_LABELS[c.op] ?? c.op}${argKind(c.op) === 'pair' ? ` ${v}` : v}`;
     }
-    case 'channels': {
-      const parts = [c.present.length && `${c.present.join(' ')} present`, c.absent.length && `${c.absent.join(' ')} absent`].filter(Boolean);
-      return `${c.of === 'input' ? 'input' : 'speakers'} ${parts.join(', ') || '…'}`;
-    }
+    case 'channels': return channelPieces(c).map((p) => p.t).join('');
     case 'all': case 'any': return c.items.map((x) => condText(x, catalog)).join(c.type === 'all' ? ' and ' : ' or ') || '…';
     case 'not': return `not (${condText(c.item, catalog)})`;
   }
@@ -194,17 +191,25 @@ function condPieces(c, catalog) {
       if (kind === 'pair') return [...head, plain(' '), ...valPieces(def, c.value?.[0]), op(' and '), ...valPieces(def, c.value?.[1])];
       return [...head, plain(' '), ...valPieces(def, c.value)];
     }
-    case 'channels': {
-      const out = [prop(c.of === 'input' ? 'input' : 'speakers')];
-      if (c.present.length) out.push(plain(' '), val(c.present.join(' ')), op(' present'));
-      if (c.absent.length) out.push(plain(c.present.length ? ', ' : ' '), val(c.absent.join(' ')), op(' absent'));
-      return out;
-    }
+    case 'channels': return channelPieces(c);
     case 'all': case 'any':
       return c.items.length ? c.items.flatMap((x, i) => [...(i ? [kw(c.type === 'all' ? ' and ' : ' or ')] : []), ...condPieces(x, catalog)]) : [plain('…')];
     case 'not': return [kw('not '), plain('('), ...condPieces(c.item, catalog), plain(')')];
   }
   return [plain('?')];
+}
+
+/** A channels condition as a sentence: "input has C and LFE, no SB", "active speakers include SW, not SB",
+ *  "input has no SB or SBR". Required channels must all be there, excluded ones all missing. */
+function channelPieces(c) {
+  const list = (chs, joiner) => chs.flatMap((ch, i) => [...(i ? [op(i === chs.length - 1 ? joiner : ', ')] : []), val(ch)]);
+  const input = c.of === 'input';
+  const out = [prop(input ? 'input' : 'active speakers')];
+  const has = c.present.length, lacks = c.absent.length;
+  if (!has && !lacks) return [...out, plain(' …')];
+  if (has) out.push(op(input ? ' has ' : ' include '), ...list(c.present, ' and '));
+  if (lacks) out.push(op(has ? (input ? ', no ' : ', not ') : input ? ' has no ' : ' exclude '), ...list(c.absent, input || has ? ' or ' : ' and '));
+  return out;
 }
 
 function triggerPieces(t, catalog) {
