@@ -10,6 +10,7 @@ export const avr = $state({
   speakerPresets: null, // { supported, list: [{id, name, slot, captured, layout}], active, incomplete, busy: {id, step}, rev }
   soundModes: null, // { signal, signalName, family, native, current, label, available: [{mode, label, group}], canLearn, busy }
   automations: [], // [{ id, name, enabled, disabled, running, lastRun: {at, status, error} }] (server/automation.ts)
+  run: null, // the rule running now, or the one that just ended: { automation, name, status, error?, ... } (showRun)
   cap: -10,
   toast: null,
 });
@@ -43,8 +44,11 @@ export function connect() {
       avr.soundModes = msg.soundModes ?? null;
       avr.automations = msg.automations ?? [];
       avr.cap = msg.cap;
+      syncRun();
     } else if (msg.type === 'progress') {
       avr.progress = { position: msg.position, duration: msg.duration };
+    } else if (msg.type === 'automation-run') {
+      showRun(msg.run);
     } else if (msg.type === 'error') {
       toast(msg.message, 'error');
     } else if (msg.type === 'raw') {
@@ -74,6 +78,26 @@ export function onRaw(fn) {
     rawListeners.delete(fn);
     if (!rawListeners.size) wsSend({ type: 'raw-subscribe', on: false });
   };
+}
+
+// The rule running now (avr.run), from the server's automation-run events: sent when a run starts, after every
+// step and when it ends. An ended run stays a few seconds, so even a quick one is seen (Automation panel, RunBubble).
+let runSeq = 0;
+function showRun(run) {
+  const seq = ++runSeq;
+  avr.run = run;
+  if (run.status !== 'running') setTimeout(() => { if (runSeq === seq) avr.run = null; }, 3000);
+}
+// Snapshots fill in what events can't: a run already going when the page connects, or an end missed while the
+// connection was down. (A snapshot is built when it's sent, so one that says "not running" is never older than
+// the run's start event.)
+function syncRun() {
+  const live = avr.automations.find((a) => a.running);
+  if (live && (avr.run?.automation !== live.id || avr.run.status !== 'running')) showRun({ automation: live.id, name: live.name, status: 'running', steps: [] });
+  else if (!live && avr.run?.status === 'running') {
+    const last = avr.automations.find((a) => a.id === avr.run.automation)?.lastRun;
+    showRun({ ...avr.run, status: last?.status ?? 'done', error: last?.error ?? undefined });
+  }
 }
 
 let toastTimer;

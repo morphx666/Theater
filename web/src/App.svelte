@@ -9,6 +9,7 @@
   import { cubicOut } from 'svelte/easing';
   import IdleDimmer from './lib/IdleDimmer.svelte';
   import PresetConfirm from './lib/PresetConfirm.svelte';
+  import RunBubble from './lib/automation/RunBubble.svelte';
   import { accent, applyAccent } from './lib/accent.svelte.js';
 
   const PAGES = [
@@ -122,9 +123,14 @@
   </nav>
 </div>
 
-{#if avr.toast}
-  <div class="toast {avr.toast.kind}" role="status">{avr.toast.text}</div>
-{/if}
+<!-- Messages at the bottom, over everything but the idle dimmer (the automation editor too): a toast above the
+     bubble of a running rule. -->
+<div class="notices">
+  {#if avr.toast}
+    <div class="toast {avr.toast.kind}" role="status">{avr.toast.text}</div>
+  {/if}
+  <RunBubble />
+</div>
 
 <IdleDimmer />
 <PresetConfirm />
@@ -187,11 +193,15 @@
     main { padding: 8px 28px 32px; }
   }
 
+  .notices {
+    position: fixed; left: 16px; right: 16px; bottom: calc(92px + env(safe-area-inset-bottom)); z-index: 60;
+    display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none;
+  }
+  .notices > :global(*) { pointer-events: auto; max-width: 100%; }
   .toast {
-    position: fixed; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom)); transform: translateX(-50%);
     background: var(--card-2); border: 1px solid var(--line); padding: 10px 16px; border-radius: 12px;
-    box-shadow: var(--shadow); z-index: 20; max-width: calc(100% - 32px); animation: pop 0.2s;
+    box-shadow: var(--shadow); animation: pop 0.2s;
   }
   .toast.error { border-color: var(--bad); color: var(--bad); }
-  @keyframes pop { from { opacity: 0; transform: translate(-50%, 8px); } }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px); } }
 </style>

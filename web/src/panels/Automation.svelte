@@ -4,7 +4,7 @@
   import { avr, toast } from '../lib/avr.svelte.js';
   import Panel from '../lib/Panel.svelte';
   import Icon from '../lib/Icon.svelte';
-  import { auto, loadCatalog, loadRules, act, openRule, followNames } from '../lib/automation/store.svelte.js';
+  import { auto, loadCatalog, loadRules, act, openRule, followNames, watchRow } from '../lib/automation/store.svelte.js';
   import { outline } from '../lib/automation/model.js';
   import RuleCode from '../lib/automation/RuleCode.svelte';
 
@@ -33,6 +33,13 @@
   async function run(body, ok) {
     try { await act(body); if (ok) toast(ok); await loadRules(); } catch (e) { toast(e.message, 'error'); }
   }
+  // The rule running now is highlighted (avr.run: right from the server's run events, so a quick run shows too);
+  // one that just ended flashes green, or red if it failed.
+  const runState = (r, s) => {
+    const run = avr.run?.automation === r.id ? avr.run : null;
+    if (run?.status === 'running' || (!run && s?.running)) return 'running';
+    return run ? (run.status === 'error' ? 'failed' : 'ended') : null;
+  };
   const isOn = (r, s) => (s?.enabled ?? r.enabled) && !s?.disabled;
   const toggle = (r, s) => run({ action: 'enable', id: r.id, on: !isOn(r, s) }); // turning on also clears a loop-protection stop
   const runNow = (r) => run({ action: 'run', id: r.id }, `Running "${r.name}"`);
@@ -60,10 +67,11 @@
   <div class="rules">
     {#each rows as { rule: r, s, lines } (r.id)}
       {@const on = isOn(r, s)}
-      <div class="rule" class:off={!on}>
+      {@const rs = runState(r, s)}
+      <div class="rule {rs ?? ''}" class:off={!on} data-rule={r.id} use:watchRow={r.id}>
         <button class="switch" class:on aria-label="{r.name} on/off" title={on ? 'Turn off' : 'Turn on'} onclick={() => toggle(r, s)}></button>
         <button class="body" onclick={() => openRule(r.id)} title="Edit">
-          <span class="name">{r.name}{#if s?.running}<span class="pill run">running</span>{/if}</span>
+          <span class="name">{r.name}{#if rs === 'running'}<span class="pill run"><span class="dot"></span>running</span>{/if}</span>
           <!-- The rule as pseudo code: one line per step, if / else bodies indented. -->
           <RuleCode {lines} />
           {#if s?.disabled}
@@ -76,7 +84,7 @@
         </button>
         <div class="acts">
           <button class="btn small" onclick={() => openRule(r.id)}><Icon name="edit" size={14} />Edit</button>
-          <button class="btn small" title="Run now" disabled={!!s?.running} onclick={() => runNow(r)}><Icon name="play" size={14} />Run</button>
+          <button class="btn small" title="Run now" disabled={rs === 'running'} onclick={() => runNow(r)}><Icon name="play" size={14} />Run</button>
           <button class="btn small" title="Duplicate" onclick={() => duplicate(r)}><Icon name="copy" size={14} />Duplicate</button>
           <button class="btn small danger" onclick={() => remove(r)}><Icon name="x" size={14} />{deleting === r.id ? 'Tap again' : 'Delete'}</button>
         </div>
@@ -92,13 +100,36 @@
     padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card-2);
   }
   .rule.off .body { opacity: 0.6; }
+  /* Running: an accent ring that breathes. Just ended: a green (or red) ring that fades. */
+  .rule { transition: border-color 0.3s, box-shadow 0.3s; }
+  .rule.running {
+    border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, var(--card-2));
+    animation: breathe 1.6s ease-in-out infinite;
+  }
+  .rule.running .body { opacity: 1; }
+  .rule.ended { animation: settle 2.8s ease-out forwards; --ring: var(--good); }
+  .rule.failed { animation: settle 2.8s ease-out forwards; --ring: var(--bad); }
+  @keyframes breathe {
+    0%, 100% { box-shadow: 0 0 0 1px var(--accent), 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent); }
+    50% { box-shadow: 0 0 0 1px var(--accent), 0 0 0 6px color-mix(in srgb, var(--accent) 0%, transparent); }
+  }
+  @keyframes settle {
+    from { border-color: var(--ring); box-shadow: 0 0 0 1px var(--ring); }
+    to { box-shadow: 0 0 0 1px transparent; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .rule.running { animation: none; box-shadow: 0 0 0 1px var(--accent); }
+    .rule.running .dot { animation: none; }
+  }
   .body {
     all: unset; cursor: pointer; display: flex; flex-direction: column; gap: 3px; min-width: 0;
   }
   /* A line under the name sets it off from the pseudo code. */
   .name { font-weight: 600; display: flex; align-items: center; gap: 8px; padding-bottom: 5px; margin-bottom: 2px; border-bottom: 1px solid var(--line); }
   .warn { color: var(--bad); }
-  .pill.run { font-size: 11px; padding: 1px 8px; color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
+  .pill.run { font-size: 11px; padding: 1px 8px; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: blink 1s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: 0.25; } }
   /* Two by two (Edit | Run over Duplicate | Delete), which leaves the pseudo code more room. Every button as wide
      as the widest; icons in one column, the text after them. */
   .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }

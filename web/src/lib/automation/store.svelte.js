@@ -47,3 +47,23 @@ export function closeRule() {
   if (openedHere) { openedHere = false; history.back(); } // back to where the panel was
   else ui.rule = null; // opened from a link: App.svelte rewrites the hash
 }
+
+/** Rule rows on screen in the Automation panel ({ [id]: count }): the run bubble (RunBubble.svelte) shows only
+ *  while the running rule's row isn't. Use on each row: use:watchRow={id}. */
+export const onScreen = $state({});
+export function watchRow(node, id) {
+  let cur = id, seen = false;
+  const set = (v) => { if (v === seen) return; seen = v; onScreen[cur] = (onScreen[cur] ?? 0) + (v ? 1 : -1); };
+  const io = new IntersectionObserver((es) => set(es.at(-1).isIntersecting));
+  io.observe(node);
+  return {
+    update(id) { const v = seen; set(false); cur = id; set(v); },
+    destroy() { io.disconnect(); set(false); },
+  };
+}
+
+/** Go to the Automation panel (Setup › App & Info) and scroll to a rule. */
+export function showRule(id) {
+  location.hash = '#setup/app';
+  setTimeout(() => document.querySelector(`[data-rule="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 150);
+}
