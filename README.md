@@ -17,6 +17,8 @@ Theater is a fast web remote for the **Denon AVR-X1700H** receiver. You run it o
 | **Zone 2** | Power, source, volume, mute and All Zone Stereo. |
 | **Remote** | An on-screen menu pad, an FM/AM tuner with presets, quick settings (sleep, dimmer, ECO, auto-standby) and a live protocol console. |
 | **Setup** | Rename, hide and assign inputs; set source levels, volume limits and the graphic EQ; change names, ECO and display options; set this app's own settings; view setup backups. |
+| **Automation** | Theater can run automations for you. Set up simple rules, like `when the input changes to TV, set the volume to -40 dB` or `when an Atmos signal starts, switch to the Movie preset,` and the server applies them automatically, even when no browser is open.<br/> <img width="300" height="219" alt="image" src="https://github.com/user-attachments/assets/183d850b-5084-4152-a61c-dd498a90c32d" />
+
 
 ### Make it yours
 
