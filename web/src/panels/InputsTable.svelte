@@ -10,18 +10,25 @@
 
   const HIDE_REASON = { 3: 'In use by Main Zone', 4: 'In use by Zone 2', 5: 'In use by Zone 3', 7: 'Select source', 8: 'Video select' };
 
-  // One row per source, merged from the three pages.
+  // Factory names (inputs type 3 <Default>), for sources missing from the rename page.
+  const DEFAULT_NAME = { 1: 'CBL/SAT', 3: 'Blu-ray', 4: 'Game', 5: 'Media Player', 6: 'TV Audio', 7: 'AUX1', 8: 'AUX2', 10: 'Phono', 11: 'Tuner', 13: 'HEOS Music' };
+
+  // One row per source, merged from the three pages. The hide page lists every source;
+  // the rename and assign pages leave out hidden ones (and Tuner), so it drives the rows.
   const rows = $derived.by(() => {
-    if (!rename.doc) return [];
-    return [...rename.doc.querySelectorAll(':scope > Source')].map((n) => {
+    const base = hide.doc ?? rename.doc;
+    if (!base) return [];
+    return [...base.querySelectorAll(':scope > Source')].map((n) => {
       const idx = n.getAttribute('index');
       const h = hide.doc?.querySelector(`:scope > Source[index="${idx}"]`);
+      const r = rename.doc?.querySelector(`:scope > Source[index="${idx}"]`);
       const a = assign.doc?.querySelector(`:scope > Source[index="${idx}"]`);
       return {
         idx,
-        def: txt(n, 'Default'),
-        name: txt(n, 'Rename'),
-        auto: txt(n, 'Auto'),
+        def: txt(r, 'Default') ?? DEFAULT_NAME[idx] ?? txt(h, 'Name'),
+        name: txt(r, 'Rename') ?? txt(h, 'Name') ?? DEFAULT_NAME[idx],
+        renamable: !!r,
+        auto: txt(r, 'Auto'),
         hideVal: txt(h, 'Hide'),
         hideLocked: h?.getAttribute('display') === '2',
         a,
@@ -44,7 +51,8 @@
     await rename.write(el('Source', esc(v || ' '), { index: r.idx }));
   }
   async function setHidden(r, hidden) {
-    await hide.write(`<Hide index="${r.idx}">${hidden ? 2 : 1}</Hide>`);
+    // Showing or hiding adds or drops the source on the rename and assign pages.
+    if (await hide.write(`<Hide index="${r.idx}">${hidden ? 2 : 1}</Hide>`)) await Promise.all([rename.reload(), assign.reload()]);
   }
   async function setAssign(r, col, value) {
     await assign.write(`<${col} index="${r.idx}">${value}</${col}>`, { delay: 600 });
@@ -53,7 +61,7 @@
 
 <Panel id="setup-inputs" title="Inputs" class="wide">
     {#snippet actions()}{#if rename.loading || hide.loading}<span class="faint small">loading…</span>{/if}{/snippet}
-    {#if rename.error}<p class="err">{rename.error}</p>{/if}
+    {#if rename.error || hide.error}<p class="err">{rename.error || hide.error}</p>{/if}
     <div class="table-wrap">
       <table>
         <thead>
@@ -64,16 +72,20 @@
             <tr class:hidden={r.hideVal === '2'}>
               <td class="muted">{r.def}</td>
               <td>
-                <input type="text" value={r.name} maxlength={maxLen} aria-label="Name for {r.def}"
-                  onchange={(e) => saveName(r, e.currentTarget.value)}
-                  onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
-                {#if r.auto && r.auto !== r.name}
-                  <div class="cec">
-                    <span class="cec-label" title="The name a device on this input announced over HDMI-CEC. The receiver remembers it even after the device is unplugged, so it may be out of date.">Device name:</span>
-                    <strong class="cec-name">{r.auto}</strong>
-                    <button class="btn small" aria-label="Set the name of {r.def} to {r.auto}" disabled={rename.saving}
-                      onclick={() => saveName(r, r.auto)}>Set</button>
-                  </div>
+                {#if !r.renamable}
+                  <span class="muted" title={r.hideVal === '2' ? 'Show this input to rename it' : ''}>{r.name}</span>
+                {:else}
+                  <input type="text" value={r.name} maxlength={maxLen} aria-label="Name for {r.def}"
+                    onchange={(e) => saveName(r, e.currentTarget.value)}
+                    onkeydown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
+                  {#if r.auto && r.auto !== r.name}
+                    <div class="cec">
+                      <span class="cec-label" title="The name a device on this input announced over HDMI-CEC. The receiver remembers it even after the device is unplugged, so it may be out of date.">Device name:</span>
+                      <strong class="cec-name">{r.auto}</strong>
+                      <button class="btn small" aria-label="Set the name of {r.def} to {r.auto}" disabled={rename.saving}
+                        onclick={() => saveName(r, r.auto)}>Set</button>
+                    </div>
+                  {/if}
                 {/if}
               </td>
               <td>
